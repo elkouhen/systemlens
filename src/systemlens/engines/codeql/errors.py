@@ -10,7 +10,7 @@ class CodeQLError(CallGraphError):
 
 
 class CodeQLTimeout(CallGraphTimeout, subprocess.TimeoutExpired):
-    """A CodeQL deadline with any rows recovered from a completed result."""
+    """A CodeQL deadline; ``calls`` stays empty, as no query result is partial."""
 
     def __init__(self, command: list[str], timeout: float, *, calls: list[MethodCall] | None = None):
         subprocess.TimeoutExpired.__init__(self, command, timeout)

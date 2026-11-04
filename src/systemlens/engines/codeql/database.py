@@ -144,14 +144,6 @@ def automatic_codeql_database(
         yield database
 
 
-class QueryTimeout(subprocess.TimeoutExpired):
-    """A query deadline, with the rows decoded from a partial result."""
-
-    def __init__(self, command: list[str], timeout: float, rows: list[dict[str, str]]) -> None:
-        super().__init__(command, timeout)
-        self.rows = rows
-
-
 def run_query(
     database: Path,
     name: str,
@@ -165,15 +157,14 @@ def run_query(
     progress: Callable[[str], None] | None = None,
     deadline: float | None = None,
     label: str,
-    recover_partial: bool = False,
 ) -> list[dict[str, str]]:
     """Run one ad-hoc query against a database and return its CSV rows.
 
     The query lives in a fresh temporary pack pinned to the installed
     ``codeql/java-all`` version; an already installed user pack cache is made
     visible so the lookup stays offline. ``label`` names the query in errors.
-    With ``recover_partial``, a deadline reached during the query still
-    decodes the rows CodeQL had written, and reports them on the timeout.
+    A deadline reached during the query raises ``TimeoutExpired`` with no
+    rows: CodeQL writes its result file only when the query completes.
     """
     if not database.is_dir():
         raise CodeQLError(f"CodeQL database not found: {database}")
@@ -198,25 +189,9 @@ def run_query(
         user_packs = Path.home() / ".codeql" / "packages"
         if user_packs.is_dir():
             command.append(f"--additional-packs={user_packs}")
-        try:
-            completed = _run_with_progress(
-                command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
-            )
-        except subprocess.TimeoutExpired as exc:
-            if not recover_partial:
-                raise
-            partial_rows: list[dict[str, str]] = []
-            if bqrs.is_file():
-                try:
-                    decoded_partial = _decode_bqrs(
-                        executable, bqrs, output,
-                        timeout=max(0.01, min(timeout_seconds, 5, _remaining_timeout(timeout_seconds, deadline))),
-                    )
-                    if decoded_partial.returncode == 0 and output.is_file():
-                        partial_rows = _read_rows(output)
-                except (OSError, subprocess.TimeoutExpired, CodeQLError):
-                    pass
-            raise QueryTimeout(command, timeout_seconds, partial_rows) from exc
+        completed = _run_with_progress(
+            command, timeout=_remaining_timeout(timeout_seconds, deadline), progress=progress,
+        )
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL {label} failed: {detail}")

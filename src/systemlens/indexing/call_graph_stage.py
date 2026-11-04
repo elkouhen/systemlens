@@ -727,8 +727,10 @@ def run_call_graph_stage(
         except CallGraphTimeout as exc:
             # A deadline is a soft indexing boundary. AST facts, relations
             # and any calls obtained before it remain useful; continue so
-            # the committed snapshot can still be exported as partial.
-            calls = exc.calls
+            # the committed snapshot can still be exported as partial. A
+            # deadline in a later query (methods, payload types) keeps the
+            # calls the completed call query already returned.
+            calls = exc.calls or calls
             codeql_timed_out = True
             reachability = []
             _report_progress(

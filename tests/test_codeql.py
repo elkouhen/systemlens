@@ -421,3 +421,29 @@ def test_source_only_root_keeps_source_packages_named_target_or_out(tmp_path: Pa
         assert (destination / path.relative_to(tmp_path)).exists()
     for path in dropped:
         assert not (destination / path.relative_to(tmp_path)).exists()
+
+
+def test_a_call_query_deadline_reports_no_recovered_calls(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Q4 of the call-graph review: CodeQL writes its BQRS result only when
+    the query completes, so a deadline decodes nothing and recovers no call."""
+    database = tmp_path / "database"
+    database.mkdir()
+    commands: list[list[str]] = []
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        commands.append(command)
+        if command[1:3] == ["query", "run"]:
+            raise subprocess.TimeoutExpired(command, 1)
+        raise AssertionError("a timed-out query has no result to decode")
+
+    monkeypatch.setattr(codeql.database, "_run_with_progress", run)
+
+    with pytest.raises(codeql.CodeQLTimeout) as raised:
+        codeql.engine._deadline_bound(
+            codeql.extract_codeql_calls, database, executable="codeql", timeout_seconds=1,
+        )
+
+    assert raised.value.calls == []
+    assert [command[1:3] for command in commands] == [["query", "run"]]

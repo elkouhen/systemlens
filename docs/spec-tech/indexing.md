@@ -546,11 +546,12 @@ POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete
 CodeQL pass, not each command independently.
 An absent selected engine is reported and keeps AST-only results. A CodeQL
-timeout is handled as a partial pass: the index keeps AST facts and any calls
-recovered from a completed partial result, runs all remaining materializers and
-commits the partial
-snapshot; the code-flow signature stays invalid so a later index retries
-CodeQL. Non-timeout failures from an available executable remain fatal and
+timeout is handled as a partial pass: the index keeps AST facts and the calls
+of a call query that completed before the deadline, even when a later query
+times out. A query cut by the deadline yields no row, because CodeQL writes
+its result file only when the query ends. The index runs all remaining
+materializers and commits the partial snapshot; the code-flow signature
+stays invalid so a later index retries CodeQL. Non-timeout failures from an available executable remain fatal and
 leave the previous successful snapshot intact.
 
 ## Call shapes

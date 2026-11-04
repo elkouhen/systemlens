@@ -12,6 +12,7 @@ from systemlens.application.engine_comparison import (
 )
 from systemlens.callgraph.engine import EngineRequest
 from systemlens.callgraph.model import (
+    CallGraphTimeout,
     MethodCall,
     MethodReachability,
     PayloadTypeEvidence,
@@ -392,3 +393,37 @@ def test_a_source_engine_flow_through_static_calls_says_so(tmp_path: Path) -> No
 
     assert flow.confidence == "medium"
     assert "The call graph resolved a static call path" in flow.reason
+
+
+class _MethodQueryTimeoutEngine(_RecordedEngine):
+    """Returns its calls, then reaches the deadline in the methods query."""
+
+    def methods(self, source_prefix: str = "") -> list[SourceMethod]:
+        raise CallGraphTimeout(calls=[])
+
+
+def test_a_deadline_after_the_call_query_keeps_its_calls(tmp_path: Path) -> None:
+    """Q3 of the call-graph review: a timeout in the methods, payload or
+    reachability query must not discard the calls already returned."""
+    repo = _repository(tmp_path / "repo")
+    controller = repo / "src/main/java/example/OrderController.java"
+    # Only the engine knows this call: the symbol pass sees an empty body.
+    controller.write_text(
+        controller.read_text(encoding="utf-8").replace("{ generator.generate(); }", "{ }"),
+        encoding="utf-8",
+    )
+    engine = _MethodQueryTimeoutEngine([MethodCall(
+        "example.OrderController.create", "src/main/java/example/OrderController.java", 7,
+        "example.Generator.generate", "src/main/java/example/Generator.java", 5, 7,
+    )])
+
+    with Store(repo) as store:
+        report = index_repo(repo, Config(), store, full=True, call_graph_engine=engine)
+        flows = store.all_code_flows()
+        status = store.get_meta("code_flow_snapshot_status")
+
+    assert report.codeql_timed_out is True
+    assert status == "partial"
+    assert [[step.kind for step in flow.steps] for flow in flows] == [
+        ["http_entry", "method_call", "message_publish"],
+    ]

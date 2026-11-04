@@ -61,7 +61,11 @@ class CallGraphError(RuntimeError):
 
 
 class CallGraphTimeout(RuntimeError):
-    """An engine deadline, with any calls recovered before it expired."""
+    """An engine deadline, with the calls an engine completed before it.
+
+    The index keeps these calls, and the calls of any query that completed
+    before the deadline, in its partial snapshot.
+    """
 
     def __init__(self, message: str = "call-graph deadline exceeded", *,
                  calls: list[MethodCall] | None = None) -> None:

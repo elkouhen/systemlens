@@ -11,7 +11,7 @@ from systemlens.callgraph.model import (
 )
 from systemlens.domain.code_flows import IntegrationMethod
 import systemlens.engines.codeql.database as database
-from systemlens.engines.codeql.errors import CodeQLError, CodeQLTimeout
+from systemlens.engines.codeql.errors import CodeQLError
 from systemlens.engines.codeql.queries import (
     _KAFKA_MESSAGE_TYPES_QUERY,
     _calls_query,
@@ -40,19 +40,14 @@ def extract_codeql_calls(
     ``caller_prefix`` restricts a global database query to callers below one
     repository-relative project prefix, while retaining callees from other
     projects for cross-project joins. A deadline reached during the query
-    reports the calls already written as a ``CodeQLTimeout``.
+    returns no call: CodeQL writes its result only when the query completes.
     """
-    try:
-        rows = database.run_query(
-            database_path, "calls", _calls_query(caller_prefix),
-            executable=executable, timeout_seconds=timeout_seconds, threads=threads,
-            ram_mb=ram_mb, verbosity=verbosity, progress=progress, deadline=deadline,
-            label="call graph", recover_partial=True,
-        )
-    except database.QueryTimeout as exc:
-        raise CodeQLTimeout(
-            list(exc.cmd), timeout_seconds, calls=_parse_codeql_calls(exc.rows, path_prefix),
-        ) from exc.__cause__
+    rows = database.run_query(
+        database_path, "calls", _calls_query(caller_prefix),
+        executable=executable, timeout_seconds=timeout_seconds, threads=threads,
+        ram_mb=ram_mb, verbosity=verbosity, progress=progress, deadline=deadline,
+        label="call graph",
+    )
     return _parse_codeql_calls(rows, path_prefix)
 
 

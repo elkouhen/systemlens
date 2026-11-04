@@ -338,10 +338,12 @@ budget is propagated to every subprocess. The deadline includes live progress
 reading, even when a subprocess stops producing output. On POSIX, timeout or
 interrupted progress handling terminates and reaps the complete process group.
 
-A timeout is a soft boundary for the index: SystemLens keeps AST facts and any
-CodeQL calls recovered from a completed partial result, executes the remaining
-relation, flow, reconciliation and statistics post-processing, then commits
-the resulting partial snapshot so it can be exported to HTML. The
+A timeout is a soft boundary for the index: SystemLens keeps AST facts and
+the CodeQL calls of a call query that completed before the deadline, even
+when a later query times out. A query cut by the deadline yields no call.
+SystemLens then executes the remaining relation, flow, reconciliation and
+statistics post-processing, and commits the resulting partial snapshot so it
+can be exported to HTML. The
 CLI reports that the graph is partial. A timed-out CodeQL pass does not update
 the code-flow signature, so the next index retries the interprocedural analysis
 even when source files are unchanged. Other CodeQL failures remain fatal and
