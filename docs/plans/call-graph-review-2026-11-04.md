@@ -114,3 +114,37 @@ engines now give 406 flows on train-ticket.
 
 | ID | Outcome |
 |---|---|
+| Q1 | Delivered in `32571f6` with ADR-83. A supplied database whose archived sources differ from the indexed files is refused; an indexed file missing from the archive is accepted, so a file added later loses edges but none are invented. |
+| Q5 | Delivered in `32571f6`. A database where no indexed file is archived, or whose calls never come from an indexed file, is refused. |
+| S1 | Delivered in `ac8183b`. A `var` initializer is typed at its own position, with a cycle guard. |
+| Q3 | Delivered in `ea7d439`. A later query deadline keeps the calls already returned. |
+| S2 | Delivered in `ac8183b`, with S1. |
+| S3 | Delivered in `6f1648f`. Overloads follow Java's phases: identity, widening and subtyping, then boxing. |
+| S4 | Delivered in `6f1648f`. Literals take their suffix, including hex, octal and binary integers. |
+| S5 | Delivered in `b844bd9`. Names resolve through every enclosing scope, innermost first. |
+| S6 | Delivered in `b844bd9`. An anonymous class's own fields come before outer fields. |
+| S7 | Delivered in `df27f26`. A local class is visible only within its block. |
+| S8 | Delivered in `df27f26`. Type parameters shadow source types of the same name. |
+| S11 | Delivered in `b844bd9`. Field hiding resolves nearest first; a tie leaves the type unknown. |
+| S12 | Delivered in `55fa1cb`. A superclass method wins over an interface default. |
+| Q2 | Delivered in `4dd1cb8`. An unresolved argument type gives `possible` rows to every agreeing overload instead of one `exact` row. |
+| Q7 | Delivered in `4dd1cb8`. Generic receivers use the source declaration of the called method. |
+| D1 | Delivered in `b10cb94`. `compare-engines` and `flows calculate` share one loader of persisted inputs; train-ticket reports 406 flows per engine. |
+| D2 | Delivered in `b10cb94`. The audit counts persisted engine methods as nodes; 0 orphans on the CodeQL index. |
+| D3 | Delivered in `b10cb94`. Edges are compared within shared methods by site and label; flows by their full route. |
+| D4 | Delivered in `b10cb94`. A call to a declaration without a body is a non-inferred `possible` edge in both engines, without duplicates. |
+| Q10 | Delivered in `1fcb3e6`. An engine method already indexed is not stored again. |
+| S14 | Delivered in `b844bd9` and `b81f7ab`. Varargs methods are reached at any arity, outer fields from inner classes resolve, and `src/main` wins over `src/test`, which the pipeline never indexes. |
+| D6 | Delivered in `ca0eafa`. `UserDetails` and other fixed Spring interfaces have known members; the two `JWTUtil` edges appear. |
+| Q4 | Delivered in `ea7d439`. The dead partial-recovery path is removed and the specification says a cut query yields no call. |
+| Q9 | Delivered in `569ba9e`. The CodeQL join separates same-line overloads by parameter types; the source engine's same-line overloads still lose their edge. |
+| S13 | Delivered in `074b0e9`. Secondary indexes replace the per-call scans: 800 classes take 0.8 s instead of 10.5 s. |
+| Q12 | Delivered in `967b760` with ADR-84, which amends ADR-29. The automatic database is reused when its sources are unchanged (24 s instead of 115 s on train-ticket), and indexing no longer runs the reachability query. |
+| D7 | Delivered in `cd37c2d`. A CodeQL database directory is never inventoried; train-ticket scans 2566 files instead of 4095. |
+
+Lot 3 (S9, S10, Q6, Q8, Q11) waits for ADR-81. Validation on `main` at
+`967b760`: ruff, mypy, 921 tests passed with 14 expected failures, the six
+slow CodeQL regression tests, and the companion contract check. On
+train-ticket the source engine gives 1811 edges (the two `JWTUtil` edges
+added) and 406 flows; the CodeQL engine keeps 406 flows; the lab keeps 23.
+ADR-82 was reserved for this lot and is unused.
