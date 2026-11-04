@@ -20,6 +20,13 @@ from systemlens.callgraph.model import MethodCall
 
 
 _TYPES = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
+# Nodes whose children are member or top-level types; a type declared
+# anywhere else is local to its block.
+_MEMBER_CONTAINERS = {"program", "class_body", "interface_body", "enum_body_declarations", "annotation_type_body"}
+_GENERIC_DECLARATIONS = {
+    "method_declaration", "constructor_declaration", "class_declaration", "interface_declaration",
+    "record_declaration",
+}
 _PRIMITIVES = {"byte", "short", "int", "long", "float", "double", "char", "boolean", "void"}
 _JAVA_LANG = {
     "String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float", "Double", "Character",
@@ -189,6 +196,8 @@ class JavaSymbols:
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
         # ``var`` initializers being typed, to break reference cycles.
         self._typing: set[tuple[str, int]] = set()
+        # Local classes: qualified name -> (path, declaration, enclosing block).
+        self.local_types: dict[str, list[tuple[str, Node, Node]]] = defaultdict(list)
         self._levels: dict[tuple[str, str], list[list[tuple[str, str]]]] = {}
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
@@ -245,12 +254,16 @@ class JavaSymbols:
             for node in nodes:
                 if node.type in _TYPES:
                     self.types[self.owner(path, node)].append((path, node))
+                    if node.parent is not None and (
+                        node.parent.type not in _MEMBER_CONTAINERS or _is_anonymous_body(node.parent)
+                    ):
+                        self.local_types[self.owner(path, node)].append((path, node, node.parent))
                 elif node.type == "object_creation_expression" and parser.child_by_type(node, "class_body"):
                     type_node = node.child_by_field_name("type")
                     if type_node is not None:
                         anonymous = self.resolve(
                             path, parser.node_text(source, type_node), self.owner(path, node),
-                            allow_ambiguous=True,
+                            allow_ambiguous=True, at=type_node,
                         )
                         if anonymous is not None:
                             self.anonymous_supertypes.add(anonymous)
@@ -280,6 +293,7 @@ class JavaSymbols:
                                 parser.node_text(self.units[path].source, candidate),
                                 owner,
                                 allow_ambiguous=True,
+                                at=candidate,
                             )
                             if base is not None and base in self.types and base != owner:
                                 base_locations = self._type_candidates(base, path)
@@ -335,7 +349,7 @@ class JavaSymbols:
                     # Varargs and unresolved generic parameters are intentionally
                     # not treated as an ordinary overload signature.
                     resolved_type = (
-                        self.resolve(path, parser.node_text(source, parameter_type), owner)
+                        self.resolve(path, parser.node_text(source, parameter_type), owner, at=parameter_type)
                         if parameter_type is not None and parameter.type == "formal_parameter" else None
                     )
                     dimensions = parameter.child_by_field_name("dimensions")
@@ -478,20 +492,34 @@ class JavaSymbols:
 
     def resolve(
         self, path: str, text: str, owner: str, *, allow_ambiguous: bool = False,
+        at: Node | None = None,
     ) -> str | None:
+        """The qualified source or external type ``text`` names in ``path``.
+
+        ``at`` is the node where the name is written. A type parameter of an
+        enclosing method or class declared there hides every type of the
+        same simple name, so the name has no type (S8). A local class is
+        visible only from its declaration to the end of its block, or from
+        inside itself (S7).
+        """
         text = re.sub(r"<.*>", "", text).strip()
+        if at is not None and text.split(".", 1)[0].split("[", 1)[0] in self._type_parameters(at):
+            return None
         if text.endswith("[]"):
-            element = self.resolve(path, text[:-2], owner, allow_ambiguous=allow_ambiguous)
+            element = self.resolve(path, text[:-2], owner, allow_ambiguous=allow_ambiguous, at=at)
             return element + "[]" if element else None
         if text in _PRIMITIVES:
             return text
         unit = self.units[path]
-        if text in self.types and ("." in text or not unit.package):
+        if (
+            text in self.types and ("." in text or not unit.package)
+            and not self._hidden_local(text, path, owner, at)
+        ):
             return text if allow_ambiguous or len(self._type_candidates(text, path)) == 1 else None
         scope = owner
         while scope and scope != unit.package:
             nested = f"{scope}.{text}"
-            if nested in self.types:
+            if nested in self.types and not self._hidden_local(nested, path, owner, at):
                 return nested if allow_ambiguous or len(self._type_candidates(nested, path)) == 1 else None
             scope = scope.rpartition(".")[0]
         first, *rest = text.split(".")
@@ -499,7 +527,7 @@ class JavaSymbols:
             imported = ".".join([unit.imports[first], *rest])
             return imported if allow_ambiguous or len(self._type_candidates(imported, path)) <= 1 else None
         local = f"{unit.package}.{text}" if unit.package else text
-        if local in self.types:
+        if local in self.types and not self._hidden_local(local, path, owner, at):
             return local if allow_ambiguous or len(self._type_candidates(local, path)) == 1 else None
         candidates = {
             f"{package}.{text}"
@@ -521,6 +549,45 @@ class JavaSymbols:
         if not candidates and re.fullmatch(r"[\w$]+(?:\.[\w$]+)+", text):
             return text
         return None
+
+    def _type_parameters(self, at: Node) -> set[str]:
+        """Type parameter names declared by the methods and types enclosing ``at``."""
+        names: set[str] = set()
+        current: Node | None = at
+        while current is not None:
+            if current.type in _GENERIC_DECLARATIONS:
+                parameters = current.child_by_field_name("type_parameters")
+                for parameter in parameters.named_children if parameters is not None else []:
+                    ident = next((
+                        child for child in parameter.named_children
+                        if child.type in {"type_identifier", "identifier"}
+                    ), None)
+                    if parameter.type == "type_parameter" and ident is not None:
+                        names.add(ident.text.decode("utf-8") if ident.text is not None else "")
+            current = current.parent
+        return names
+
+    def _hidden_local(self, qualified_name: str, path: str, owner: str, at: Node | None) -> bool:
+        """Whether a local class in ``qualified_name`` is out of scope here.
+
+        A local class is no member of its enclosing type: it is visible from
+        its declaration to the end of the enclosing block, and inside itself.
+        """
+        if not self.local_types:
+            return False
+        parts = qualified_name.split(".")
+        for end in range(len(parts), 0, -1):
+            prefix = ".".join(parts[:end])
+            scopes = self.local_types.get(prefix)
+            if not scopes:
+                continue
+            if owner == prefix or owner.startswith(prefix + "."):
+                return False
+            return not (at is not None and any(
+                scope_path == path and declaration.start_byte <= at.start_byte < block.end_byte
+                for scope_path, declaration, block in scopes
+            ))
+        return False
 
     def ancestors(self, owner: str, module: str) -> set[tuple[str, str]]:
         key = (owner, module)
@@ -837,7 +904,7 @@ class JavaSymbols:
             type_node = node.child_by_field_name("type")
             return self.resolve(
                 info.method.path, parser.node_text(source, type_node), info.owner,
-                allow_ambiguous=True,
+                allow_ambiguous=True, at=type_node,
             ) if type_node is not None else None
         if node.type == "parenthesized_expression" and node.named_children:
             return self.expression_type(info, node.named_children[0], invocation, depth + 1)
@@ -879,7 +946,7 @@ class JavaSymbols:
                                 return self._initializer_type(info, child.child_by_field_name("value"))
                             return self.resolve(
                                 path, parser.node_text(source, type_node), info.owner,
-                                allow_ambiguous=True,
+                                allow_ambiguous=True, at=type_node,
                             )
             if scope.type in _TYPES or _is_anonymous_body(scope):
                 declared, field_type = self._class_scope_field(info, scope, name)
@@ -909,12 +976,13 @@ class JavaSymbols:
                 if ident is not None and parser.node_text(source, ident) == name:
                     found.add(self.resolve(
                         path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+                        at=type_node,
                     ))
         if found:
             return True, next(iter(found)) if len(found) == 1 else None
         type_node = scope.parent.child_by_field_name("type") if scope.parent is not None else None
         supertype = self.resolve(
-            path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+            path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True, at=type_node,
         ) if type_node is not None else None
         if supertype is None or supertype not in self.types:
             return False, None
@@ -975,6 +1043,7 @@ class JavaSymbols:
                 if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
                     found.add(self.resolve(
                         path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
+                        at=type_node,
                     ))
         body = declaration.child_by_field_name("body")
         members = list(body.named_children) if body is not None else []
@@ -989,6 +1058,7 @@ class JavaSymbols:
                     if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
                         found.add(self.resolve(
                             path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
+                            at=type_node,
                         ))
             elif member.type == "enum_constant" and declaration.type == "enum_declaration":
                 # Enum constants are fields of the enum type itself.
@@ -1034,7 +1104,7 @@ class JavaSymbols:
             text = parser.node_text(source, type_node).strip()
             if text == "var":
                 return True, self._initializer_type(info, value)
-            return True, self.resolve(path, text, info.owner, allow_ambiguous=True)
+            return True, self.resolve(path, text, info.owner, allow_ambiguous=True, at=type_node)
 
         def named(node: Node | None) -> bool:
             return node is not None and parser.node_text(source, node) == name
@@ -1106,7 +1176,7 @@ class JavaSymbols:
                 return declared
             # ``Type.method()``: a capitalized name that is no variable is a
             # static call on that source type.
-            static_owner = self.resolve(info.method.path, name, info.owner)
+            static_owner = self.resolve(info.method.path, name, info.owner, at=receiver)
             return static_owner if static_owner in self.types else None
         if receiver.type in {"object_creation_expression", "cast_expression", "parenthesized_expression"}:
             return self.expression_type(info, receiver, invocation, depth + 1)
@@ -1157,6 +1227,7 @@ class JavaSymbols:
                 candidate.method.path,
                 parser.node_text(self.units[candidate.method.path].source, type_node),
                 candidate.owner,
+                at=type_node,
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
 
@@ -1176,7 +1247,7 @@ class JavaSymbols:
                 ):
                     return self.resolve(
                         declaration_path, parser.node_text(source, type_node), owner,
-                        allow_ambiguous=True,
+                        allow_ambiguous=True, at=type_node,
                     )
         return None
 
@@ -1225,7 +1296,7 @@ class JavaSymbols:
                         ident = child.child_by_field_name("name")
                         field_name = parser.node_text(source, ident) if ident is not None else ""
                         if field_name and field_name[:1].upper() + field_name[1:] == suffix:
-                            found.add(self.resolve(path, type_text, candidate, allow_ambiguous=True))
+                            found.add(self.resolve(path, type_text, candidate, allow_ambiguous=True, at=type_node))
             if found:
                 return next(iter(found)) if len(found) == 1 else None
         return None
@@ -1364,6 +1435,7 @@ class JavaSymbols:
                 type_node = node.parent.child_by_field_name("type")
                 supertype = self.resolve(
                     path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+                    at=type_node,
                 ) if type_node is not None else None
                 if supertype is None:
                     return None

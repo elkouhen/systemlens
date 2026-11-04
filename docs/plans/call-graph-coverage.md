@@ -80,6 +80,8 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T4 | `var` initializer typed where it is written, not at the call site | `covered` | review S1 (crash), S2 |
 | T5 | Names in anonymous, local and inner classes: the innermost method, then the class's own fields, then the outer scopes | `covered` | review S5, S6, S14 |
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | review S11 |
+| T7 | A local class is visible only from its declaration to the end of its block | `covered` | review S7 |
+| T8 | A class or method type parameter hides a source type of the same simple name, in receivers and dispatch signatures | `covered` | review S8 |
 
 ### 2.5 Functional and implicit implementations
 

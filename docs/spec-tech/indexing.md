@@ -207,6 +207,11 @@ supertype; an external supertype is assumed to declare none, a known
 limit. A field hides any field of the same name farther up the hierarchy:
 the type is searched first, then its supertypes by distance. Field
 accesses and Lombok getters follow the same rule.
+A type name resolves where it is written. A type parameter of an
+enclosing method or class hides any source type of the same simple name:
+the name has no type, in a receiver as in a dispatch signature. A local
+class is visible from its declaration to the end of its block and inside
+itself, never as a member type of the enclosing class.
 An unqualified call binds to the innermost enclosing type, anonymous classes
 included, that declares or inherits the name at any arity; a named inner
 class thus reaches its outer type's methods. A scope with an external
@@ -537,7 +542,7 @@ that owns each gap. A shape not delivered is a strict expected failure.
 
 | Status | Shapes |
 |---|---|
-| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol pass), H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
+| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol pass), H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
 | `defect` | F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
 | `missing` | S7 constructors, S8 constructor and initializer bodies, H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
 | out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |

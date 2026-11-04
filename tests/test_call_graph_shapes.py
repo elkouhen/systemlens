@@ -837,6 +837,98 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Service.go": "exact"},
         note="review S11: field access and Lombok getters read the nearest field"),
+    Shape("T7", {
+        f"{_APP}A.java": """
+            package p;
+            import p.q.Validator;
+            class Use {
+              Validator validator;
+              void first() { //@Use.first
+                class Validator {
+                  void check() {} //@Local.check
+                }
+                new Validator().check();
+              }
+              void second() { //@Use.second
+                validator.check();
+              }
+            }
+            """,
+        f"{_APP}q/Validator.java": """
+            package p.q;
+            public class Validator {
+              public void check() {} //@Validator.check
+            }
+            """,
+    }, "Use.second", {"Validator.check": "exact"},
+        note="review S7: a local class does not leak to the whole enclosing type"),
+    Shape("T7-in-block", {
+        f"{_APP}A.java": """
+            package p;
+            import p.q.Validator;
+            class Use {
+              void first() { //@Use.first
+                class Validator {
+                  void check() {} //@Local.check
+                }
+                new Validator().check();
+              }
+            }
+            """,
+        f"{_APP}q/Validator.java": """
+            package p.q;
+            public class Validator {
+              public void check() {} //@Validator.check
+            }
+            """,
+    }, "Use.first", {"Local.check": "exact"},
+        note="inside its block, the local class shadows the import"),
+    Shape("T8", """
+        class Order {
+          void ship() {} //@Order.ship
+        }
+        class Handler<Order> {
+          void handle(Order o) { //@Handler.handle
+            o.ship();
+          }
+        }
+        class Bus {
+          <Order> void publish(Order event) { //@Bus.publish
+            event.ship();
+          }
+        }
+        """, "Handler.handle", {}, absent=("Order.ship",),
+        note="review S8: a class type parameter hides the source type"),
+    Shape("T8-method", """
+        class Order {
+          void ship() {} //@Order.ship
+        }
+        class Bus {
+          <Order> void publish(Order event) { //@Bus.publish
+            event.ship();
+          }
+        }
+        """, "Bus.publish", {}, absent=("Order.ship",),
+        note="review S8: a method type parameter hides the source type"),
+    Shape("T8-dispatch", """
+        class Order {}
+        interface Handler<Order> {
+          void handle(Order o); //@Handler.handle
+        }
+        class OrderHandler implements Handler<Order> {
+          public void handle(Order o) {} //@OrderHandler.handle
+        }
+        class TextHandler implements Handler<String> {
+          public void handle(String s) {} //@TextHandler.handle
+        }
+        class Use {
+          Handler<String> handler;
+          void run() { //@Use.run
+            handler.handle("x");
+          }
+        }
+        """, "Use.run", {"TextHandler.handle": "possible", "OrderHandler.handle": "possible"},
+        note="review S8: the contract's signature is generic, so it does not bind to OrderHandler alone"),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {
