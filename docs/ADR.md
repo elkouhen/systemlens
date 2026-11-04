@@ -8,7 +8,7 @@ functional or technical contract.
 | Topic | ADRs |
 |---|---|
 | Local, conservative extraction | [ADR-1](#adr-1-local-static-architecture-analysis), [ADR-3](#adr-3-conservative-static-resolution) |
-| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias), [ADR-80](#adr-80-follow-the-build-tools-project-model-for-module-ownership) |
+| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias), [ADR-81](#adr-81-keep-a-dispatch-exact-only-when-its-implementor-set-is-complete) (proposed), [ADR-80](#adr-80-follow-the-build-tools-project-model-for-module-ownership) |
 | Delivery and graph projection | [ADR-8](#adr-8-persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9-exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23-mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
@@ -1878,3 +1878,38 @@ relations exist. Stray copies such as train-ticket's
 are no longer indexed. A repository whose aggregator omits a real service
 loses that service until the build declares it. The removed five-level
 test is replaced by a regression test for deep modules.
+
+## ADR-81: Keep a dispatch exact only when its implementor set is complete
+
+**Status:** Proposed on 2026-11-04 for lot 3 of the
+[call-graph review](plans/call-graph-review-2026-11-04.md). Not validated.
+Amends ADR-66 and ADR-70.
+
+**Context:** In a closed world, the `source` engine marks a call `exact`
+when one source body implements the called method. The review found
+implementors that the sources declare without writing a body: record
+accessors, Lombok-generated getters, bodies inherited from an external
+class, and `Object`'s own `toString`, `equals` and `hashCode`. The one
+written body then becomes a false `exact` target. CodeQL has the same
+effect with test implementations in a user-built database, and both
+engines mark the `fallback` class of a `@FeignClient` as the exact target
+of a call that really goes over HTTP. Calls to `equals` or `hashCode` on
+an `Object` receiver fan out to every override in the sources.
+
+**Decision:**
+1. A call is `exact` only when every implementor of the static receiver
+   type has a known body, and exactly one body applies. A record accessor
+   or a Lombok-generated member is a known implementor without an indexed
+   body; a body inherited from an external class or from `Object` is an
+   unknown implementor. Either one keeps every source target `possible`.
+2. Test sources are never part of the world: both engines ignore
+   implementations declared under test source roots.
+3. A source class named by `@FeignClient(fallback = ...)` or
+   `fallbackFactory` is a `possible` target; the interface method, which
+   carries the HTTP call, stays the primary target of the call.
+4. A call to an `Object` method on a receiver typed `Object` or by a type
+   variable produces no edge: its runtime type is unknown.
+
+**Consequences:** Some `exact` edges become `possible`, and flows built
+on them lose confidence. No edge is invented. On train-ticket the measured
+change is recorded before delivery; a flow lost entirely must be explained.

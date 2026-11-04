@@ -86,6 +86,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/plans/data-operations-in-internal-flows.md](plans/data-operations-in-internal-flows.md) | Working on the scoped data-operation plan and its acceptance criteria. |
 | [docs/plans/async-write-read-consistency.md](plans/async-write-read-consistency.md) | Working on stale-read detection, visibility ordering, or key matching. |
 | [docs/plans/runtime-observations-in-export.md](plans/runtime-observations-in-export.md) | Elastic APM overlay in the HTML export: decisions, scope, and validation. |
+| [docs/plans/call-graph-review-2026-11-04.md](plans/call-graph-review-2026-11-04.md) | Proposed findings of the 2026-11-04 call-graph review, by root cause and lot. |
 | [docs/plans/indexing-review-2026-11-03.md](plans/indexing-review-2026-11-03.md) | Proposed findings of the 2026-11-03 indexing review, by root cause and lot. |
 | [docs/plans/indexing-case-analysis.md](plans/indexing-case-analysis.md) | Proposed list of indexing cases by fact and axis, with their measured status. |
 | [docs/plans/call-graph-coverage.md](plans/call-graph-coverage.md) | Proposed list of call-graph dependency shapes, their status, and the plan to cover them. |
