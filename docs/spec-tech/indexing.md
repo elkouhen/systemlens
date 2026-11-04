@@ -136,6 +136,15 @@ Maven/Gradle descriptors or build outputs, except Java files below
 `target/generated-sources`), create a database from that projection, query
 it, and decode the result as CSV.
 
+The database is cached in `.systemlens/codeql/java-database` with
+`java-database.fingerprint` beside it (ADR-84). The fingerprint hashes every
+projected file's path and content and the CodeQL executable's path, size and
+modification time. A run whose projection has the same fingerprint reuses
+the database; any difference creates a new one, which replaces the cache.
+The stamp is removed before the replacement and written after it, so an
+interrupted run leaves no stale stamp. On train-ticket, a reused database
+takes the index from 117 s to 24 s. The cache costs disk space, 65 MB there.
+
 The temporary database remains global so cross-module references have the same
 resolution context. CodeQL calls and methods are queried once globally, then
 the returned rows are partitioned and processed one source-owning module at a
@@ -455,7 +464,12 @@ for intermediate methods. Components only restrict the search to methods linked
 by observed calls; they do not reverse edges or create routes. It does not
 connect endpoint facts by name alone.
 
-CodeQL also runs an output-anchored transitive reachability query whose source and target
+The index no longer runs the reachability query described below (ADR-84). Since
+ADR-78 a row adds no flow the join does not already find: on train-ticket and
+the lab, the flows and edges are identical without it, and the query cost
+about 3 s on train-ticket. The query and its rules stay for other callers.
+
+The output-anchored transitive reachability query has source and target
 predicates are restricted to the already indexed input/output methods by
 relative path and indexed line range: the indexed method starts at its first
 annotation while CodeQL locates the declaration line. Module-scoped method

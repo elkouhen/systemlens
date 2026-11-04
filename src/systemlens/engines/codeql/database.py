@@ -198,11 +198,17 @@ def automatic_codeql_database(
     allowed_paths: Sequence[str] | None = None,
     deadline: float | None = None,
 ) -> Iterator[Path | None]:
-    """Create a temporary source-only Java database for one index run.
+    """Yield a source-only Java database of the indexed sources.
 
     CodeQL is an optional local prerequisite.  Its absence leaves the AST-only
     flow materialization available; a present but failing CodeQL installation
     is reported as an indexing error rather than silently reducing coverage.
+
+    The database is cached under ``.systemlens/codeql/`` with a fingerprint
+    of the projected sources and of the CodeQL executable. A later run whose
+    projection has the same fingerprint reuses it instead of creating it
+    again; any change creates a new one. When the cache cannot be written,
+    the database stays temporary.
     """
     executable = codeql_executable()
     if executable is None:
@@ -229,6 +235,15 @@ def automatic_codeql_database(
             ),
             allowed_paths=allowed_paths,
         )
+        cache = repo_root / CODEQL_CACHE_DIRECTORY
+        cached = cache / "java-database"
+        stamp = cache / "java-database.fingerprint"
+        fingerprint = _projection_fingerprint(source_root, executable)
+        if _cached_database_matches(cached, stamp, fingerprint):
+            if progress is not None:
+                progress("CodeQL : base réutilisée, sources inchangées.")
+            yield cached
+            return
         command = [
             executable, "database", "create", str(database), "--language=java",
             f"--source-root={source_root}", "--build-mode=none", f"--threads={threads}",
@@ -243,7 +258,58 @@ def automatic_codeql_database(
         if completed.returncode != 0:
             detail = (completed.stderr or completed.stdout).strip()
             raise CodeQLError(f"CodeQL source-only database creation failed: {detail}")
-        yield database
+        yield _store_cached_database(database, cached, stamp, fingerprint)
+
+
+CODEQL_CACHE_DIRECTORY = Path(".systemlens") / "codeql"
+
+
+def _projection_fingerprint(source_root: Path, executable: str) -> str:
+    """Hash the projected sources and the CodeQL executable that reads them."""
+    digest = hashlib.sha256(b"build-mode=none\n")
+    resolved = shutil.which(executable) or executable
+    try:
+        stat = Path(resolved).resolve().stat()
+        digest.update(f"{Path(resolved).resolve()}|{stat.st_size}|{stat.st_mtime_ns}\n".encode())
+    except OSError:
+        digest.update(f"{resolved}\n".encode())
+    for path in sorted(source_root.rglob("*")):
+        if path.is_file():
+            digest.update(path.relative_to(source_root).as_posix().encode() + b"\0")
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+    return digest.hexdigest()
+
+
+def _cached_database_matches(cached: Path, stamp: Path, fingerprint: str) -> bool:
+    try:
+        return (
+            stamp.read_text(encoding="utf-8").strip() == fingerprint
+            and (cached / "codeql-database.yml").is_file()
+        )
+    except OSError:
+        return False
+
+
+def _store_cached_database(
+    database: Path, cached: Path, stamp: Path, fingerprint: str,
+) -> Path:
+    """Move a finalized database to the cache; return where it now lives.
+
+    The stamp is removed first and written last, so an interrupted move
+    leaves no stamp and the next run creates the database again.
+    """
+    if not (database / "codeql-database.yml").is_file():
+        return database
+    try:
+        cached.parent.mkdir(parents=True, exist_ok=True)
+        stamp.unlink(missing_ok=True)
+        if cached.exists():
+            shutil.rmtree(cached)
+        shutil.move(str(database), str(cached))
+        stamp.write_text(fingerprint + "\n", encoding="utf-8")
+    except OSError:
+        return database if database.is_dir() else cached
+    return cached
 
 
 def run_query(

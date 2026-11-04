@@ -60,7 +60,7 @@ dispatch with lower confidence.
 The traversal keeps call direction, source evidence, ambiguity, and cycles.
 A CodeQL reachability row adds a flow only through a route that passes the
 join's boundary, dispatch and hop rules (ADR-78); an unchecked route adds
-nothing. A call between Java methods does not by itself establish a call
+nothing, so the index no longer runs that query (ADR-84). A call between Java methods does not by itself establish a call
 between services. See
 [call graph indexing](indexing.md) and
 [`code_flows.py`](../../src/systemlens/indexing/code_flows.py).

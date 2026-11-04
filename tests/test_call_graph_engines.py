@@ -429,6 +429,25 @@ def test_a_deadline_after_the_call_query_keeps_its_calls(tmp_path: Path) -> None
     ]
 
 
+class _NoReachabilityEngine(_RecordedEngine):
+    def reachability(self, methods: Sequence[IntegrationMethod]) -> list[MethodReachability]:
+        raise AssertionError("the index does not run the reachability query")
+
+
+def test_the_index_runs_no_reachability_query(tmp_path: Path) -> None:
+    """Q12 of the call-graph review: since ADR-78 a reachability row adds
+    no flow the join does not find, so the index no longer pays for it."""
+    repo = _repository(tmp_path / "repo")
+    engine = _NoReachabilityEngine([MethodCall(
+        "example.OrderController.create", "src/main/java/example/OrderController.java", 7,
+        "example.Generator.generate", "src/main/java/example/Generator.java", 5, 7,
+    )])
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True, call_graph_engine=engine)
+        assert len(store.all_code_flows()) == 1
+
+
 class _MethodsEngine(_RecordedEngine):
     """Reports engine methods the way CodeQL spells and locates them."""
 

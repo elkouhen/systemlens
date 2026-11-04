@@ -225,6 +225,36 @@ def test_automatic_codeql_database_is_source_only_and_temporary(
     ], 42)]
 
 
+def test_automatic_codeql_database_is_reused_while_the_sources_are_unchanged(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Q12 of the call-graph review: the automatic database was rebuilt on
+    every index (97 s against 20 s prebuilt on train-ticket)."""
+    source = tmp_path / "src/main/java/A.java"
+    source.parent.mkdir(parents=True)
+    source.write_text("class A {}", encoding="utf-8")
+    created: list[str] = []
+
+    def run(command: list[str], **_kwargs: object) -> CompletedProcess[str]:
+        created.append(command[3])
+        Path(command[3]).mkdir()
+        (Path(command[3]) / "codeql-database.yml").write_text("finalised: true\n")
+        return CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(codeql.database, "codeql_executable", lambda: "codeql")
+    monkeypatch.setattr(codeql.database, "_run_with_progress", run)
+
+    databases = []
+    for text in ("class A {}", "class A {}", "class A { void m() {} }"):
+        source.write_text(text, encoding="utf-8")
+        with codeql.automatic_codeql_database(tmp_path) as database:
+            assert database is not None and (database / "codeql-database.yml").is_file()
+            databases.append(database)
+
+    assert len(created) == 2, "unchanged sources reuse the database; a change rebuilds it"
+    assert databases[0] == databases[1] == databases[2] == tmp_path / ".systemlens/codeql/java-database"
+
+
 def test_automatic_codeql_database_includes_generated_java_sources(
     tmp_path: Path, monkeypatch
 ) -> None:

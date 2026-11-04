@@ -471,7 +471,7 @@ orthogonal router preserves a usable export.
 
 ## ADR-29: Ask CodeQL directly for input-to-output reachability
 
-**Status:** Accepted. Amended by ADR-78.
+**Status:** Accepted. Amended by ADR-78 and ADR-84.
 
 **Context:** Reconstructing every interprocedural flow by starting at each
  indexed input method and traversing Python-side call edges can miss a flow
@@ -1940,3 +1940,29 @@ database. A file added after the database was created is not detected;
 its calls are missing, which loses edges but invents none. The check
 reads the archive once; on train-ticket it compares 409 of 411 indexed
 Java files.
+
+## ADR-84: Reuse the automatic CodeQL database and drop reachability from the index
+
+**Status:** Accepted on 2026-11-04 with lot 6 of the
+[call-graph review](plans/call-graph-review-2026-11-04.md) (finding Q12),
+whose fix the product owner validated. Amends ADR-29.
+
+**Context:** The automatic database lived in a temporary directory and
+was created on every index: 117 s on train-ticket against 25 s with a
+prebuilt database. ADR-29's reachability query cost about 3 s more, yet
+since ADR-78 a reachability row becomes a flow only through a route the
+join already checks. Without it, train-ticket and the lab keep the same
+406 and 23 flows and the same edges.
+
+**Decision:** Cache the automatic database in
+`.systemlens/codeql/java-database`, with a fingerprint of the projected
+Java sources (paths and contents) and of the CodeQL executable. A run
+with the same fingerprint reuses it; any change creates it again and
+replaces the cache. The index stops running the reachability query; the
+query and ADR-78's rules stay available to other callers.
+
+**Consequences:** An index of unchanged sources takes 24 s instead of
+117 s on train-ticket. The cache takes disk space (65 MB there) under
+`.systemlens/`, which the inventory already skips. A change to one Java
+file still recreates the whole database. Reachability no longer appears
+in the index's progress lines.

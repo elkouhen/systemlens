@@ -19,7 +19,6 @@ from systemlens.callgraph.model import (
     CallGraphError,
     CallGraphTimeout,
     MethodCall,
-    MethodReachability,
     SourceMethod,
 )
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
@@ -479,7 +478,6 @@ def run_call_graph_stage(
             store.set_meta("codeql_join_completed_entries", "0")
             store.set_meta("code_flow_snapshot_status", "partial")
         _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
-        reachability: list[MethodReachability] = []
         prepared_codeql_flows: list[CodeFlow] | None = None
         codeql_stats: dict[str, int] = {}
         calls: list[MethodCall] = []
@@ -704,7 +702,9 @@ def run_call_graph_stage(
                     codeql_view_prefix if refresh_codeql_view else ""
                 )
                 scoped_project_calls = _partition_calls(calls, roots)
-                reachability = [] if refresh_codeql_view else session.reachability(methods)
+                # The reachability query adds no flow since ADR-78: a row
+                # becomes a flow only through a route the join already
+                # checks. The index no longer runs it (ADR-84).
             prepared_codeql_flows = materialize_call_graph_flows(
                 methods, flow_endpoints(), calls, repo_root=repo_root,
                 modules=relation_modules,
@@ -714,7 +714,7 @@ def run_call_graph_stage(
                 codeql_edge_confidence=config.codeql_edge_confidence,
                 closed_world=not engine.resolves_types,
                 module_dependencies=relation_dependencies,
-                stats=codeql_stats, reachability=reachability,
+                stats=codeql_stats,
                 progress=progress,
                 call_chain_progress=progress if show_call_chains else None,
                 call_chain_module=show_call_chains_module,
@@ -747,7 +747,6 @@ def run_call_graph_stage(
             # calls the completed call query already returned.
             calls = exc.calls or calls
             codeql_timed_out = True
-            reachability = []
             _report_progress(
                 progress,
                 f"→ {engine_label} : délai dépassé ; poursuite avec les faits déjà indexés "
@@ -778,7 +777,6 @@ def run_call_graph_stage(
             closed_world=not engine.resolves_types,
             module_dependencies=relation_dependencies,
             stats=codeql_stats,
-            reachability=reachability,
             progress=progress,
             call_chain_progress=progress if show_call_chains else None,
             call_chain_module=show_call_chains_module,
@@ -816,8 +814,7 @@ def run_call_graph_stage(
             f"→ {engine_label} : "
             f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
             f"{codeql_stats['explored_paths']} transition(s), "
-            f"{len(codeql_flows)} flux interprocédural(aux), "
-            f"{len(reachability)} reachability(s) directe(s).",
+            f"{len(codeql_flows)} flux interprocédural(aux).",
         )
     service_aliases = {
         module_identity(module): local_spring_application_names(module.path, None)

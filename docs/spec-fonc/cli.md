@@ -236,7 +236,9 @@ When CodeQL reaches its time limit, the CLI prints
 `systemlens index --resume-codeql-join` as the recovery path.
 
 Automatic method-call analysis creates one source-only Java database for the
-whole repository with `codeql`. Progress reports the completed project over the
+whole repository with `codeql`. It is cached in `.systemlens/codeql/` and
+reused by the next index while the projected Java sources and the CodeQL
+executable are unchanged; any change creates it again (ADR-84). Progress reports the completed project over the
 total and the calls processed from the global result. By default, SystemLens
 persists the flow snapshot once after all modules have been processed; this
 avoids rewriting the complete SQLite flow table for every module. When

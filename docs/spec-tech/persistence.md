@@ -46,10 +46,11 @@ when the extraction reaches its timeout, and commits a partial-snapshot checkpoi
 checkpoint is independent from the later flow-join cursor.
 
 CodeQL is a local executable invoked by the indexer when the configured call
-graph engine is enabled. The temporary CodeQL database is an analysis input;
+graph engine is enabled. The automatic CodeQL database is an analysis input,
+cached in `.systemlens/codeql/` until the projected sources change (ADR-84);
 the persisted `codeql_methods` and `codeql_call_edges` tables are the durable
 SystemLens projections used by exports and flow reconstruction. Exports never
-reopen the temporary database or reparse source files.
+reopen the database or reparse source files.
 
 With `index --module NAME --refresh-codeql-view`, the method projection is
 refreshed only for source paths below the selected module. Existing rows for

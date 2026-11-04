@@ -218,13 +218,10 @@ When a Java method consumes multiple indexed Kafka topics and contains a
 publication depends on a join. Each input remains a potential path; the graph
 does not claim that one message alone triggers the output.
 
-CodeQL additionally answers transitive reachability by starting at indexed
-output methods and walking callers until indexed input methods are reached.
-A pair the Python-side traversal misses becomes a flow only when the indexed
-call graph holds a route that passes the same rules: the application
-boundary, the entry's dispatch and the hop limit (ADR-78). A pair without
-such a route stays absent, and a pair the traversal found keeps its flows.
-The configured timeout remains the operational guard.
+CodeQL can also answer transitive reachability, from indexed output methods
+back to indexed input methods. Since ADR-78 such a pair becomes a flow only
+through a route the Python-side traversal already checks, so it adds no
+flow, and the index no longer runs that query (ADR-84).
 
 Only source-located CodeQL call pairs are materialized. The internal-flow join
 keeps source-located intermediate methods even when they have no IN or OUT
@@ -244,7 +241,10 @@ candidate there: the witness opens no route (ADR-70).
 Calls are aggregated before the global flow join. `--codeql-database DIR`
 reuses an existing global CodeQL database instead.
 
-The temporary database and the supplied database path are never persisted. If
+The automatic database is cached in `.systemlens/codeql/` and reused while
+the projected Java sources and the CodeQL executable are unchanged; a change
+creates it again (ADR-84). Neither its path nor the supplied database path
+is recorded in the index. If
 the selected engine is unavailable, indexing reports the CodeQL limitation
 and retains same-method and source-symbol flows. A uniquely resolved dispatch
 yields a `potential` flow with medium confidence. When CodeQL identifies several compatible virtual
