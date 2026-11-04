@@ -294,6 +294,32 @@ SHAPES: list[Shape] = [
         }
         """, "Use.new", {"Service.init": None}, partial=True,
         pending="K7: constructor and initializer bodies are never callers"),
+    Shape("S9", """
+        class Service {
+          void log(String fmt, Object... args) {} //@Service.log
+        }
+        class Use {
+          Service service;
+          void call() { //@Use.call
+            service.log("a {} {}", 1, 2);
+            service.log("a");
+          }
+        }
+        """, "Use.call", {"Service.log": "exact"},
+        note="review S14: a varargs call of any arity from the fixed count up"),
+    Shape("S9-fixed-arity-first", """
+        class Service {
+          void log(String fmt, Object... args) {} //@Service.log.varargs
+          void log(String fmt, int a, int b) {} //@Service.log.fixed
+        }
+        class Use {
+          Service service;
+          void call() { //@Use.call
+            service.log("a {} {}", 1, 2);
+          }
+        }
+        """, "Use.call", {"Service.log.fixed": "exact"},
+        note="a fixed-arity overload that applies wins over varargs"),
     # 2.2 Inheritance and dispatch
     Shape("H1", """
         class Base {
@@ -1101,6 +1127,34 @@ SHAPES: list[Shape] = [
             """,
     }, "Use.run", {"lib1.Base.go": "exact"}, deps=(("app", "lib1"),),
         pending="K4: dependencies do not choose between two declarations of one type"),
+    Shape("M4", {
+        "app/src/main/java/p/Use.java": """
+            package p;
+            public class Use {
+              Clock clock;
+              void run() { //@Use.run
+                clock.now();
+              }
+            }
+            """,
+        "app/src/main/java/p/Clock.java": """
+            package p;
+            public class Clock {
+              public long now() { //@Clock.main
+                return 0;
+              }
+            }
+            """,
+        "app/src/test/java/p/Clock.java": """
+            package p;
+            public class Clock {
+              public long now() { //@Clock.test
+                return 1;
+              }
+            }
+            """,
+    }, "Use.run", {"Clock.main": "exact"},
+        note="review S14: production code resolves to its module's src/main type"),
     # 2.7 Framework-mediated calls (Spring)
     Shape("W1", """
         import org.springframework.beans.factory.annotation.Autowired;

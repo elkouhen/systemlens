@@ -676,3 +676,42 @@ def test_a_provably_incompatible_argument_separates_same_arity_overloads(tmp_pat
     # ``span`` cannot be a ``String`` and ``toString()`` returns one; the
     # unknown arguments of ``put`` select nothing and it stays unresolved.
     assert calls == [(5, 13, "exact"), (6, 14, "exact")]
+
+
+def test_a_test_source_set_never_reaches_the_call_graph(tmp_path: Path) -> None:
+    """Review S14: a type declared in ``src/main`` and ``src/test`` of one module.
+
+    The file inventory excludes the test source set, so the indexed call
+    graph binds production code to the ``src/main`` declaration exactly.
+    """
+    from systemlens.indexing.service import index_repo
+    from systemlens.infrastructure.config import Config
+    from systemlens.storage.sqlite import Store
+
+    repo = tmp_path / "repo"
+    (repo / "src/main/java/p").mkdir(parents=True)
+    (repo / "src/test/java/p").mkdir(parents=True)
+    (repo / "pom.xml").write_text(
+        "<project><modelVersion>4.0.0</modelVersion><groupId>p</groupId>"
+        "<artifactId>clock</artifactId><version>1.0</version></project>",
+        encoding="utf-8",
+    )
+    (repo / "src/main/java/p/Use.java").write_text(
+        "package p;\npublic class Use {\n  Clock clock;\n  void run() { clock.now(); }\n}\n",
+        encoding="utf-8",
+    )
+    clock = "package p;\npublic class Clock {\n  public long now() { return %d; }\n}\n"
+    (repo / "src/main/java/p/Clock.java").write_text(clock % 0, encoding="utf-8")
+    (repo / "src/test/java/p/Clock.java").write_text(clock % 1, encoding="utf-8")
+
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+        methods = {method.id: method for method in store.all_integration_methods()}
+        edges = [
+            (methods[edge.caller_id].qualified_method, methods[edge.callee_id].path, edge.dispatch_confidence)
+            for edge in store.all_call_edges()
+            if edge.caller_id in methods and edge.callee_id in methods
+        ]
+
+    assert not any("src/test/" in method.path for method in methods.values())
+    assert ("p.Use.run", "src/main/java/p/Clock.java", "exact") in edges

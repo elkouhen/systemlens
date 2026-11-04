@@ -15,6 +15,7 @@ from tree_sitter import Node
 from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.module_inventory import ModuleDependency
+from systemlens.indexing.file_inventory import is_test_source
 from systemlens.indexing.integration_methods import declared_parameter_types
 from systemlens.callgraph.model import MethodCall
 
@@ -169,6 +170,8 @@ class _Method:
     # A static or private method binds to its own declaration: no subtype
     # overrides it and it implements no ancestor's contract.
     binds_statically: bool = False
+    # The last parameter is ``T...``: any arity from the fixed count up.
+    varargs: bool = False
 
 
 class JavaSymbols:
@@ -186,6 +189,7 @@ class JavaSymbols:
         self.superclasses: dict[tuple[str, str], set[tuple[str, str]]] = defaultdict(set)
         self.methods: dict[str, _Method] = {}
         self.by_owner: dict[tuple[str, str, int, str], list[_Method]] = defaultdict(list)
+        self.varargs_by_owner: dict[tuple[str, str, str], list[_Method]] = defaultdict(list)
         self.dispatch: dict[tuple[str, str, str, tuple[str | None, ...]], list[_Method]] = defaultdict(list)
         self._ancestors: dict[tuple[str, str], set[tuple[str, str]]] = {}
         self.inherited_dispatch: dict[tuple[str, str], set[str]] = defaultdict(set)
@@ -364,9 +368,14 @@ class JavaSymbols:
                     bool(modifiers is not None and {"static", "private"} & set(
                         parser.node_text(source, modifiers).split()
                     )),
+                    varargs=bool(parameters is not None and parameters.named_children and (
+                        parameters.named_children[-1].type == "spread_parameter"
+                    )),
                 )
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
+                if info.varargs:
+                    self.varargs_by_owner[(owner, name, method.module)].append(info)
                 if info.concrete and all(value is not None for value in info.parameters):
                     for base_owner, base_module in self._dispatch_owners(info):
                         self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
@@ -575,7 +584,12 @@ class JavaSymbols:
         if module is None:
             return candidates
         same_module = [candidate for candidate in candidates if self.path_modules.get(candidate[0]) == module]
-        return same_module or candidates
+        candidates = same_module or candidates
+        if len(candidates) > 1 and not is_test_source(path):
+            # Production code never sees its module's test source set.
+            production = [candidate for candidate in candidates if not is_test_source(candidate[0])]
+            candidates = production or candidates
+        return candidates
 
     def resolve(
         self, path: str, text: str, owner: str, *, allow_ambiguous: bool = False,
@@ -900,6 +914,14 @@ class JavaSymbols:
                 if (owner, _candidate_module) in receiver_bases
                 and candidate_name == name and candidate_arity == arity
                 for candidate in values
+            ]
+        if not contracts:
+            # Java's third phase: a varargs method takes any arity from its
+            # fixed parameter count up, when no fixed arity applies (S14).
+            contracts = [
+                candidate for owner, owner_module in receiver_bases
+                for candidate in self.varargs_by_owner.get((owner, name, owner_module), [])
+                if len(candidate.parameters) - 1 <= arity
             ]
         contracts = self._select_overload(contracts, argument_types)
         if len({candidate.parameters for candidate in contracts}) != 1:

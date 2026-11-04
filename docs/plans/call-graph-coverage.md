@@ -43,6 +43,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass | K2; the join still locates a target by line (section 7) |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `missing` | constructors are not methods of the graph |
 | S8 | Calls inside a constructor, an initializer or a field initializer | `missing` | these bodies are never callers |
+| S9 | Varargs call with any arity from the fixed parameter count up | `covered` | review S14; a fixed-arity overload that applies wins |
 
 ### 2.2 Inheritance and dispatch
 
@@ -100,6 +101,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | M1 | External-interface dispatch limited to visible modules | `covered` | ADR-71 |
 | M2 | Source-type dispatch from a library into a module that depends on it | `defect` | fixture 51; none on train-ticket today |
 | M3 | Same qualified type in two modules, one visible | `defect` | stays `possible` although the dependencies decide it |
+| M4 | Same qualified type in `src/main` and `src/test` of one module | `covered` | review S14: the inventory excludes test sources, and the symbol pass prefers the production type |
 
 ### 2.7 Framework-mediated calls (Spring)
 
