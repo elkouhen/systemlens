@@ -40,7 +40,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S3 | Unqualified call, outer class from an inner class or from an anonymous class of a type with known members | `covered` | fixture 27; review D6 (`UserDetails`) |
 | S4 | Private method | `covered` | K2: `Base.go()` no longer reaches a homonym `Sub.go()` |
 | S5 | Overload chosen by argument type, including a subtype, widening before boxing, and literal suffixes | `covered` | fixtures 14b, 14c; review S3, S4 |
-| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass | K2; the join still locates a target by line (section 7) |
+| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass; the CodeQL join tells them apart by parameter types | K2; Q9 of the [call-graph review](call-graph-review-2026-11-04.md); the source pass's join still locates a target by line (section 7) |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `missing` | constructors are not methods of the graph |
 | S8 | Calls inside a constructor, an initializer or a field initializer | `missing` | these bodies are never callers |
 | S9 | Varargs call with any arity from the fixed parameter count up | `covered` | review S14; a fixed-arity overload that applies wins |

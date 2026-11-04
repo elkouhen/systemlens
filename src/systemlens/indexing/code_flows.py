@@ -731,21 +731,65 @@ def _build_call_graph(
             for method in sorted(values.values(), key=lambda item: item.id)
         )
 
+    def simple_type(written: str) -> str:
+        """Reduce a written or engine type name to its simple erased name."""
+        depth = 0
+        kept = []
+        for character in written:
+            if character == "<":
+                depth += 1
+            elif character == ">":
+                depth = max(0, depth - 1)
+            elif depth == 0:
+                kept.append(character)
+        reduced = "".join(kept).replace("...", "[]").replace(" ", "")
+        return reduced.rsplit(".", 1)[-1]
+
+    def same_signature(
+        method: IntegrationMethod, parameter_types: tuple[str, ...],
+    ) -> bool:
+        """Whether a method may be the engine's declaration of these types.
+
+        An unknown signature on either side, or an unnamed engine type,
+        matches: only a provable difference separates two overloads.
+        """
+        if method.parameter_types is None:
+            return True
+        if len(method.parameter_types) != len(parameter_types):
+            return False
+        return all(
+            not simple_type(engine) or simple_type(engine) == simple_type(written)
+            for written, engine in zip(method.parameter_types, parameter_types)
+        )
+
+    def overload(
+        candidates: Sequence[IntegrationMethod], parameter_types: tuple[str, ...] | None,
+    ) -> list[IntegrationMethod]:
+        """Keep the same-line overloads whose signature the engine names."""
+        if len(candidates) <= 1 or parameter_types is None:
+            return list(candidates)
+        return [item for item in candidates if same_signature(item, parameter_types)]
+
     def locate(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
+        parameter_types: tuple[str, ...] | None = None,
     ) -> tuple[IntegrationMethod, bool] | None:
-        """Resolve one CodeQL method to an indexed method."""
+        """Resolve one CodeQL method to an indexed method.
+
+        Same-name overloads declared on one line share the locator; the
+        engine's ``parameter_types``, when known, choose between them.
+        """
         normalized_name = normalized_method_name(name)
         path = normalized_path(path)
-        exact = by_locator.get((normalized_name, path, line), [])
+        exact = overload(by_locator.get((normalized_name, path, line), []), parameter_types)
         if len(exact) == 1:
             return exact[0], False
         if len(exact) > 1:
             return None
-        same_file = [
+        same_file = overload([
             item for item in methods_by_path_and_name.get((path, normalized_name), ())
             if item.start_line <= line <= item.end_line
-        ]
+        ], parameter_types)
         if len(same_file) == 1:
             return same_file[0], False
         if len(same_file) > 1:
@@ -757,7 +801,10 @@ def _build_call_graph(
         return None
 
     def locate_caller(call: MethodCall) -> IntegrationMethod | None:
-        resolved = locate(call.caller, call.caller_path, call.caller_line)
+        resolved = locate(
+            call.caller, call.caller_path, call.caller_line,
+            parameter_types=call.caller_parameter_types,
+        )
         if resolved is not None:
             return resolved[0]
         if not call.caller.startswith("<anonymous"):
@@ -869,6 +916,7 @@ def _build_call_graph(
         resolved_callee = locate(
             call.callee, call.callee_path, call.callee_line,
             allow_signature_fallback=True,
+            parameter_types=call.callee_parameter_types,
         )
         if caller is None or resolved_callee is None:
             continue

@@ -306,8 +306,14 @@ the superclass and its ancestors, after overload selection; the call is
 searches interface `X`, or the superclass of an enclosing class `X`.
 The pass matches each indexed method to its declaration by start line,
 end line and written signature, so two methods on one line stay distinct
-in the symbol table. The join still locates a callee by name, path and
-line, so it drops an edge to one of two same-name overloads on one line.
+in the symbol table. The join locates a method by name, path and start
+line. When two same-name overloads share that line, the CodeQL row's
+declared parameter types choose between them: each side is reduced to
+simple erased names (`java.util.List<String>` is `List`, `String...` is
+`String[]`). The indexed method has no column, so the types replace it.
+The source pass's rows carry no types, so its edge to one of two such
+overloads is still dropped, and so is a CodeQL edge when an indexed
+signature is unknown or the types name no difference.
 
 The closed world adds two shapes of the CodeQL query (ADR-70). When the
 receiver's declared type is a source interface and the call has one exact
@@ -588,7 +594,7 @@ that owns each gap. A shape not delivered is a strict expected failure.
 
 | Status | Shapes |
 |---|---|
-| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol pass), S9 varargs of any arity, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, H13 class wins over a `default`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, M4 one type in `src/main` and `src/test`, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
+| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol table; CodeQL join), S9 varargs of any arity, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, H13 class wins over a `default`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, M4 one type in `src/main` and `src/test`, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
 | `defect` | F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
 | `missing` | S7 constructors, S8 constructor and initializer bodies, H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
 | out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |

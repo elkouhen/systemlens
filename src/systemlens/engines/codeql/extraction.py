@@ -106,10 +106,19 @@ def _parse_codeql_calls(rows: Iterable[Mapping[str, str]], path_prefix: str) -> 
                 # A result without the confidence column cannot claim exact
                 # dispatch.
                 dispatch_confidence=row.get("dispatch_confidence", "possible"),
+                caller_parameter_types=_parameter_types(row.get("caller_parameter_types")),
+                callee_parameter_types=_parameter_types(row.get("callee_parameter_types")),
             ))
         except (KeyError, TypeError, ValueError) as exc:
             raise CodeQLError("CodeQL returned an unexpected call-graph CSV schema.") from exc
     return calls
+
+
+def _parameter_types(value: str | None) -> tuple[str, ...] | None:
+    """Decode the ``;``-separated parameter types; ``None`` when absent."""
+    if value is None:
+        return None
+    return tuple(value.split(";")) if value else ()
 
 
 def extract_codeql_kafka_message_types(

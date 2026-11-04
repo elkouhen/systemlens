@@ -129,6 +129,19 @@ predicate callerInScope(Callable enclosing) {
   __CALLER_SCOPE__
 }
 
+/**
+ * The declared parameter types, separated by `;`. Two same-name overloads
+ * declared on one line share a name, a file and a start line; the join
+ * tells them apart with these types.
+ */
+string parameterTypes(Callable callable) {
+  result = concat(int i |
+    i in [0 .. callable.getNumberOfParameters() - 1]
+  |
+    callable.getSourceDeclaration().getParameterType(i).getName(), ";" order by i
+  )
+}
+
 from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
 where callerInScope(enclosing) and
   enclosing = call.getEnclosingCallable() and
@@ -142,7 +155,9 @@ select enclosing.getQualifiedName() as caller,
   invoked.getFile().getRelativePath() as callee_path,
   invoked.getLocation().getStartLine() as callee_line,
   call.getLocation().getStartLine() as call_line,
-  dispatch_confidence
+  dispatch_confidence,
+  parameterTypes(enclosing) as caller_parameter_types,
+  parameterTypes(invoked) as callee_parameter_types
 """
 
 _METHODS_QUERY = """import java

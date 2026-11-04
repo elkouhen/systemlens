@@ -4,7 +4,7 @@ An engine reports source-located method calls; the core joins them to
 indexed integration methods. No type here depends on a particular analyzer.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
@@ -13,6 +13,10 @@ class MethodCall:
 
     ``dispatch_confidence`` is ``exact`` when the engine identified a single
     target, ``possible`` when the target is one of several candidates.
+    ``caller_parameter_types`` and ``callee_parameter_types`` give each
+    declaration's parameter types when the engine knows them, so the join
+    tells apart same-name overloads declared on one line. They do not take
+    part in a call's identity.
     """
 
     caller: str
@@ -23,6 +27,8 @@ class MethodCall:
     callee_line: int
     call_line: int
     dispatch_confidence: str = "exact"
+    caller_parameter_types: tuple[str, ...] | None = field(default=None, compare=False)
+    callee_parameter_types: tuple[str, ...] | None = field(default=None, compare=False)
 
 
 @dataclass(frozen=True)

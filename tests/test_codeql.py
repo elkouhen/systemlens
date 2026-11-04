@@ -530,6 +530,42 @@ def test_calls_that_join_no_indexed_file_are_refused(tmp_path: Path, monkeypatch
             session.calls()
 
 
+def test_overloads_declared_on_one_line_keep_their_codeql_edge() -> None:
+    """Q9 of the call-graph review: two same-name overloads on one line
+    shared the join key (name, path, line) and the edge was dropped."""
+    from systemlens.indexing.code_flows import _build_call_graph
+
+    out = "src/main/java/com/acme/Out.java"
+    api = "src/main/java/com/acme/Api.java"
+    methods = [
+        IntegrationMethod("api", "m", "com.acme.Api.sameline", api, 13, 16, ("in",), (),
+                          parameter_types=()),
+        IntegrationMethod("a0", "m", "com.acme.Out.a", out, 7, 7, (), ("out-a",),
+                          parameter_types=()),
+        IntegrationMethod("a1", "m", "com.acme.Out.a", out, 7, 7, (), ("out-int",),
+                          parameter_types=("int",)),
+        IntegrationMethod("g0", "m", "com.acme.Out.g", out, 8, 8, (), (),
+                          parameter_types=("java.util.List<String>", "String...")),
+        IntegrationMethod("g1", "m", "com.acme.Out.g", out, 8, 8, (), (),
+                          parameter_types=("Map<K, V>",)),
+    ]
+    calls = [
+        codeql.MethodCall("com.acme.Api.sameline", api, 14, "com.acme.Out.a", out, 7, 15,
+                          caller_parameter_types=(), callee_parameter_types=()),
+        codeql.MethodCall("com.acme.Api.sameline", api, 14, "com.acme.Out.a", out, 7, 16,
+                          caller_parameter_types=(), callee_parameter_types=("int",)),
+        codeql.MethodCall("com.acme.Api.sameline", api, 14, "com.acme.Out.g", out, 8, 16,
+                          callee_parameter_types=("List<String>", "String[]")),
+    ]
+
+    graph = _build_call_graph(methods, calls, repo_root=None, source_paths=[api, out],
+                              progress=None)
+
+    assert sorted((edge.callee_id, edge.line) for edge in graph.edges()) == [
+        ("a0", 15), ("a1", 16), ("g0", 16),
+    ]
+
+
 def test_the_supplied_database_identity_enters_the_flow_signature(tmp_path: Path) -> None:
     """Q1: a recreated database recomputes the flows of unchanged sources."""
     first = _supplied_database(tmp_path / "one", "/work/repo", {})

@@ -123,6 +123,45 @@ def test_q1_a_database_of_the_indexed_sources_is_used(tmp_path: Path) -> None:
     ]
 
 
+def test_q9_overloads_declared_on_one_line_keep_their_edges(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _write(repo, {
+        "pom.xml": _POM,
+        "src/main/java/com/acme/Api.java": _API.replace(
+            "        pub.send();\n", "        pub.a();\n        pub.a(1);\n",
+        ),
+        "src/main/java/com/acme/Pub.java": (
+            "package com.acme;\n\n"
+            "import org.springframework.kafka.core.KafkaTemplate;\n\n"
+            "public class Pub {\n"
+            "    private KafkaTemplate<String, String> kafkaTemplate;\n"
+            "    public void a() { kafkaTemplate.send(\"a\", \"x\"); }"
+            " public void a(int i) { kafkaTemplate.send(\"a-int\", \"x\"); }\n"
+            "}\n"
+        ),
+    })
+    database = _create_database(repo, tmp_path / "db")
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True,
+                   call_graph_engine=codeql.CodeQLEngine(database=database))
+        methods = {method.id: method for method in store.all_integration_methods()}
+        edges = [
+            (methods[edge.callee_id].parameter_types, edge.line)
+            for edge in store.all_call_edges()
+            if edge.callee_id in methods
+            and methods[edge.callee_id].qualified_method == "com.acme.Pub.a"
+        ]
+        published = sorted(
+            flow.steps[-1].start_line for flow in store.all_code_flows()
+            if flow.steps and flow.steps[-1].kind == "message_publish"
+        )
+
+    assert sorted(edges) == [((), 12), (("int",), 13)]
+    # One flow per overload, each to its own send site on line 7.
+    assert published == [7, 7]
+
+
 def _calls(tmp_path: Path, files: dict[str, str]) -> set[tuple[str, int, str, int, str]]:
     _write(tmp_path / "repo", files)
     database = _create_database(tmp_path / "repo", tmp_path / "db")
