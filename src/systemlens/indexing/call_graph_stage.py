@@ -161,6 +161,15 @@ def _partition_calls(
     return [(name, by_project.get(name, [])) for name, _root, _prefix in roots]
 
 
+def _engine_method_name(name: str) -> str:
+    """Spell an engine's qualified method name as the index does.
+
+    The same rule as the call-graph join: ``$`` separates a nested type,
+    and a leading ``$`` marks the unnamed package.
+    """
+    return name.replace("$", ".").lstrip(".")
+
+
 @dataclass(frozen=True)
 class JoinResume:
     """A persisted join checkpoint to resume from, validated by the caller."""
@@ -398,30 +407,36 @@ def run_call_graph_stage(
                 )
             )
         methods_projection.extend(graph_methods)
-        known_locators = {
-            (method.qualified_method, method.path, method.start_line)
-            for method in methods_projection
-        }
+        # An engine method is the indexed method of the same name whose line
+        # range holds its line: the engine locates the declaration, the index
+        # starts at its first annotation, and CodeQL spells nested types
+        # with ``$`` (call-graph review Q10).
+        ranges_by_name: dict[tuple[str, str], list[tuple[int, int]]] = {}
+        for known in methods_projection:
+            ranges_by_name.setdefault((known.qualified_method, known.path), []).append(
+                (known.start_line, known.end_line)
+            )
         eligible_paths = set(current_hashes)
         module_of_path = path_module_resolver(repo_root, relation_modules)
         for method in codeql_method_projection:
             if method.path not in eligible_paths:
                 continue
-            locator = (method.qualified_method, method.path, method.start_line)
-            if locator in known_locators:
+            name = _engine_method_name(method.qualified_method)
+            ranges = ranges_by_name.setdefault((name, method.path), [])
+            if any(start <= method.start_line <= end for start, end in ranges):
                 continue
             module = module_of_path(method.path) or ""
             methods_projection.append(PersistedCallGraphMethod(
                 id="codeql:" + hashlib.sha256(
-                    f"{module}|{method.path}|{method.start_line}|{method.qualified_method}".encode()
+                    f"{module}|{method.path}|{method.start_line}|{name}".encode()
                 ).hexdigest()[:24],
                 module=module,
-                qualified_method=method.qualified_method,
+                qualified_method=name,
                 path=method.path,
                 start_line=method.start_line,
                 end_line=method.start_line,
             ))
-            known_locators.add(locator)
+            ranges.append((method.start_line, method.start_line))
         store.replace_call_graph_methods(methods_projection)
         store.replace_call_edges(edges)
         store.set_meta(

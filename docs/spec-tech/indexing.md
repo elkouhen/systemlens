@@ -568,8 +568,13 @@ symbol indexes are released before route expansion; the adjacency remains the
 single in-memory call-graph representation used by the BFS. The source-backed
 method projection and all source-backed call edges are written to `codeql_methods`
 and `codeql_call_edges`; ordinary intermediate methods remain distinct from
-`integration_methods` and can be rehydrated in later joins. Live progress uses a
-wall-clock watchdog covering pipe reads;
+`integration_methods` and can be rehydrated in later joins. A method the
+engine reports is stored once: it is dropped when an indexed method of the
+same name and path holds its line, after `$` in CodeQL's nested type names
+becomes `.`. CodeQL locates the declaration while the index starts at its
+first annotation, so the range, not the start line, identifies it.
+
+Live progress uses a wall-clock watchdog covering pipe reads;
 
 POSIX timeouts terminate the complete process group, and
 subprocesses are reaped on errors. The configured deadline covers the complete

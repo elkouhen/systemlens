@@ -427,3 +427,52 @@ def test_a_deadline_after_the_call_query_keeps_its_calls(tmp_path: Path) -> None
     assert [[step.kind for step in flow.steps] for flow in flows] == [
         ["http_entry", "method_call", "message_publish"],
     ]
+
+
+class _MethodsEngine(_RecordedEngine):
+    """Reports engine methods the way CodeQL spells and locates them."""
+
+    def __init__(self, methods: list[SourceMethod]) -> None:
+        super().__init__([])
+        self._methods = methods
+
+    def methods(self, source_prefix: str = "") -> list[SourceMethod]:
+        return self._methods
+
+
+def test_engine_methods_never_duplicate_an_indexed_method(tmp_path: Path) -> None:
+    """Q10 of the call-graph review: CodeQL's raw ``$`` name and declaration
+    line stored each annotated or nested method a second time."""
+    repo = _repository(tmp_path / "repo")
+    path = "src/main/java/example/Outer.java"
+    (repo / path).write_text(
+        "package example;\n"
+        "class Outer {\n"
+        "  @Deprecated\n"
+        "  void annotated() { }\n"
+        "  static class Inner {\n"
+        "    void nested() { }\n"
+        "  }\n"
+        "  void plain() { }\n"
+        "}\n",
+        encoding="utf-8",
+    )
+    engine = _MethodsEngine([
+        SourceMethod("example.Outer.annotated", path, 4),
+        SourceMethod("example.Outer$Inner.nested", path, 6),
+        SourceMethod("example.Outer$Inner.<init>", path, 5),
+    ])
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True, call_graph_engine=engine)
+        rows = [
+            (method.qualified_method, method.start_line)
+            for method in store.all_call_graph_methods() if method.path == path
+        ]
+
+    assert sorted(rows) == [
+        ("example.Outer.Inner.<init>", 5),
+        ("example.Outer.Inner.nested", 6),
+        ("example.Outer.annotated", 3),
+        ("example.Outer.plain", 8),
+    ]
