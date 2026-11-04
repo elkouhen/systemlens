@@ -43,7 +43,7 @@ Each case gets one status:
 | # | Case | Status | Evidence |
 |---|---|---|---|
 | M1 | Maven multi-module build with an aggregator | `verified` | sample: seven modules, one aggregator |
-| M2 | Gradle build, `settings.gradle` includes | `specified` | `discovery/build` |
+| M2 | Gradle build, `settings.gradle` includes | `verified` | fixtures of lot 3 (2026-11-04): includes, `projectDir` remaps, `buildSrc`, `includeBuild`; ADR-80 |
 | M3 | Application module versus library, by `SpringApplication.run` | `verified` | sample: entry points recorded |
 | M4 | Service name from `spring.application.name` in a multi-document YAML | `specified` | sample names equal the module names, so not discriminating |
 | M5 | Service name served by a config server from another module | `absent` | sample: `config-service/.../config/*.yml` |

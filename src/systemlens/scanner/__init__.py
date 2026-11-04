@@ -30,6 +30,7 @@ from pathlib import Path
 from systemlens.discovery.build import gradle as gradle_module
 from systemlens.discovery.java import parser as java_parser
 from systemlens.discovery.build import maven as maven_module
+from systemlens.discovery.build import projects as build_projects
 from systemlens.scanner._core import _java_qualified_name, _java_source
 from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner._spring_properties import (
@@ -123,3 +124,4 @@ def clear_analysis_caches() -> None:
     java_parser.clear_caches()
     maven_module.clear_caches()
     gradle_module.clear_caches()
+    build_projects.clear_caches()

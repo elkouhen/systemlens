@@ -1,10 +1,9 @@
-"""Détection de microservices Gradle Spring Boot (BACKLOG-15 H1, ADR-33)."""
+"""Gradle build files: project names, versions and settings declarations."""
 
 import re
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-
-from systemlens.discovery.java import parser as java_parser
 
 _GRADLE_ARTIFACT_RE = re.compile(
     r"(?:archiveBaseName|archivesBaseName|archivesName)\s*(?:\.set\s*\()?\s*=\s*['\"]([^'\"]+)['\"]"
@@ -15,32 +14,6 @@ _GRADLE_ARTIFACT_SET_RE = re.compile(
 _ROOT_PROJECT_NAME_RE = re.compile(r"rootProject\.name\s*=\s*['\"]([^'\"]+)['\"]")
 _GRADLE_VERSION_RE = re.compile(r"\bversion\s*(?:=|\.set\()\s*['\"]([^'\"]+)['\"]")
 _GRADLE_BUILD_FILENAMES = ("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts")
-_MAX_NESTED_MODULE_DEPTH = 5
-
-
-def _is_build_output_path(root: Path, path: Path) -> bool:
-    """Return whether *path* is nested under Maven or Gradle build output."""
-    return bool({"target", "build"}.intersection(path.relative_to(root).parts))
-
-
-def _is_module_within_depth(root: Path, module_dir: Path) -> bool:
-    return len(module_dir.relative_to(root).parts) <= _MAX_NESTED_MODULE_DEPTH
-
-
-def _is_spring_boot_main_class(source: bytes) -> bool:
-    return java_parser.has_spring_boot_main_class(source)
-
-
-def _nearest_gradle_project(repo_root: Path, java_file: Path) -> Path | None:
-    """Return the owning Gradle project, never a source-directory surrogate."""
-    for candidate in [java_file.parent, *java_file.parent.parents]:
-        if candidate != repo_root and repo_root not in candidate.parents:
-            break
-        if any((candidate / filename).is_file() for filename in _GRADLE_BUILD_FILENAMES):
-            return candidate
-        if candidate == repo_root:
-            break
-    return None
 
 
 def _first_gradle_match(paths: list[Path], patterns: tuple[re.Pattern[str], ...]) -> str | None:
@@ -72,102 +45,172 @@ def _gradle_artifact_name(service_dir_str: str, fallback: str) -> str:
     return project_name or fallback
 
 
-@lru_cache(maxsize=8)
-def _service_root_artifacts(repo_root_str: str) -> tuple[tuple[str, str], ...]:
-    """Paires ``(racine relative, nom d'artefact)`` des services détectés."""
-    repo_root = Path(repo_root_str)
-    roots: dict[str, str] = {}
-    for java_file in repo_root.rglob("*.java"):
-        if {"target", "build"}.intersection(java_file.relative_to(repo_root).parts):
-            continue
-        try:
-            source = java_file.read_bytes()
-        except OSError:
-            continue
-        if not _is_spring_boot_main_class(source):
-            continue
-
-        service_dir = _nearest_gradle_project(repo_root, java_file)
-        if service_dir is None or not _is_module_within_depth(repo_root, service_dir):
-            continue
-        relative_root = "" if service_dir == repo_root else service_dir.relative_to(repo_root).as_posix()
-        fallback = service_dir.name
-        roots[relative_root] = _gradle_artifact_name(str(service_dir), fallback)
-    return tuple(sorted(roots.items()))
-
-
 def clear_caches() -> None:
     """Vide les caches de détection Gradle avant une nouvelle indexation."""
     _gradle_artifact_name.cache_clear()
-    _service_root_artifacts.cache_clear()
 
 
-def discover_gradle_services(repo_root: Path) -> list[tuple[str, Path]]:
-    """Services Gradle détectés sous la forme ``(artefact, répertoire)``."""
-    root = repo_root.resolve()
-    return [
-        (artifact, root if not relative_root else root / relative_root)
-        for relative_root, artifact in _service_root_artifacts(str(root))
-    ]
+def gradle_version(module_dir: Path) -> str | None:
+    """Return the version literal declared by a project's own build file."""
+    return _first_gradle_match(
+        [module_dir / "build.gradle", module_dir / "build.gradle.kts"], (_GRADLE_VERSION_RE,)
+    )
 
 
-def discover_gradle_service_roots(repo_root: Path) -> list[str]:
-    """Noms d'artefacts des microservices Gradle détectés, triés."""
-    return sorted(artifact for artifact, _ in discover_gradle_services(repo_root))
+def gradle_project_name(module_dir: Path, fallback: str) -> str:
+    """Return the archive name, the root project name, or ``fallback``."""
+    return _gradle_artifact_name(str(module_dir), fallback)
 
 
-def discover_gradle_modules(repo_root: Path) -> list[tuple[str, Path, str | None]]:
-    """Return every Gradle project, including settings-only aggregators."""
-    root = repo_root.resolve()
-    module_dirs = {
-        path.parent
-        for filename in ("build.gradle", "build.gradle.kts")
-        for path in root.rglob(filename)
-        if _is_module_within_depth(root, path.parent)
-        if not _is_build_output_path(root, path)
-    }
-    if any((root / filename).is_file() for filename in ("settings.gradle", "settings.gradle.kts")):
-        module_dirs.add(root)
-    modules = []
-    for module_dir in sorted(module_dirs):
-        name = _gradle_artifact_name(str(module_dir), module_dir.name)
-        version = _first_gradle_match(
-            [module_dir / "build.gradle", module_dir / "build.gradle.kts"], (_GRADLE_VERSION_RE,)
-        )
-        modules.append((name, module_dir, version))
-    return modules
+@dataclass(frozen=True)
+class GradleSettings:
+    """Projects declared by one ``settings.gradle(.kts)`` file.
 
-
-def gradle_module_identity(repo_root: Path, module_dir: Path) -> str:
-    """Return an artifact identity, qualified by path only when ambiguous."""
-    root = repo_root.resolve()
-    module_dir = module_dir.resolve()
-    name = _gradle_artifact_name(str(module_dir), module_dir.name)
-    matches = [
-        candidate
-        for candidate_name, candidate, _version in discover_gradle_modules(root)
-        if candidate_name == name
-    ]
-    if len(matches) <= 1:
-        return name
-    relative = module_dir.relative_to(root).as_posix() or "."
-    return f"{name}@{relative}"
-
-
-def gradle_service_for_path(repo_root: Path, rel_path: str) -> str | None:
-    """Nom d'artefact du service Gradle auquel appartient ``rel_path``.
-
-    Un projet mono-service avec ``src/main/java`` à la racine est rattaché à
-    son propre artefact. Pour un workspace, tous les sous-projets du même
-    répertoire de premier niveau reçoivent le nom d'artefact déclaré par le
-    projet Gradle de ce service.
+    ``projects`` maps each declared project path (``:a:b``) to its directory,
+    relative to the settings directory, including implicit parents of nested
+    paths. ``complete`` is false when the file computes its includes or
+    project directories at runtime: the declaration is then not used to
+    decide which build files belong to the build. ``included_builds`` lists
+    the literal ``includeBuild`` directories, which are never projects of
+    this build.
     """
-    parts = Path(rel_path).parts
-    if not parts:
+
+    projects: dict[str, str]
+    explicit: frozenset[str]
+    included_builds: tuple[str, ...]
+    complete: bool
+
+
+_INCLUDE_CALL_RE = re.compile(r"\b(include|includeFlat|includeBuild)\b(?!\s*[.=])")
+_STRING_LITERAL_RE = re.compile(r"\s*(['\"])([^'\"\n]*)\1")
+_PROJECT_DIR_ASSIGNMENT_RE = re.compile(r"\bprojectDir\s*=(?!=)")
+_PROJECT_DIR_REMAP_RE = re.compile(
+    r"\b(?:project|findProject)\s*\(\s*(['\"])(:?[^'\"$]+)\1\s*\)\s*!?\??\.projectDir\s*=\s*"
+    r"(?:file\s*\(\s*(['\"])([^'\"$]+)\3\s*\)"
+    r"|(?:new\s+)?(?:java\.io\.)?File\s*\(\s*(?:settingsDir|rootDir|rootProject\.projectDir)\s*,"
+    r"\s*(['\"])([^'\"$]+)\5\s*\))"
+)
+# A settings script that computes its project list cannot be read statically.
+_DYNAMIC_SETTINGS_MARKERS = (
+    "apply from", "apply(from", "eachDir", "listFiles", ".each", "forEach", "for (", "for(",
+    "fileTree", "walkTopDown",
+)
+
+
+def _strip_gradle_comments(text: str) -> str:
+    """Remove ``//`` and ``/* */`` comments outside string literals."""
+    result: list[str] = []
+    index = 0
+    quote: str | None = None
+    while index < len(text):
+        char = text[index]
+        if quote is not None:
+            result.append(char)
+            if char == "\\" and index + 1 < len(text):
+                result.append(text[index + 1])
+                index += 2
+                continue
+            if char == quote:
+                quote = None
+            index += 1
+            continue
+        if char in "'\"":
+            quote = char
+            result.append(char)
+            index += 1
+            continue
+        if text.startswith("//", index):
+            end = text.find("\n", index)
+            index = len(text) if end < 0 else end
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index + 2)
+            index = len(text) if end < 0 else end + 2
+            result.append(" ")
+            continue
+        result.append(char)
+        index += 1
+    return "".join(result)
+
+
+def _literal_arguments(text: str, start: int) -> list[str] | None:
+    """Read ``'a', 'b'`` or ``('a', "b")`` after a call name, else ``None``."""
+    position = start
+    while position < len(text) and text[position] in " \t":
+        position += 1
+    parenthesized = position < len(text) and text[position] == "("
+    if parenthesized:
+        position += 1
+    values: list[str] = []
+    while True:
+        match = _STRING_LITERAL_RE.match(text, position)
+        if match is None or "$" in match.group(2):
+            return None
+        values.append(match.group(2))
+        position = match.end()
+        separator = re.match(r"\s*,", text[position:])
+        if separator is None:
+            break
+        position += separator.end()
+        if parenthesized and re.match(r"\s*\)", text[position:]) is not None:
+            break
+    if parenthesized and re.match(r"\s*\)", text[position:]) is None:
         return None
-    resolved_root = repo_root.resolve()
-    for root, artifact in _service_root_artifacts(str(resolved_root)):
-        if not root or rel_path == root or rel_path.startswith(f"{root}/"):
-            module_dir = resolved_root if not root else resolved_root / root
-            return gradle_module_identity(resolved_root, module_dir)
-    return None
+    return values
+
+
+def _normalized_project_path(value: str) -> str:
+    segments = [segment for segment in value.strip().split(":") if segment]
+    return ":" + ":".join(segments) if segments else ":"
+
+
+def parse_gradle_settings(settings_path: Path) -> GradleSettings:
+    """Read the literal project declarations of one settings script."""
+    try:
+        text = _strip_gradle_comments(
+            settings_path.read_text(encoding="utf-8", errors="replace")
+        )
+    except OSError:
+        return GradleSettings({}, frozenset(), (), False)
+    complete = not any(marker in text for marker in _DYNAMIC_SETTINGS_MARKERS)
+    declared: list[str] = []
+    included_builds: list[str] = []
+    for match in _INCLUDE_CALL_RE.finditer(text):
+        arguments = _literal_arguments(text, match.end())
+        kind = match.group(1)
+        if arguments is None:
+            if kind != "includeBuild":
+                complete = False
+            continue
+        if kind == "include":
+            declared.extend(_normalized_project_path(argument) for argument in arguments)
+        elif kind == "includeBuild":
+            included_builds.extend(arguments)
+        # ``includeFlat`` projects live beside the settings directory, outside
+        # the indexed tree; they are never projects of this repository.
+    remaps: dict[str, str] = {}
+    for match in _PROJECT_DIR_REMAP_RE.finditer(text):
+        remaps[_normalized_project_path(match.group(2))] = match.group(4) or match.group(6)
+    if len(remaps) != len(_PROJECT_DIR_ASSIGNMENT_RE.findall(text)):
+        complete = False
+    every_path: set[str] = set()
+    for path in declared:
+        segments = path.strip(":").split(":")
+        for depth in range(1, len(segments) + 1):
+            every_path.add(":" + ":".join(segments[:depth]))
+    directories: dict[str, str] = {}
+    for path in sorted(every_path, key=lambda value: value.count(":")):
+        parent, _, name = path.rpartition(":")
+        if path in remaps:
+            directories[path] = remaps[path]
+        else:
+            parent_dir = directories.get(parent, "") if parent else ""
+            directories[path] = f"{parent_dir}/{name}" if parent_dir else name
+    if not declared:
+        complete = False
+    return GradleSettings(
+        projects=directories,
+        explicit=frozenset(declared),
+        included_builds=tuple(included_builds),
+        complete=complete,
+    )

@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from systemlens.discovery.build.maven import module_name_for_path
+from systemlens.discovery.build.projects import module_for_path as module_name_for_path
 
 
 def test_module_name_for_path_finds_nearest_pom(tmp_path: Path) -> None:

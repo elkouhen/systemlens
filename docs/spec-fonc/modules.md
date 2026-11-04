@@ -156,3 +156,46 @@ pattern.
 Topic conventions never create synthetic request/reply relations. Kafka
 relations are derived only from indexed producers, consumers, concrete topics,
 and compatible payload evidence.
+
+## Build projects and file ownership
+
+A directory with a `pom.xml`, a `build.gradle(.kts)` or a
+`settings.gradle(.kts)` is a build project, at any depth. Hidden
+directories, `node_modules` and build outputs are not searched. When one
+directory has both a POM and a Gradle build file, the Maven project wins.
+
+An aggregator POM with `<modules>` declares its build. Below it, only the
+modules it declares, recursively and profiles included, are projects. A
+`settings.gradle(.kts)` with literal `include` calls declares its build the
+same way, and its literal `projectDir` remaps move a project. A declared
+Gradle project is named after its project path, unless its build file sets
+an archive name.
+
+A declaration that SystemLens cannot read statically declares nothing: an
+unresolved `<module>` entry, a computed include, or `apply from`. Every
+build file below it then stays a project. `buildSrc` and `includeBuild`
+directories are never projects.
+
+Test, mock and archetype modules, `buildSrc` and included builds are
+excluded from the index with everything below them. A build directory that
+its declaring build does not include is excluded too, unless it contains a
+project. Excluded sources produce no endpoint and no finding.
+
+Each indexed file belongs to the deepest project that contains it, whether
+that project is an application or a library. Every endpoint, relation and
+flow therefore names a module of the inventory. When two projects share a
+name, both identities are qualified with their relative path; the root uses
+`racine`.
+
+## Module dependencies
+
+A module dependency joins two inventory modules. A Maven dependency names a
+local module by `artifactId`, and also by `groupId` when the module declares
+or inherits one: the external `io.github.resilience4j:core` is not the local
+module `core`. A Gradle `project(':path')` dependency names the project that
+`settings.gradle` declares at that path.
+
+Test-only dependencies give no module dependency: the Maven `test` scope and
+the Gradle `test*`, `androidTest*`, `testFixtures*` and other test
+source-set configurations. `provided`, `runtime`, `compileOnly` and
+`runtimeOnly` stay dependencies, because the build or the runtime uses them.

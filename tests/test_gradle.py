@@ -1,6 +1,11 @@
 from pathlib import Path
 
-from systemlens.discovery.build.gradle import discover_gradle_service_roots, gradle_service_for_path
+from systemlens.discovery.build.projects import build_layout
+from systemlens.discovery.build.projects import module_for_path as gradle_service_for_path
+
+
+def discover_gradle_service_roots(root: Path) -> list[str]:
+    return sorted(project.name for project in build_layout(root).projects)
 
 
 def test_gradle_service_for_path_groups_all_submodules_under_the_top_level_dir(

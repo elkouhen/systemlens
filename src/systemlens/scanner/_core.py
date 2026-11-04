@@ -14,8 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from systemlens.discovery.java import parser as java_parser
-from systemlens.discovery.build.gradle import gradle_service_for_path
-from systemlens.discovery.build.maven import module_name_for_path
+from systemlens.discovery.build.projects import module_for_path
 from systemlens.domain.message_types import informative_message_type
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 
@@ -313,14 +312,12 @@ def _infer_rest_parameter_type(
             other_types.append(declared_type)
     return (body_types or other_types)[0] if body_types or other_types else None
 def _module_for_path(repo_root: Path, rel_path: str) -> str | None:
-    """Module Maven (`pom.xml`) en priorité (choix explicite, ADR-32) ;
-    repli sur la détection de service Gradle (BACKLOG-15 H1, ADR-33) quand
-    aucun `pom.xml` n'est trouvé — un repo purement Maven ou purement
-    Gradle n'a jamais les deux à interroger, un repo mixte essaie les deux
-    dans cet ordre par fichier."""
-    return module_name_for_path(repo_root, rel_path) or gradle_service_for_path(
-        repo_root, rel_path
-    )
+    """Identity of the deepest Maven or Gradle project owning ``rel_path``.
+
+    Application and library projects are owners alike, so a file always
+    names a module of the persisted inventory (ADR-80).
+    """
+    return module_for_path(repo_root, rel_path)
 
 
 # BACKLOG-10 K2/K11 : règles d'inventaire d'endpoints (`metadata.category:

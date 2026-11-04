@@ -330,19 +330,6 @@ def test_discover_module_dependencies_keeps_only_local_maven_and_gradle_targets(
     ]
 
 
-def test_discover_modules_limits_nested_build_discovery_to_five_levels(tmp_path: Path) -> None:
-    at_limit = tmp_path / "one" / "two" / "three" / "four" / "five"
-    beyond_limit = at_limit / "six"
-    at_limit.mkdir(parents=True)
-    beyond_limit.mkdir()
-    _write_pom(at_limit / "pom.xml", "at-limit", "1.0.0")
-    _write_pom(beyond_limit / "pom.xml", "too-deep", "1.0.0")
-
-    modules = discover_modules(tmp_path)
-
-    assert [module.name for module in modules] == ["at-limit"]
-
-
 def test_discover_modules_enriches_child_module_files_under_an_aggregator(tmp_path: Path) -> None:
     (tmp_path / "pom.xml").write_text(
         "<project xmlns=\"http://maven.apache.org/POM/4.0.0\">"

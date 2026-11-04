@@ -4,6 +4,7 @@ import fnmatch
 import hashlib
 from pathlib import Path
 
+from systemlens.discovery.build.projects import outermost_build_directories
 from systemlens.infrastructure.config import Config
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.conventions.strategy1.indexing import (
@@ -97,7 +98,11 @@ def is_target_java_source_path(rel_path: str) -> bool:
 
 
 def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:
-    """Return outermost build roots when the input is a workspace container."""
+    """Return outermost build roots when the input is a workspace container.
+
+    Build roots are found at any depth, with the walk of the build layout,
+    so a deep project is inside the perimeter it is attributed to (ADR-80).
+    """
     descriptors = (
         "pom.xml",
         "build.gradle",
@@ -107,19 +112,7 @@ def _nested_build_roots(repo_root: Path) -> tuple[Path, ...]:
     )
     if any((repo_root / descriptor).is_file() for descriptor in descriptors):
         return ()
-    candidates = {
-        path.parent
-        for descriptor in descriptors
-        for path in repo_root.rglob(descriptor)
-        if not is_git_metadata(path.relative_to(repo_root).as_posix())
-        if not is_build_output(path.relative_to(repo_root).as_posix())
-        if len(path.parent.relative_to(repo_root).parts) <= 5
-    }
-    return tuple(
-        candidate
-        for candidate in sorted(candidates)
-        if not any(parent != candidate and parent in candidates for parent in candidate.parents)
-    )
+    return outermost_build_directories(repo_root)
 
 
 def is_in_excluded_module(path: Path, excluded_module_paths: tuple[Path, ...]) -> bool:

@@ -6,14 +6,20 @@ Parent: [Technical specification](../SPEC-TECH.md).
 `index_repo` performs these steps:
 
 1. Clear parser and discovery caches before each indexing pass.
-2. Discover modules unless disabled.
+2. Discover modules unless disabled. `discovery/build/projects.py` builds
+   one `BuildLayout` per pass: projects, identities and excluded build
+   directories (ADR-80). Inventory, file ownership (`module_for_path`) and
+   the excluded perimeter all read it, so they cannot disagree.
 3. Build the eligible-file hash inventory, respecting include/exclude rules,
-   test-source exclusion, Maven test/archetype module exclusion and nested-build
-   boundaries.
+   test-source exclusion, the layout's excluded build directories and
+   nested-build boundaries.
 4. Compare hashes with the stored inventory and purge removed files. A changed
    or deleted Spring configuration file or Maven/Gradle descriptor expands the
    delta to the owning module when the module boundary is known. Root-level or
    otherwise ambiguous inputs still promote the delta to a full endpoint refresh.
+   A module whose identity changed, appeared or disappeared since the stored
+   inventory expands the delta to every file below it; the root forces a full
+   refresh.
 5. Force a full refresh when extractor/configuration/strategy signatures differ.
 6. Run AST extractors for the changed files and atomically replace their
    endpoints.
@@ -504,3 +510,32 @@ that owns each gap. A shape not delivered is a strict expected failure.
 | `defect` | F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
 | `missing` | S7 constructors, S8 constructor and initializer bodies, H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
 | out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |
+
+## Build layout
+
+The layout walks the repository once with `os.walk`, without a depth limit.
+It prunes hidden directories, `node_modules`, `__pycache__`,
+`bower_components`, and `target` or `build` directories outside `src`. The
+cost is one directory listing per source directory, below the file
+inventory's own walk.
+
+Maven projects are resolved by a fixpoint over the POM directories, from
+the shallowest. A kept aggregator whose `<modules>` all resolve to a POM
+directory governs its subtree: a POM below it is kept only when some kept
+aggregator declares it. Entries leaving the repository are ignored.
+
+Gradle builds are resolved per `settings.gradle(.kts)`, from the shallowest.
+`parse_gradle_settings` strips comments outside strings, reads literal
+`include`, `includeBuild` and `projectDir` remaps, and derives each
+project's directory from its parent's. A settings file with no literal
+include, a non-literal argument, an unmatched `projectDir` assignment or a
+dynamic marker (`apply from`, `eachDir`, `.each`, `forEach`, loops) is
+incomplete: its directory is the root project and its build files stay
+projects.
+
+`BuildLayout.owner(path)` walks the path's parents and returns the first
+project, or `None` at an excluded directory. Layouts are cached per root and
+cleared by `clear_analysis_caches`; `discover_modules` refreshes the cache.
+Maven module dependencies resolve `${...}` groupIds from the POM and its
+local parent chain; a placeholder that stays unresolved never matches a
+known groupId.

@@ -8,7 +8,7 @@ functional or technical contract.
 | Topic | ADRs |
 |---|---|
 | Local, conservative extraction | [ADR-1](#adr-1-local-static-architecture-analysis), [ADR-3](#adr-3-conservative-static-resolution) |
-| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias) |
+| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias), [ADR-80](#adr-80-follow-the-build-tools-project-model-for-module-ownership) |
 | Delivery and graph projection | [ADR-8](#adr-8-persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9-exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23-mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
@@ -1830,3 +1830,51 @@ the persisted relations. A generated Avro class keeps its own name and
 stays a known DTO. A project DTO that reuses a carrier name, such as a
 class named `Bytes`, is unknown too; that loss is accepted over a false
 mismatch.
+
+## ADR-80: Follow the build tool's project model for module ownership
+
+**Status:** Accepted on 2026-11-04 at the product owner's request (lot 3)
+of the [indexing review](plans/indexing-review-2026-11-03.md) (findings I2,
+I3, I4, I6, I7, I9). Applies ADR-11's `racine` segment to Gradle too.
+
+**Context:** Module inventory, file ownership and module dependencies each
+had their own rules. Gradle files belonged to the enclosing Spring Boot
+project, so a root application owned every subproject and a library owned
+nothing. Inventory stopped at five directory levels while Maven ownership
+did not. Every build file was a module, declared or not. Dependencies
+matched on `artifactId` alone and counted test scopes. An identity change
+left unchanged files with the old identity.
+
+**Decision:** One build layout per index drives inventory, ownership,
+identities and the excluded perimeter.
+
+- A file belongs to the deepest Maven or Gradle project that contains it,
+  application or library. When one directory has both build files, Maven
+  wins. There is no depth limit. The walk skips hidden directories,
+  `node_modules` and build outputs.
+- An aggregator POM with `<modules>` declares its build: below it, only the
+  declared POMs are projects, recursively, profiles included. A
+  `settings.gradle(.kts)` with literal `include` calls does the same, with
+  literal `projectDir` remaps. A declared Gradle project is named after its
+  project path. A module entry that does not resolve, or a computed
+  include, declares nothing, and every build file below stays a project.
+- `buildSrc` and `includeBuild` directories are never projects. With test,
+  mock and archetype modules, they are excluded with everything below them.
+  An undeclared build directory is excluded unless it contains a project.
+- Identities are collision-safe across Maven and Gradle projects of the
+  inventory; a qualified root uses `racine`.
+- A Maven dependency names a local module only when its `groupId` matches
+  the module's declared or inherited one, when both are known. Maven `test`
+  and Gradle test configurations (`test*`, `androidTest*`, `testFixtures*`,
+  `<sourceSet>Test*`) give no edge. `provided`, `runtime`, `compileOnly`
+  and `runtimeOnly` stay edges: they are build or runtime dependencies.
+- An incremental index rescans every file below a module whose identity
+  changed, appeared or disappeared; a change at the root forces `--full`.
+
+**Consequences:** Every endpoint, relation and flow names a module of the
+inventory. Gradle library endpoints now carry their module, so their
+relations exist. Stray copies such as train-ticket's
+`old-docs/Lib/ms-monitoring-core` leave the inventory, and their sources
+are no longer indexed. A repository whose aggregator omits a real service
+loses that service until the build declares it. The removed five-level
+test is replaced by a regression test for deep modules.

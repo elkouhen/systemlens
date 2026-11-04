@@ -3,6 +3,7 @@ entre `workspace.py` (fédération multi-services, BACKLOG-11 A2) et `scanner.py
 (attribution d'un module à chaque finding/endpoint indexé, BACKLOG-13 M1)."""
 
 import os
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 import re
@@ -314,57 +315,137 @@ def _cached_module_name(pom_path_str: str) -> str:
     return artifact_id or pom_path.parent.name
 
 
-@lru_cache(maxsize=512)
-def _cached_module_identity(repo_root_str: str, pom_path_str: str) -> str:
-    """Return a collision-safe Maven module identity within one index root."""
-    repo_root = Path(repo_root_str)
-    pom_path = Path(pom_path_str)
-    name = _cached_module_name(pom_path_str)
-    matching_paths = [
-        candidate
-        for candidate in repo_root.rglob("pom.xml")
-        if not {"target", "build"}.intersection(candidate.relative_to(repo_root).parts)
-        if _cached_module_name(str(candidate)) == name
-    ]
-    if len(matching_paths) <= 1:
-        return name
-    try:
-        relative_path = pom_path.parent.resolve().relative_to(repo_root.resolve())
-        relative = relative_path.as_posix()
-        if relative == ".":
-            relative = "racine"
-    except ValueError:
-        relative = pom_path.parent.name
-    return f"{name}@{relative}"
-
-
 def clear_caches() -> None:
     """BACKLOG-16 P2 : à appeler en tête de chaque indexation dans un
     processus long-vivant — `_cached_module_name` est caché par
     chemin de pom.xml pour toute la durée du process, un artifactId modifié
     entre deux `systemlens index` resterait sinon périmé."""
     _cached_module_name.cache_clear()
-    _cached_module_identity.cache_clear()
     _module_has_spring_boot_main_class.cache_clear()
 
 
-def module_name_for_path(repo_root: Path, rel_path: str) -> str | None:
-    """Nom de module Maven (artifactId, repli sur le nom du répertoire) du
-    plus proche `pom.xml` en remontant depuis le répertoire de `rel_path`
-    jusqu'à `repo_root` inclus (BACKLOG-13 M1). `None` si aucun `pom.xml`
-    n'est trouvé sur ce chemin — repo non-Maven, ou fichier hors
-    arborescence Maven. Résultat caché par `pom.xml` (mêmes garanties que
-    `resolve_spring_property`/`_load_flat_spring_properties` : un pom lu une
-    seule fois par process). Même bornage que `_candidate_spring_roots`
-    (`scanner.py`) : jamais de remontée au-delà de `repo_root`."""
-    source_abs = (repo_root / rel_path).resolve()
-    repo_root_resolved = repo_root.resolve()
-    candidates = [source_abs.parent, *source_abs.parent.parents]
-    for candidate in candidates:
-        if candidate == repo_root_resolved or repo_root_resolved in candidate.parents:
-            pom_path = candidate / "pom.xml"
-            if pom_path.is_file():
-                return _cached_module_identity(str(repo_root_resolved), str(pom_path))
-        if candidate == repo_root_resolved:
+def declared_modules(pom_path: Path) -> tuple[str, ...]:
+    """Return the ``<module>`` entries of a POM, its profiles included."""
+    root = parse_pom_root(pom_path)
+    if root is None:
+        return ()
+    entries = [
+        *_pom_findall(root, f"{_MAVEN_NS}modules/{_MAVEN_NS}module"),
+        *_pom_findall(
+            root,
+            f"{_MAVEN_NS}profiles/{_MAVEN_NS}profile/{_MAVEN_NS}modules/{_MAVEN_NS}module",
+        ),
+    ]
+    return tuple(
+        dict.fromkeys(entry.text.strip() for entry in entries if entry.text and entry.text.strip())
+    )
+
+
+@dataclass(frozen=True)
+class MavenDependency:
+    """One ``<dependency>`` of a POM, with its groupId resolved when possible.
+
+    ``group_id`` is ``None`` when the dependency declares none; it keeps an
+    unresolved ``${...}`` placeholder when no local POM defines the property.
+    """
+
+    group_id: str | None
+    artifact_id: str
+    scope: str | None
+
+
+def _local_parent_pom(pom_path: Path, root: Element) -> tuple[Path, Element] | None:
+    parent = root.find(f"{_MAVEN_NS}parent")
+    if parent is None:
+        parent = root.find("parent")
+    if parent is None:
+        return None
+    relative = _pom_child_text(parent, "relativePath")
+    candidate = pom_path.parent / (relative if relative is not None else "../pom.xml")
+    if candidate.is_dir():
+        candidate = candidate / "pom.xml"
+    if not candidate.is_file():
+        return None
+    parent_root = parse_pom_root(candidate)
+    if parent_root is None:
+        return None
+    if _pom_child_text(parent_root, "artifactId") != _pom_child_text(parent, "artifactId"):
+        return None
+    return candidate, parent_root
+
+
+def _declared_group_id(root: Element) -> str | None:
+    group_id = _pom_child_text(root, "groupId")
+    if group_id is not None:
+        return group_id
+    parent = root.find(f"{_MAVEN_NS}parent")
+    if parent is None:
+        parent = root.find("parent")
+    return _pom_child_text(parent, "groupId") if parent is not None else None
+
+
+def _inherited_properties(pom_path: Path, root: Element) -> dict[str, str]:
+    """Return the POM's properties merged over those of its local parents."""
+    chain: list[tuple[Path, Element]] = [(pom_path, root)]
+    seen = {pom_path.resolve()}
+    while len(chain) < 16:
+        parent_pom = _local_parent_pom(*chain[-1])
+        if parent_pom is None or parent_pom[0].resolve() in seen:
             break
-    return None
+        seen.add(parent_pom[0].resolve())
+        chain.append(parent_pom)
+    properties: dict[str, str] = {}
+    for path, element in reversed(chain):
+        properties.update(_pom_properties(element, path))
+    group_id = _declared_group_id(root)
+    if group_id:
+        properties.update({"groupId": group_id, "project.groupId": group_id, "pom.groupId": group_id})
+    parent = root.find(f"{_MAVEN_NS}parent")
+    if parent is None:
+        parent = root.find("parent")
+    if parent is not None:
+        for tag in ("groupId", "version"):
+            value = _pom_child_text(parent, tag)
+            if value:
+                properties.setdefault(f"parent.{tag}", value)
+                properties[f"project.parent.{tag}"] = value
+    return properties
+
+
+def maven_group_id(pom_path: Path) -> str | None:
+    """Return the module groupId, declared or inherited from ``<parent>``."""
+    root = parse_pom_root(pom_path)
+    if root is None:
+        return None
+    group_id = _declared_group_id(root)
+    if group_id is None:
+        return None
+    return _resolve_maven_value(group_id, _inherited_properties(pom_path, root))
+
+
+def maven_dependencies(pom_path: Path) -> tuple[MavenDependency, ...]:
+    """Return the direct ``<dependencies>`` of a POM (not its management)."""
+    root = parse_pom_root(pom_path)
+    if root is None:
+        return ()
+    dependencies = root.find(f"{_MAVEN_NS}dependencies")
+    if dependencies is None:
+        dependencies = root.find("dependencies")
+    if dependencies is None:
+        return ()
+    properties: dict[str, str] | None = None
+    result: list[MavenDependency] = []
+    for dependency in list(dependencies):
+        artifact = _pom_child_text(dependency, "artifactId")
+        if not artifact:
+            continue
+        group_id = _pom_child_text(dependency, "groupId")
+        scope = _pom_child_text(dependency, "scope")
+        if (group_id and "${" in group_id) or (scope and "${" in scope) or "${" in artifact:
+            if properties is None:
+                properties = _inherited_properties(pom_path, root)
+            group_id = _resolve_maven_value(group_id, properties) if group_id else group_id
+            scope = _resolve_maven_value(scope, properties) if scope else scope
+            artifact = _resolve_maven_value(artifact, properties)
+        result.append(MavenDependency(group_id=group_id, artifact_id=artifact, scope=scope))
+    return tuple(result)

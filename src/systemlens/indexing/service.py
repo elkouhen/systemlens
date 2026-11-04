@@ -45,7 +45,7 @@ from systemlens.domain.models import (
     MessageEndpoint,
     ensure_unique_endpoint_ids,
 )
-from systemlens.domain.module_inventory import module_identity
+from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.discovery.build.modules import (
     discover_module_dependencies,
     discover_modules,
@@ -353,6 +353,21 @@ def _index_repo(
             unchanged = set()
         else:
             changed = sorted(set(changed) | dependent_paths)
+            unchanged = current_paths - set(changed)
+    # A module identity can change without any file below it changing: a
+    # second module with the same name qualifies both identities, and a
+    # module appears or disappears. Facts of unchanged files keep the identity
+    # they were extracted with, so every file of such a module is rescanned.
+    if not full and "properties" not in disabled:
+        identity_paths = _module_identity_rescan_paths(
+            store.module_identities(), discovered_modules, current_paths, repo_root,
+        )
+        if identity_paths is None:
+            full = True
+            changed = sorted(current_paths)
+            unchanged = set()
+        elif identity_paths - set(changed):
+            changed = sorted(set(changed) | identity_paths)
             unchanged = current_paths - set(changed)
     _report_progress(
         progress,
@@ -672,3 +687,34 @@ def index_repo(
             show_call_chains_module=show_call_chains_module,
             refresh_codeql_view=refresh_codeql_view,
         )
+
+
+def _module_identity_rescan_paths(
+    previous: dict[str, str],
+    modules: list[DiscoveredModule],
+    current_paths: set[str],
+    repo_root: Path,
+) -> set[str] | None:
+    """Return the files below every module whose identity changed.
+
+    A module whose path is new, gone, or carries another identity changes the
+    owner identity of the files below it. ``None`` asks for a full rescan,
+    when the repository root itself is such a module.
+    """
+    root = repo_root.resolve()
+    current = {
+        module.path.resolve().relative_to(root).as_posix(): module_identity(module)
+        for module in modules
+    }
+    changed_roots = {
+        path for path in set(previous) | set(current)
+        if previous.get(path) != current.get(path)
+    }
+    if not changed_roots:
+        return set()
+    if "." in changed_roots:
+        return None
+    return {
+        path for path in current_paths
+        if any(path.startswith(f"{changed_root}/") for changed_root in changed_roots)
+    }

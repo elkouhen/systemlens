@@ -880,6 +880,13 @@ class Store:
                 ),
             )
 
+    def module_identities(self) -> dict[str, str]:
+        """Return the persisted identity of each module, by relative path."""
+        return {
+            row["path"]: row["identity"] or row["name"]
+            for row in self.conn.execute("SELECT path, name, identity FROM modules")
+        }
+
     def all_modules(self) -> list[DiscoveredModule]:
         rows = self.conn.execute(
             "SELECT path, name, identity, build_system, version, kind, starts_application, configuration_example, application_entrypoint, mongo_collections, mongo_methods, mongo_persistence_classes, jpa_entities, jpa_methods, jpa_dtos, openapi_files, kafka_methods, blocking_points, rest_controllers, openapi_generated_clients, kubernetes_workloads "

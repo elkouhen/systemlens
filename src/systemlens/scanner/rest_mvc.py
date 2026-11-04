@@ -655,7 +655,9 @@ def _module_has_spring_data_rest(repo_root_str: str, rel_path: str) -> bool:
         current = current.parent
     if pom is None:
         return False
-    return any("data-rest" in dependency for dependency in maven_module_dependencies(pom))
+    return any(
+        "data-rest" in dependency.artifact_id for dependency in maven_module_dependencies(pom)
+    )
 def _infer_spring_data_rest_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Inventorie les endpoints Spring Data REST d'un repository.
 

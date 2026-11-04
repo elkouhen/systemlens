@@ -10,6 +10,9 @@ owning module when that boundary is known. Root-level or ambiguous inputs force 
 full refresh because they can affect otherwise unchanged Java source files.
 This includes `kafka.yml` and `kafka.yaml`, whose declared Strategy1 topic names
 can change the endpoint facts of unchanged Java sources.
+When a module identity changes, appears or disappears, every file below that
+module is rescanned, so no fact keeps an identity that no longer exists. A
+second module with the same name is such a change; removing it is another.
 The endpoint extractor signature, analysis configuration signature and selected
 topic strategy always force a full refresh. Explicit manifests are included even
 when otherwise excluded.

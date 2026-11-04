@@ -18,12 +18,20 @@ from systemlens.discovery.build.data_operations import (
 )
 from systemlens.domain.data_operation_projection import mongo_data_operation
 from systemlens.domain.data_operations import DataOperation, sort_data_operations
-from systemlens.discovery.build.gradle import discover_gradle_modules, gradle_module_identity
+from systemlens.discovery.build.gradle import gradle_version
 from systemlens.discovery.build.maven import (
-    module_name_for_path,
+    MavenDependency,
+    maven_dependencies,
+    maven_group_id,
     parse_pom,
-    parse_pom_root,
     pom_version,
+)
+from systemlens.discovery.build.projects import (
+    BuildLayout,
+    _is_excluded_maven_module,
+    _is_excluded_module,
+    cached_build_layout,
+    refresh_build_layout,
 )
 from systemlens.discovery.configuration import service_configuration_example
 from systemlens.domain.module_inventory import (
@@ -156,73 +164,21 @@ _OPENAPI_FILENAMES = (
 )
 _OPENAPI_DOCUMENT_SUFFIXES = frozenset({".yaml", ".yml", ".json"})
 _OPENAPI_RESOURCE_DIRECTORY = ("src", "main", "resources", "openapi")
-_MAX_NESTED_MODULE_DEPTH = 5
 
 
-def _is_excluded_module(name: str, module_dir: Path, root: Path) -> bool:
-    """Whether a non-production build module must not be indexed.
-
-    Test and mock projects do not describe the production architecture.  Their
-    artifact name is not always explicit: a module in ``contract-tests`` may
-    still publish an artifact named ``contract-api``. Inspect both the build
-    name and every component of its path relative to the workspace, without
-    considering the workspace path itself.
-    """
-    try:
-        path_parts = module_dir.resolve().relative_to(root.resolve()).parts
-    except ValueError:
-        path_parts = (module_dir.name,)
-    # A substring match made ordinary artifact names such as ``test-service``
-    # (and pytest's temporary workspace names) disappear from discovery.
-    # Keep explicit test directories excluded, while retaining production
-    # modules whose names merely contain that word.
-    test_or_mock = any(
-        value.casefold() in {"test", "tests"} or "mock" in value.casefold()
-        for value in path_parts
-    ) or "mock" in name.casefold() or name.casefold().endswith("-test")
-    # Build archetypes are templates rather than runtime applications. This
-    # applies to both Maven and Gradle module names.
-    return test_or_mock or "archetype" in name.casefold()
-
-
-def _is_excluded_maven_module(name: str, module_dir: Path, root: Path) -> bool:
-    """Exclude Maven modules whose identity is test-only or templated."""
-    identities = (name.casefold(), module_dir.name.casefold())
-    # The workspace root is also a valid Maven aggregator. Its directory name
-    # may be an implementation detail such as ``pytest-123`` and must not
-    # make the root POM disappear from discovery. ``test`` must be a whole
-    # name token: ``orders-test-support`` is excluded, ``attestation-service``
-    # and ``contest-service`` remain production modules.
-    module_name_is_test = module_dir.resolve() != root.resolve() and any(
-        {"test", "tests"} & set(re.split(r"[-_.]", identity)) for identity in identities
-    )
-    return _is_excluded_module(name, module_dir, root) or module_name_is_test
+__all__ = ["_is_excluded_maven_module", "_is_excluded_module"]
 
 
 def discover_excluded_module_paths(root: Path) -> tuple[Path, ...]:
-    """Return build-module roots excluded from the production index.
+    """Return build directories excluded from the production index.
 
-    Module inventory already omits test, mock, and Maven ``archetype`` modules. The
-    indexer also needs their paths before scanning files: an excluded artifact
-    can legitimately contain ``src/main`` sources and would otherwise still
-    produce endpoints and findings despite being absent from the inventory.
+    Module inventory omits test, mock and archetype modules, ``buildSrc``,
+    included builds and build directories that a declaring build does not
+    include (ADR-80). The indexer needs their paths before scanning files:
+    an excluded directory can contain ``src/main`` sources and would
+    otherwise still produce endpoints and findings without a module.
     """
-    root = root.resolve()
-    paths: set[Path] = set()
-    for pom_path in sorted(root.rglob("pom.xml")):
-        if ".git" in pom_path.relative_to(root).parts:
-            continue
-        module_dir = pom_path.parent.resolve()
-        if not _is_module_within_depth(root, module_dir):
-            continue
-        artifact_id, _, _ = parse_pom(pom_path)
-        if _is_excluded_maven_module(artifact_id or module_dir.name, module_dir, root):
-            paths.add(module_dir)
-    for name, module_dir, _version in discover_gradle_modules(root):
-        module_dir = module_dir.resolve()
-        if _is_excluded_module(name, module_dir, root):
-            paths.add(module_dir)
-    return tuple(sorted(paths))
+    return cached_build_layout(root).excluded_paths
 
 
 def _trace(stage: str, **fields: object) -> None:
@@ -404,10 +360,6 @@ def _module_files(module_dir: Path, module_roots: set[Path], pattern: str):
         ):
             continue
         yield path
-
-
-def _is_module_within_depth(root: Path, module_dir: Path) -> bool:
-    return len(module_dir.relative_to(root).parts) <= _MAX_NESTED_MODULE_DEPTH
 
 
 class KafkaArchitectureExtension:
@@ -1286,62 +1238,43 @@ def discover_modules(
     enrich_architecture: bool = True,
     use_tree_sitter: bool = True,
 ) -> list[DiscoveredModule]:
-    """Discover build modules, including libraries and aggregators."""
+    """Discover build modules, including libraries and aggregators.
+
+    The build layout is rediscovered here and becomes the layout that file
+    ownership reads for the rest of the indexing pass (ADR-80).
+    """
     root = root.resolve()
+    layout = refresh_build_layout(root)
     modules: list[DiscoveredModule] = []
-    seen_paths: set[Path] = set()
-    pom_paths = [
-        pom_path for pom_path in sorted(root.rglob("pom.xml"))
-        if ".git" not in pom_path.relative_to(root).parts
-        and not _is_build_output_path(root, pom_path)
-        and _is_module_within_depth(root, pom_path.parent.resolve())
-    ]
-    gradle_modules = discover_gradle_modules(root)
-    # Every build root is known before entry points are read, so a parent
-    # never inherits the Spring Boot ``main`` of a nested module.
-    all_module_roots = {pom_path.parent.resolve() for pom_path in pom_paths} | {
-        module_dir.resolve() for _name, module_dir, _version in gradle_modules
-    }
-    for pom_path in pom_paths:
-        module_dir = pom_path.parent.resolve()
-        _trace("module.maven.begin", pom=pom_path)
-        artifact_id, _, packaging = parse_pom(pom_path)
-        _trace("module.maven.parsed", pom=pom_path, artifact=artifact_id, packaging=packaging)
-        module_name = artifact_id or module_dir.name
-        if _is_excluded_maven_module(module_name, module_dir, root):
-            _trace("module.maven.skipped", pom=pom_path, artifact=module_name)
-            continue
-        if use_tree_sitter:
-            entrypoint = _starts_application(module_dir, all_module_roots)
-        else:
-            _trace("module.maven.entrypoint.disabled", pom=pom_path)
-            entrypoint = None
-        _trace("module.maven.entrypoint.end", pom=pom_path, found=entrypoint is not None)
-        kind = (
-            "aggregator"
-            if packaging == "pom"
-            else "library"
-        )
-        modules.append(
-            DiscoveredModule(
-                name=module_name,
-                path=module_dir,
-                build_system="maven",
-                version=pom_version(pom_path),
-                kind=kind,
-                starts_application=packaging != "pom" and entrypoint is not None,
-                configuration_example=service_configuration_example(module_dir),
-                application_entrypoint=entrypoint,
-                identity=module_name_for_path(root, pom_path.relative_to(root).as_posix()) or module_name,
+    # Every build directory is known before entry points are read, so a
+    # parent never inherits the Spring Boot ``main`` of a nested module.
+    all_module_roots = set(layout.build_directories)
+    for project in layout.projects:
+        module_dir = project.path
+        if project.build_system == "maven":
+            pom_path = module_dir / "pom.xml"
+            _trace("module.maven.begin", pom=pom_path)
+            _artifact_id, _, packaging = parse_pom(pom_path)
+            _trace("module.maven.parsed", pom=pom_path, artifact=project.name, packaging=packaging)
+            if use_tree_sitter:
+                entrypoint = _starts_application(module_dir, all_module_roots)
+            else:
+                _trace("module.maven.entrypoint.disabled", pom=pom_path)
+                entrypoint = None
+            _trace("module.maven.entrypoint.end", pom=pom_path, found=entrypoint is not None)
+            modules.append(
+                DiscoveredModule(
+                    name=project.name,
+                    path=module_dir,
+                    build_system="maven",
+                    version=pom_version(pom_path),
+                    kind="aggregator" if packaging == "pom" else "library",
+                    starts_application=packaging != "pom" and entrypoint is not None,
+                    configuration_example=service_configuration_example(module_dir),
+                    application_entrypoint=entrypoint,
+                    identity=project.identity,
+                )
             )
-        )
-        seen_paths.add(module_dir)
-    for name, module_dir, version in gradle_modules:
-        module_dir = module_dir.resolve()
-        if module_dir in seen_paths:
-            continue
-        if _is_excluded_module(name, module_dir, root):
-            _trace("module.gradle.skipped", module=module_dir, name=name)
             continue
         has_build_file = any(
             (module_dir / filename).is_file() for filename in ("build.gradle", "build.gradle.kts")
@@ -1353,22 +1286,24 @@ def discover_modules(
             entrypoint = None
         modules.append(
             DiscoveredModule(
-                name=name,
+                name=project.name,
                 path=module_dir,
                 build_system="gradle",
-                version=version,
+                version=gradle_version(module_dir),
                 kind=(
                     "library"
-                    if has_build_file
+                    if has_build_file or (module_dir / "src").is_dir()
                     else "aggregator"
                 ),
                 starts_application=entrypoint is not None,
                 configuration_example=service_configuration_example(module_dir),
                 application_entrypoint=entrypoint,
-                identity=gradle_module_identity(root, module_dir),
+                identity=project.identity,
             )
         )
-    module_roots = {module.path for module in modules}
+    # Excluded build directories bound enrichment too: their sources belong
+    # to no module.
+    module_roots = {module.path for module in modules} | set(layout.excluded_paths)
     _trace("modules.enrich.begin", count=len(modules))
     enriched = sorted(
         (
@@ -1388,63 +1323,122 @@ def discover_modules(
 
 
 def discover_module_dependencies(root: Path, modules: list[DiscoveredModule]) -> list[ModuleDependency]:
-    """Retourne les dépendances de build dont les deux extrémités sont locales.
+    """Return the build dependencies whose two ends are local modules.
 
-    Les coordonnées Maven sont rapprochées sur l'``artifactId`` des modules
-    découverts. Les dépendances Gradle ``project(':...')`` sont rapprochées sur
-    leur chemin de projet, puis sur le nom d'artefact. Les dépendances externes
-    ne sont volontairement pas ajoutées au graphe.
+    A Maven dependency matches a local module by ``artifactId``, and by
+    ``groupId`` when the local module declares or inherits one: an external
+    ``io.github.resilience4j:core`` is not the local module ``core``. A
+    Gradle ``project(':...')`` dependency matches the project path declared
+    by ``settings.gradle``, then the directory path, then the project name.
+    Test-only dependencies (Maven ``test`` scope; Gradle ``test*``,
+    ``androidTest*``, ``testFixtures*`` and other test source-set
+    configurations) are not runtime dependencies and give no edge.
+    ``provided``, ``runtime``, ``compileOnly`` and ``runtimeOnly`` stay
+    edges: they are build or runtime dependencies (ADR-80). External
+    dependencies are never added to the graph.
     """
-    identities_by_name: dict[str, set[str]] = {}
+    root = root.resolve()
+    layout = cached_build_layout(root)
+    candidates_by_name: dict[str, list[DiscoveredModule]] = {}
     for module in modules:
-        identities_by_name.setdefault(module.name, set()).add(module_identity(module))
-    gradle_projects = {
-        ":" + module.path.resolve().relative_to(root.resolve()).as_posix().replace("/", ":"): module_identity(module)
+        candidates_by_name.setdefault(module.name, []).append(module)
+    group_ids = {
+        module.path.resolve(): maven_group_id(module.path / "pom.xml")
         for module in modules
-        if module.build_system == "gradle" and module.path.resolve() != root.resolve()
+        if module.build_system == "maven"
     }
+    declared_gradle_paths = _declared_gradle_projects(layout)
+    directory_gradle_paths = {
+        ":" + module.path.resolve().relative_to(root).as_posix().replace("/", ":"): module_identity(module)
+        for module in modules
+        if module.build_system == "gradle" and module.path.resolve() != root
+    }
+    identities = {module_identity(module) for module in modules}
+    gradle_builds = {project.path: project.gradle_build for project in layout.projects}
     dependencies: set[ModuleDependency] = set()
     for module in modules:
+        source = module_identity(module)
+        resolved_targets: set[str] = set()
         if module.build_system == "maven":
-            targets = maven_module_dependencies(module.path / "pom.xml")
+            for dependency in maven_module_dependencies(module.path / "pom.xml"):
+                matches = [
+                    candidate for candidate in candidates_by_name.get(dependency.artifact_id, [])
+                    if _group_matches(dependency, group_ids.get(candidate.path.resolve()))
+                ]
+                if len(matches) == 1:
+                    resolved_targets.add(module_identity(matches[0]))
         else:
-            targets = _gradle_module_dependencies(module.path)
-        for target in targets:
-            resolved = gradle_projects.get(target)
-            if resolved is None:
-                candidates = identities_by_name.get(target, set())
-                resolved = next(iter(candidates)) if len(candidates) == 1 else None
-            if resolved is not None and resolved != module_identity(module):
-                dependencies.add(ModuleDependency(source=module_identity(module), target=resolved))
+            build = gradle_builds.get(module.path.resolve())
+            for target in _gradle_module_dependencies(module.path):
+                resolved = (
+                    declared_gradle_paths.get((build, target)) if build is not None else None
+                ) or directory_gradle_paths.get(target)
+                if resolved is None:
+                    name_matches = candidates_by_name.get(target.rsplit(":", 1)[-1], [])
+                    resolved = module_identity(name_matches[0]) if len(name_matches) == 1 else None
+                if resolved is not None:
+                    resolved_targets.add(resolved)
+        for target in resolved_targets:
+            if target != source and target in identities:
+                dependencies.add(ModuleDependency(source=source, target=target))
     return sorted(dependencies)
 
 
-def maven_module_dependencies(pom_path: Path) -> set[str]:
-    """Return direct Maven artifact dependencies declared by ``pom_path``."""
-    root = parse_pom_root(pom_path)
-    if root is None:
-        return set()
-    namespace = "{http://maven.apache.org/POM/4.0.0}"
-    dependencies = root.find(f"{namespace}dependencies")
-    if dependencies is None:
-        dependencies = root.find("dependencies")
-    if dependencies is None:
-        return set()
-    targets: set[str] = set()
-    for dependency in list(dependencies):
-        artifact = dependency.findtext(f"{namespace}artifactId") or dependency.findtext("artifactId")
-        if artifact:
-            targets.add(artifact.strip())
-    return targets
+def _declared_gradle_projects(layout: BuildLayout) -> dict[tuple[Path, str], str]:
+    return {
+        (project.gradle_build, project.gradle_path): project.identity
+        for project in layout.projects
+        if project.gradle_build is not None and project.gradle_path is not None
+    }
+
+
+def _group_matches(dependency: MavenDependency, module_group_id: str | None) -> bool:
+    """Whether a dependency's groupId can name a local module.
+
+    A module without a known groupId (a Gradle project, a POM without one)
+    matches on the artifactId alone, as does a dependency without a groupId.
+    An unresolved ``${...}`` groupId never matches a known one.
+    """
+    if module_group_id is None or dependency.group_id is None:
+        return True
+    return dependency.group_id == module_group_id
+
+
+_TEST_SCOPES = frozenset({"test"})
+
+
+def maven_module_dependencies(pom_path: Path) -> set[MavenDependency]:
+    """Return the direct, non-test Maven dependencies declared by ``pom_path``."""
+    return {
+        dependency for dependency in maven_dependencies(pom_path)
+        if (dependency.scope or "compile").strip().casefold() not in _TEST_SCOPES
+    }
 
 
 _GRADLE_PROJECT_DEPENDENCY_RE = re.compile(
-    r"\b(?:api|compileOnly|implementation|runtimeOnly|testImplementation)\s*\(?\s*"
-    r"project\s*\(\s*(?:path\s*:\s*)?['\"](:[^'\"]+)['\"]"
+    r"\b([A-Za-z]\w*)\s*\(?\s*"
+    r"project\s*\(\s*(?:path\s*[:=]\s*)?['\"](:[^'\"]+)['\"]"
+)
+_GRADLE_DEPENDENCY_CONFIGURATION_RE = re.compile(
+    r"(?:[a-z]\w*?)?(?:api|Api|implementation|Implementation|compileOnly|CompileOnly"
+    r"|runtimeOnly|RuntimeOnly|compileOnlyApi|CompileOnlyApi|compile|Compile|runtime|Runtime)"
 )
 
 
+def _is_test_configuration(configuration: str) -> bool:
+    """Whether a Gradle configuration only feeds a test source set."""
+    if configuration.startswith(("test", "androidTest", "testFixtures")):
+        return True
+    source_set = re.sub(
+        r"(Api|Implementation|CompileOnly|RuntimeOnly|CompileOnlyApi|Compile|Runtime)$",
+        "",
+        configuration,
+    )
+    return source_set != configuration and source_set.endswith("Test")
+
+
 def _gradle_module_dependencies(module_dir: Path) -> set[str]:
+    """Return the project paths of the non-test ``project(...)`` dependencies."""
     targets: set[str] = set()
     for filename in ("build.gradle", "build.gradle.kts"):
         path = module_dir / filename
@@ -1452,5 +1446,10 @@ def _gradle_module_dependencies(module_dir: Path) -> set[str]:
             text = path.read_text(encoding="utf-8", errors="replace")
         except OSError:
             continue
-        targets.update(_GRADLE_PROJECT_DEPENDENCY_RE.findall(text))
+        for configuration, target in _GRADLE_PROJECT_DEPENDENCY_RE.findall(text):
+            if _GRADLE_DEPENDENCY_CONFIGURATION_RE.fullmatch(configuration) is None:
+                continue
+            if _is_test_configuration(configuration):
+                continue
+            targets.add(target)
     return targets
