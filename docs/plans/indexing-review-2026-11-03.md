@@ -149,3 +149,25 @@ leaves a regression test built from its probe.
 
 | ID | Outcome |
 |---|---|
+| I10 | Delivered in `68517b0`. A POM refused by defusedxml is skipped like a malformed one; protection stays on. |
+| I1 | Delivered in `d934618`. The flow stage unsets the flow signature and marks the snapshot partial before its first checkpoint; a partial snapshot reruns the flow stage and drops flows of deleted files. |
+| I14 | Delivered in `0203dc5`. A current index opens without the write lock; a locked index fails with a clear message and exit code 2. Residual risk: the `index_engine` write after the transaction can still meet a raw lock error. |
+| H1 | Delivered in `b227619`. A dynamic call of a route-declaring client keeps one service-level relation without a resource. |
+| H2 | Delivered in `b227619`. Each gateway DSL route uses its own `uri(...)` and line. |
+| H4 | Delivered in `b227619` with ADR-77. A literal route wins over a template; constraints are honoured; unaligned templated calls keep every candidate as separate edges, without a confidence change. |
+| H5 | Delivered in `b227619`. Only single-label and cluster-local hosts name a service; other hosts need an exact alias. |
+| K1 | Delivered in `9b7c824`. Strategy1 producers are send calls found in the syntax tree. |
+| K2 | Delivered in `9b7c824`. Strategy1 listeners are read from the syntax tree; the AST payload type is used. |
+| K3 | Delivered in `53c02fe`. `sendDefault` publishes to the template's known default topic, else a dynamic topic. |
+| K4 | Delivered in `0188929`. The `ProducerRecord` value is chosen by constructor arity or written type argument. |
+| K6 | Delivered in `915706c`. Streams facts are typed from their own declarations or serdes. |
+| K7 | Delivered in `9c92a43` with ADR-79. Generic payload carriers are unknown types. |
+| F1 | Delivered in `a9ee304` with ADR-78, which amends ADR-29 and ADR-30. A reachability row creates a flow only through a route that passes the join's rules and never replaces a join flow. Train-ticket with CodeQL keeps 408 flows; 170 flow IDs change back to the join's IDs. |
+| F7 | Delivered in `8af758e`. A port belongs to the narrowest method that contains it. |
+| F8 | Delivered in `9d495ce`. The witness and the symbol fallback expand only to the exactly resolved target at a site CodeQL resolved. |
+
+Validation on `main` after all lots 1 and 2 commits: ruff, mypy, 868 tests
+passed with 14 expected failures, and the companion contract check. A fresh
+train-ticket index with the source engine keeps 2999 edges, 406 flows and
+78 HTTP service relations; the lab keeps its 23 flows. K1 and K2 were not
+measured on a real Strategy1 repository.
