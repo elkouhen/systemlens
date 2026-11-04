@@ -2,7 +2,8 @@
 
 Status: lots 1 and 2 validated on 2026-11-03 by the product owner, who
 asked to treat them; H4 follows Spring's rule (a literal route wins over a
-template, and a template constraint is honoured). Lots 3 to 7 stay
+template, and a template constraint is honoured). Lot 3 continued at the
+product owner's request on 2026-11-04 (ADR-80). Lots 4 to 7 stay
 `proposed`. Section 5 records each finding's state. Baseline: commit
 `224dcfd`.
 Owner: SystemLens implementer. Reviewer: product owner.
@@ -165,9 +166,24 @@ leaves a regression test built from its probe.
 | F1 | Delivered in `a9ee304` with ADR-78, which amends ADR-29 and ADR-30. A reachability row creates a flow only through a route that passes the join's rules and never replaces a join flow. Train-ticket with CodeQL keeps 408 flows; 170 flow IDs change back to the join's IDs. |
 | F7 | Delivered in `8af758e`. A port belongs to the narrowest method that contains it. |
 | F8 | Delivered in `9d495ce`. The witness and the symbol fallback expand only to the exactly resolved target at a site CodeQL resolved. |
+| I2 | Delivered in `74789a1` with ADR-80. A file belongs to the deepest Maven or Gradle project; a Spring Boot root no longer owns its subprojects. |
+| I3 | Delivered in `74789a1`. Gradle library endpoints name their library module, so their relations exist; ownership no longer depends on a main class. |
+| I4 | Delivered in `74789a1`. A Maven dependency needs the local groupId when known; Maven `test` and Gradle test configurations give no edge; `provided`, `compileOnly`, `runtimeOnly` stay edges. |
+| I7 | Delivered in `74789a1`. No depth limit; one walk that skips hidden, `node_modules` and build-output directories feeds inventory and ownership. |
+| I9 | Delivered in `74789a1`. Aggregator `<modules>` and literal `settings.gradle` includes and `projectDir` remaps declare the build; `buildSrc`, `includeBuild` and undeclared build directories are excluded; computed declarations keep the former discovery. |
+| I6 | Delivered in `74789a1`. An incremental index rescans every file of a module whose identity changed, appeared or disappeared. |
 
 Validation on `main` after all lots 1 and 2 commits: ruff, mypy, 868 tests
 passed with 14 expected failures, and the companion contract check. A fresh
 train-ticket index with the source engine keeps 2999 edges, 406 flows and
 78 HTTP service relations; the lab keeps its 23 flows. K1 and K2 were not
 measured on a real Strategy1 repository.
+
+Validation on `main` after lot 3: ruff, mypy, 878 tests passed with 14
+expected failures, and the companion contract check. Fresh source-engine
+indexes keep train-ticket's 406 flows, 78 HTTP service relations, 1153
+relations and 524 endpoints, the sample's 4 flows and the lab's 23 flows.
+Train-ticket drops the undeclared `old-docs/Lib/ms-monitoring-core` copy:
+one module and its 1190 call edges (2999 to 1809), with no endpoint,
+relation or flow. Gradle findings were measured on fixtures only; no
+reference project uses Gradle.
