@@ -128,7 +128,9 @@ def _graph_edges(edges: list[GraphEdge]) -> list[GraphEdgeInfo]:
                 to_site=None,
             )
         )
-        assert edge.to_endpoint is not None, "a matched kafka edge always has a consumer endpoint"
+        # A persisted publishes_to relation can lack a matching consumer site
+        # (graph_edges_from_relations yields None then): keep the edge, with
+        # no consumer evidence, rather than guessing a site.
         rendered_edges.append(
             GraphEdgeInfo(
                 kind="kafka_consume",
@@ -138,7 +140,11 @@ def _graph_edges(edges: list[GraphEdge]) -> list[GraphEdgeInfo]:
                 to_kind="microservice",
                 label=topic,
                 from_site=None,
-                to_site=_endpoint_to_site(edge.to_endpoint),
+                to_site=(
+                    _endpoint_to_site(edge.to_endpoint)
+                    if edge.to_endpoint is not None
+                    else None
+                ),
             )
         )
     return rendered_edges

@@ -2432,3 +2432,47 @@ def test_export_carries_the_index_time_only_when_known() -> None:
     assert with_time["indexed_at"] == "2026-11-01 10:17:30"
     older = _html_graph_data(render_graph_html({"orders": [entry]}, []))
     assert "indexed_at" not in older
+
+
+def test_graph_json_keeps_kafka_relation_without_matching_consumer_site() -> None:
+    """Regression: a persisted publishes_to relation whose target has no
+    matching consumer site used to trip an assertion in the JSON renderer."""
+    from systemlens.domain.graph import graph_edges_from_relations
+    from systemlens.render import render_graph_json
+
+    producer = replace(
+        _kafka_endpoint("produce", "OrderCreated", "orders/src/OrderPublisher.java"),
+        module="orders",
+    )
+    # The consumer exists but carries a conflicting payload type, so the
+    # relation adapter cannot attach a consumer site and yields None.
+    consumer = replace(
+        _kafka_endpoint("consume", "PaymentDone", "billing/src/OrderListener.java"),
+        module="billing",
+    )
+    relation = ArchitectureRelation(
+        id="orders-billing", source_kind="microservice", source_name="orders",
+        relation="publishes_to", target_kind="microservice", target_name="billing",
+        origin="code", confidence="high",
+        path=producer.path, start_line=producer.start_line,
+    )
+
+    edges = graph_edges_from_relations(
+        [relation], {"orders": [producer], "billing": [consumer]}
+    )
+    assert [edge.to_endpoint for edge in edges] == [None]
+
+    result = render_graph_json(["orders", "billing"], edges, [])
+    consume_edges = [
+        edge for edge in result["edges"] if edge["kind"] == "kafka_consume"
+    ]
+    assert consume_edges == [{
+        "kind": "kafka_consume",
+        "from_node": "orders.created",
+        "from_kind": "kafka_topic",
+        "to_node": "billing",
+        "to_kind": "microservice",
+        "label": "orders.created",
+        "from_site": None,
+        "to_site": None,
+    }]
