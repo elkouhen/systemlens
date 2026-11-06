@@ -40,6 +40,7 @@ from systemlens.domain.module_inventory import (
 )
 from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
 from systemlens.infrastructure.paths import db_path
+import systemlens.storage.persisted_names as persisted_names
 from systemlens.storage.serialization import (
     CodeChunk,
     blocking_point_from_json as _blocking_point_from_json,
@@ -297,7 +298,7 @@ class Store:
                     f"non prise en charge, attendu entre 1 et {SCHEMA_VERSION}."
                 )
         self.conn.executescript(
-            """
+            f"""
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
                 value TEXT
@@ -437,7 +438,7 @@ class Store:
                 evidence_line INTEGER,
                 note TEXT,
                 technology TEXT,
-                metadata TEXT NOT NULL DEFAULT '{}'
+                metadata TEXT NOT NULL DEFAULT '{{}}'
                 ,namespace TEXT NOT NULL DEFAULT 'manual'
                 ,status TEXT NOT NULL DEFAULT 'confirmed'
                 ,pass_id TEXT
@@ -473,7 +474,7 @@ class Store:
             );
             CREATE INDEX IF NOT EXISTS idx_integration_methods_path ON integration_methods(path);
             CREATE INDEX IF NOT EXISTS idx_integration_methods_module ON integration_methods(module);
-            CREATE TABLE IF NOT EXISTS codeql_call_edges (
+            CREATE TABLE IF NOT EXISTS {persisted_names.CALL_EDGES_TABLE} (
                 caller_id TEXT NOT NULL,
                 callee_id TEXT NOT NULL,
                 path TEXT NOT NULL,
@@ -484,9 +485,9 @@ class Store:
                 FOREIGN KEY (caller_id) REFERENCES integration_methods(id),
                 FOREIGN KEY (callee_id) REFERENCES integration_methods(id)
             );
-            CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_caller ON codeql_call_edges(caller_id);
-            CREATE INDEX IF NOT EXISTS idx_codeql_call_edges_callee ON codeql_call_edges(callee_id);
-            CREATE TABLE IF NOT EXISTS codeql_methods (
+            CREATE INDEX IF NOT EXISTS {persisted_names.CALL_EDGES_CALLER_INDEX} ON {persisted_names.CALL_EDGES_TABLE}(caller_id);
+            CREATE INDEX IF NOT EXISTS {persisted_names.CALL_EDGES_CALLEE_INDEX} ON {persisted_names.CALL_EDGES_TABLE}(callee_id);
+            CREATE TABLE IF NOT EXISTS {persisted_names.CALL_GRAPH_METHODS_TABLE} (
                 id TEXT PRIMARY KEY,
                 module TEXT NOT NULL,
                 qualified_method TEXT NOT NULL,
@@ -494,10 +495,10 @@ class Store:
                 start_line INTEGER NOT NULL,
                 end_line INTEGER NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_codeql_methods_locator
-                ON codeql_methods(path, start_line);
-            CREATE INDEX IF NOT EXISTS idx_codeql_methods_module
-                ON codeql_methods(module);
+            CREATE INDEX IF NOT EXISTS {persisted_names.CALL_GRAPH_METHODS_LOCATOR_INDEX}
+                ON {persisted_names.CALL_GRAPH_METHODS_TABLE}(path, start_line);
+            CREATE INDEX IF NOT EXISTS {persisted_names.CALL_GRAPH_METHODS_MODULE_INDEX}
+                ON {persisted_names.CALL_GRAPH_METHODS_TABLE}(module);
             -- Typed data operations, one row per supported source invocation.
             -- Paths are repository-relative; flows reference rows by id.
             CREATE TABLE IF NOT EXISTS data_operations (
@@ -573,7 +574,7 @@ class Store:
                 interval TEXT,
                 step TEXT,
                 collected_at TEXT NOT NULL,
-                page_counts TEXT NOT NULL DEFAULT '{}',
+                page_counts TEXT NOT NULL DEFAULT '{{}}',
                 truncated INTEGER NOT NULL DEFAULT 0,
                 overflow_services TEXT NOT NULL DEFAULT '[]',
                 notes TEXT NOT NULL DEFAULT '[]'
@@ -1052,7 +1053,7 @@ class Store:
         ]
 
     def replace_call_edges(self, edges: list[CallGraphEdge]) -> None:
-        """Replace the source-backed CodeQL call graph edges."""
+        """Replace the source-backed call-graph edges."""
         rows = _deduplicate_keyed_rows(
             [
                 (
@@ -1066,22 +1067,22 @@ class Store:
                 for edge in edges
             ],
             key_indexes=(0, 1, 2, 3, 4, 5),
-            label="CodeQL call edge",
+            label="call-graph edge",
         )
-        self.conn.execute("DELETE FROM codeql_call_edges")
+        self.conn.execute(f"DELETE FROM {persisted_names.CALL_EDGES_TABLE}")
         self.conn.executemany(
-            """INSERT INTO codeql_call_edges
+            f"""INSERT INTO {persisted_names.CALL_EDGES_TABLE}
             (caller_id, callee_id, path, line, dispatch_confidence, inferred)
             VALUES (?, ?, ?, ?, ?, ?)""",
             rows,
         )
 
     def replace_call_graph_methods(self, methods: list[PersistedCallGraphMethod]) -> None:
-        """Replace the source-backed CodeQL method projection."""
+        """Replace the source-backed call-graph method projection."""
         methods = _ensure_unique_record_ids(methods)
-        self.conn.execute("DELETE FROM codeql_methods")
+        self.conn.execute(f"DELETE FROM {persisted_names.CALL_GRAPH_METHODS_TABLE}")
         self.conn.executemany(
-            """INSERT INTO codeql_methods
+            f"""INSERT INTO {persisted_names.CALL_GRAPH_METHODS_TABLE}
             (id, module, qualified_method, path, start_line, end_line)
             VALUES (?, ?, ?, ?, ?, ?)""",
             [
@@ -1093,8 +1094,8 @@ class Store:
 
     def all_call_graph_methods(self) -> list[PersistedCallGraphMethod]:
         rows = self.conn.execute(
-            """SELECT id, module, qualified_method, path, start_line, end_line
-               FROM codeql_methods ORDER BY module, path, start_line, id"""
+            f"""SELECT id, module, qualified_method, path, start_line, end_line
+               FROM {persisted_names.CALL_GRAPH_METHODS_TABLE} ORDER BY module, path, start_line, id"""
         ).fetchall()
         return [PersistedCallGraphMethod(**dict(row)) for row in rows]
 
@@ -1155,9 +1156,9 @@ class Store:
 
     def all_call_edges(self) -> list[CallGraphEdge]:
         rows = self.conn.execute(
-            """SELECT caller_id, callee_id, path, line,
+            f"""SELECT caller_id, callee_id, path, line,
                       dispatch_confidence, inferred
-               FROM codeql_call_edges
+               FROM {persisted_names.CALL_EDGES_TABLE}
                ORDER BY caller_id, callee_id, path, line,
                         dispatch_confidence, inferred"""
         ).fetchall()

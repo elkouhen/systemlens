@@ -59,6 +59,12 @@ from systemlens.scanner import (
     infer_json_kafka_flow_graph_endpoints,
     infer_markdown_topic_manifest_endpoints,
 )
+from systemlens.storage.persisted_names import (
+    META_CALL_GRAPH_STATUS,
+    META_JOIN_COMPLETED_ENTRIES,
+    META_JOIN_METHODS_SIGNATURE,
+    META_JOIN_SIGNATURE,
+)
 from systemlens.storage.sqlite import Store
 from systemlens.discovery.kubernetes import KubernetesDiscoveryError, discover_workloads
 from systemlens.domain.runtime import KubernetesWorkload
@@ -76,7 +82,7 @@ class IndexReport:
     deleted_files: int
     endpoints_added: int = 0
     endpoints_removed: int = 0
-    codeql_timed_out: bool = False
+    call_graph_timed_out: bool = False
 
 
 # The call-graph stage and its progress contract live in ``call_graph_stage``.
@@ -115,7 +121,7 @@ def _trace(stage: str, **fields: object) -> None:
 
 
 def _resume_invalidating_paths(paths: Sequence[str]) -> list[str]:
-    """Return changes that can invalidate a persisted CodeQL join checkpoint."""
+    """Return changes that can invalidate a persisted call-graph join checkpoint."""
     presentation_suffixes = {
         ".adoc", ".css", ".html", ".js", ".log", ".md", ".rst", ".svg", ".txt",
     }
@@ -138,21 +144,21 @@ def _index_repo(
     kubernetes_namespace: str | None = None,
     call_graph_engine: CallGraphEngine | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
-    codeql_progress: bool = False,
+    engine_progress: bool = False,
     generate_sources: bool = False,
-    resume_codeql_join: bool = False,
+    resume_call_graph_join: bool = False,
     show_call_chains: bool = False,
     show_call_chains_module: str | None = None,
-    refresh_codeql_view: bool = False,
+    refresh_call_graph_view: bool = False,
 ) -> IndexReport:
     timer = _IndexStageTimer(progress)
-    # Engine diagnostics are opt-in (``codeql_progress``); older configs
-    # never make the index command verbose.
-    if refresh_codeql_view and show_call_chains_module is None:
-        raise ValueError("Refreshing the CodeQL view requires a selected module.")
-    if refresh_codeql_view and store.get_meta("codeql_call_graph_status") != "complete":
+    # Engine diagnostics are opt-in (``engine_progress``); the configuration
+    # never makes the index command verbose.
+    if refresh_call_graph_view and show_call_chains_module is None:
+        raise ValueError("Refreshing the call-graph view requires a selected module.")
+    if refresh_call_graph_view and store.get_meta(META_CALL_GRAPH_STATUS) != "complete":
         raise ValueError(
-            "Refreshing one module requires a complete global CodeQL graph; "
+            "Refreshing one module requires a complete global call graph; "
             "run a global index first."
         )
     topic_strategy = topic_strategy or config.strategy
@@ -171,7 +177,7 @@ def _index_repo(
         )
         _generate_sources(
             repo_root,
-            timeout=config.codeql_timeout_seconds,
+            timeout=config.engine_timeout_seconds,
             progress=progress,
         )
         timer.end("generation", "génération des sources")
@@ -274,9 +280,7 @@ def _index_repo(
     # ordinary Java/configuration changes keep the incremental fast path.
     explicit_engine = call_graph_engine is not None
     engine: CallGraphEngine | None = call_graph_engine or load_engine(
-        config.call_graph_engine,
-        threads=config.codeql_threads,
-        ram_mb=config.codeql_ram_mb,
+        config.call_graph_engine, config.engine_settings(repo_root=repo_root),
     )
     if engine is not None and not engine.available():
         _report_progress(
@@ -284,16 +288,16 @@ def _index_repo(
             f"→ Indexation : {engine.label} indisponible ; moteur source (tree-sitter) utilisé.",
         )
         engine = SourceEngine()
-    if refresh_codeql_view and (engine is None or not engine.supports_module_refresh):
+    if refresh_call_graph_view and (engine is None or not engine.supports_module_refresh):
         raise ValueError(
-            "Refreshing one module requires an engine that supports module refresh (codeql)."
+            "Refreshing one module requires an engine that supports module refresh."
         )
     engine_name = engine.name if engine is not None else "none"
     engine_label = engine.label if engine is not None else "Graphe d'appel"
     flow_signature = (
         f"{CODE_FLOW_SIGNATURE}|engine={engine_name}|"
-        f"hops={config.codeql_max_hops}"
-        f"|edge-confidence={config.codeql_edge_confidence}"
+        f"hops={config.engine_max_hops}"
+        f"|edge-confidence={config.engine_edge_confidence}"
     )
     # A supplied analyzer database is an input of the flows: a new one
     # recomputes them even when no source file changed.
@@ -305,33 +309,33 @@ def _index_repo(
     resume_join_entries = 0
     resume_join_flows: list[CodeFlow] = []
     resume_join_methods_signature: str | None = None
-    if resume_codeql_join:
+    if resume_call_graph_join:
         resume_invalidating_paths = _resume_invalidating_paths([*changed, *deleted])
         if full or resume_invalidating_paths:
             raise ValueError(
-                "CodeQL join resume requires unchanged analysis inputs; "
+                "Call-graph join resume requires unchanged analysis inputs; "
                 f"changed files: {', '.join(resume_invalidating_paths[:10])}. "
                 "Run a normal index first."
             )
         if store.get_meta("code_flow_snapshot_status") != "partial":
-            raise ValueError("No partial CodeQL join snapshot is available to resume.")
-        if store.get_meta("codeql_join_signature") != join_signature:
+            raise ValueError("No partial call-graph join snapshot is available to resume.")
+        if store.get_meta(META_JOIN_SIGNATURE) != join_signature:
             raise ValueError(
-                "The partial CodeQL join checkpoint does not match the current "
+                "The partial call-graph join checkpoint does not match the current "
                 "repository or analysis configuration."
             )
         try:
-            resume_join_entries = int(store.get_meta("codeql_join_completed_entries") or "0")
+            resume_join_entries = int(store.get_meta(META_JOIN_COMPLETED_ENTRIES) or "0")
         except ValueError as exc:
-            raise ValueError("The CodeQL join checkpoint offset is invalid.") from exc
-        resume_join_methods_signature = store.get_meta("codeql_join_methods_signature")
+            raise ValueError("The call-graph join checkpoint offset is invalid.") from exc
+        resume_join_methods_signature = store.get_meta(META_JOIN_METHODS_SIGNATURE)
         resume_join_flows = store.all_code_flows()
         _report_progress(
             progress,
             f"→ {engine_label} : reprise de la jointure après la méthode IN "
             f"{resume_join_entries} ({len(resume_join_flows)} flux persisté(s)).",
         )
-    codeql_timed_out = False
+    call_graph_timed_out = False
     if (
         topic_strategy == "strategy1"
         and not full
@@ -530,7 +534,7 @@ def _index_repo(
         or changed
         or deleted
         or explicit_engine
-        or refresh_codeql_view
+        or refresh_call_graph_view
         or store.get_meta("code_flow_signature") != flow_signature
         # A run stopped after a checkpoint leaves a partial snapshot; retry.
         or store.get_meta("code_flow_snapshot_status") == "partial"
@@ -557,18 +561,18 @@ def _index_repo(
                     flows=tuple(resume_join_flows),
                     methods_signature=resume_join_methods_signature,
                 )
-                if resume_codeql_join else None
+                if resume_call_graph_join else None
             ),
-            refresh_codeql_view=refresh_codeql_view,
+            refresh_call_graph_view=refresh_call_graph_view,
             show_call_chains=show_call_chains,
             show_call_chains_module=show_call_chains_module,
             generate_sources=generate_sources,
-            codeql_progress=codeql_progress,
+            engine_progress=engine_progress,
             progress=progress,
             call_graph_progress=call_graph_progress,
             timer=timer,
         )
-        codeql_timed_out = stage_result.timed_out
+        call_graph_timed_out = stage_result.timed_out
     else:
         _report_progress(
             progress,
@@ -643,7 +647,7 @@ def _index_repo(
         deleted_files=len(deleted),
         endpoints_added=endpoints_added,
         endpoints_removed=endpoints_removed,
-        codeql_timed_out=codeql_timed_out,
+        call_graph_timed_out=call_graph_timed_out,
     )
 
 
@@ -660,17 +664,17 @@ def index_repo(
     kubernetes_namespace: str | None = None,
     call_graph_engine: CallGraphEngine | None = None,
     call_graph_progress: CallGraphProgressCallback | None = None,
-    codeql_progress: bool = False,
+    engine_progress: bool = False,
     generate_sources: bool = False,
-    resume_codeql_join: bool = False,
+    resume_call_graph_join: bool = False,
     show_call_chains: bool = False,
     show_call_chains_module: str | None = None,
-    refresh_codeql_view: bool = False,
+    refresh_call_graph_view: bool = False,
 ) -> IndexReport:
     """Index one repository, publishing explicit call-graph checkpoints when needed.
 
     ``call_graph_engine`` overrides the engine named by the configuration,
-    for instance a CodeQL engine bound to an existing database.
+    for instance an engine bound to an existing analyzer database.
     """
     with store.transaction():
         return _index_repo(
@@ -686,12 +690,12 @@ def index_repo(
             kubernetes_namespace=kubernetes_namespace,
             call_graph_engine=call_graph_engine,
             call_graph_progress=call_graph_progress,
-            codeql_progress=codeql_progress,
+            engine_progress=engine_progress,
             generate_sources=generate_sources,
-            resume_codeql_join=resume_codeql_join,
+            resume_call_graph_join=resume_call_graph_join,
             show_call_chains=show_call_chains,
             show_call_chains_module=show_call_chains_module,
-            refresh_codeql_view=refresh_codeql_view,
+            refresh_call_graph_view=refresh_call_graph_view,
         )
 
 

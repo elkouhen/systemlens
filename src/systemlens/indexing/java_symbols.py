@@ -1466,7 +1466,7 @@ class JavaSymbols:
 
         A Spring Data query method (``findByOrderId``) is declared in the
         sources and implemented by the runtime: the call reaches the
-        declaration, a possible target, as it does in CodeQL.
+        declaration, a possible target, as it does in a typed engine.
         """
         module = self._receiver_module(receiver_type, caller)
         contracts = {
@@ -1704,7 +1704,7 @@ class JavaSymbols:
     ) -> IntegrationMethod | None:
         """The abstract source interface method a call names, kept as a witness.
 
-        CodeQL reports the statically bound interface declaration next to
+        A typed engine reports the statically bound interface declaration next to
         the concrete dispatch target; the source engine does the same so the
         exported call tree keeps the caller-to-contract hop. A static or
         un-overridden default method that is itself the target, and an
@@ -1729,7 +1729,7 @@ class JavaSymbols:
         ``closed_world`` applies when this pass is the whole call graph (the
         ``source`` engine): every implementation is then in the sources, so a
         unique implementation of an interface is an exact target. It also
-        adds the shapes of the CodeQL query (ADR-70): a possible witness edge
+        adds the shapes of the typed engine's query (ADR-70): a possible witness edge
         to the source interface method the call names next to its exact
         implementation, and dispatch on an external interface to its source
         implementations in the caller's visible modules, always possible
@@ -1843,7 +1843,7 @@ class JavaSymbols:
                 # A concrete method declared by the receiver's own type is an
                 # exact call. Interface dispatch to a unique source
                 # implementation is exact only in a closed world, like
-                # CodeQL's ``exactVirtualMethod``; otherwise dependencies may
+                # a typed engine's ``exactVirtualMethod``; otherwise dependencies may
                 # add implementations and the call stays possible. A target
                 # left unique by preferring the caller's module stays
                 # possible: the preference is a heuristic, not a proof. A call

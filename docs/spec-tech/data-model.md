@@ -469,7 +469,7 @@ ambiguous inherited declarations still produce no edge.
 
 The transitive query has no business-level hop or global path limit; the
 configured complete-pass deadline remains the operational safeguard. The legacy
-`analysis.codeql_max_hops` remains for bounded route reconstruction; it does not
+`analysis.engine_max_hops` remains for bounded route reconstruction; it does not
 authorize inferred call edges. By default, SystemLens creates one temporary CodeQL
 database for the whole indexed repository, with CodeQL's `--build-mode=none`
 source-only mode, then deletes it. The resulting calls are partitioned by caller
@@ -739,7 +739,7 @@ genuinely different intermediate routes remain distinct.
 
 After each completed CodeQL project, the indexing service persists a partial
 `code_flows` checkpoint with `code_flow_snapshot_status=partial`. The optional
-`--codeql-progress-html FILE` delivery adapter renders the same checkpoint to
+`--call-graph-progress-html FILE` delivery adapter renders the same checkpoint to
 `FILE` by atomic replacement and labels it as provisional with its
 completed-project count. Each checkpoint also carries the source-owning Maven
 module and the Java methods associated with its indexed IN and OUT integration

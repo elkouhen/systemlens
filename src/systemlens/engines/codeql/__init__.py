@@ -1,69 +1,57 @@
 """Local CodeQL call-graph engine for Java integration flows.
 
-The package is loaded lazily by the engine registry; no core module imports
-it. Submodules own one concern each:
+The registry reads ``declaration`` and loads ``engine`` lazily; no core
+module imports this package's adapter. Submodules own one concern each:
 
+- ``declaration``: name, capabilities and options published to the registry.
 - ``queries``: QL text and query builders.
 - ``database``: executable lookup, database lifecycle, query execution.
 - ``extraction``: decoding of query results into engine-neutral facts.
 - ``engine``: the ``CallGraphEngine`` implementation and registry entry.
 - ``errors``: engine errors mapped onto the engine seam.
+
+The public names below resolve on first access, so importing the package
+for its declaration does not load the adapter.
 """
 
-from systemlens.callgraph.model import (
-    MethodCall,
-    MethodReachability,
-    PayloadTypeEvidence,
-    SourceMethod,
-)
-from systemlens.engines.codeql import database, engine, errors, extraction, queries
-from systemlens.engines.codeql.database import (
-    _prepare_source_only_root,
-    _run_with_progress,
-    automatic_codeql_database,
-    codeql_executable,
-)
-from systemlens.engines.codeql.engine import CodeQLEngine, create_engine
-from systemlens.engines.codeql.errors import CodeQLError, CodeQLTimeout
-from systemlens.engines.codeql.extraction import (
-    extract_codeql_calls,
-    extract_codeql_kafka_message_types,
-    extract_codeql_methods,
-    extract_codeql_reachability,
-)
-from systemlens.engines.codeql.queries import (
-    _QUERY,
-    CODEQL_JAVA_PACK_VERSION,
-    _calls_query,
-    _methods_query,
-    _reachability_query,
-)
+import importlib
+from typing import Any
 
-__all__ = [
-    "CODEQL_JAVA_PACK_VERSION",
-    "CodeQLEngine",
-    "CodeQLError",
-    "CodeQLTimeout",
-    "MethodCall",
-    "MethodReachability",
-    "PayloadTypeEvidence",
-    "SourceMethod",
-    "_QUERY",
-    "_calls_query",
-    "_methods_query",
-    "_prepare_source_only_root",
-    "_reachability_query",
-    "_run_with_progress",
-    "automatic_codeql_database",
-    "codeql_executable",
-    "create_engine",
-    "database",
-    "engine",
-    "errors",
-    "extract_codeql_calls",
-    "extract_codeql_kafka_message_types",
-    "extract_codeql_methods",
-    "extract_codeql_reachability",
-    "extraction",
-    "queries",
-]
+_EXPORTS = {
+    "CODEQL_JAVA_PACK_VERSION": "queries",
+    "CodeQLEngine": "engine",
+    "CodeQLError": "errors",
+    "CodeQLTimeout": "errors",
+    "MethodCall": None,
+    "MethodReachability": None,
+    "PayloadTypeEvidence": None,
+    "SourceMethod": None,
+    "_QUERY": "queries",
+    "_calls_query": "queries",
+    "_methods_query": "queries",
+    "_prepare_source_only_root": "database",
+    "_reachability_query": "queries",
+    "_run_with_progress": "database",
+    "automatic_codeql_database": "database",
+    "codeql_executable": "database",
+    "create_engine": "engine",
+    "extract_codeql_calls": "extraction",
+    "extract_codeql_kafka_message_types": "extraction",
+    "extract_codeql_methods": "extraction",
+    "extract_codeql_reachability": "extraction",
+}
+_SUBMODULES = ("database", "declaration", "engine", "errors", "extraction", "queries")
+
+__all__ = sorted([*_EXPORTS, *_SUBMODULES])
+
+
+def __getattr__(name: str) -> Any:
+    if name in _SUBMODULES:
+        return importlib.import_module(f"{__name__}.{name}")
+    if name in _EXPORTS:
+        owner = _EXPORTS[name]
+        module = importlib.import_module(
+            "systemlens.callgraph.model" if owner is None else f"{__name__}.{owner}"
+        )
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

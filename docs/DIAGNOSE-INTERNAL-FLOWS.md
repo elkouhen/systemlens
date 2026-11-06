@@ -9,13 +9,13 @@ Run a full index so that the current extractor and code-flow signatures are
 used:
 
 ```bash
-systemlens index --full --codeql-progress 2>&1 | tee indexing.log
+systemlens index --full --engine-progress 2>&1 | tee indexing.log
 ```
 
 If source-generated Java classes are part of the application, use:
 
 ```bash
-systemlens index --full --generate-sources --codeql-progress 2>&1 | tee indexing.log
+systemlens index --full --generate-sources --engine-progress 2>&1 | tee indexing.log
 ```
 
 `--generate-sources` runs the Maven or Gradle source-generation task in the
@@ -55,7 +55,7 @@ default values are:
 
 ```yaml
 analysis:
-  codeql_max_hops: 12
+  engine_max_hops: 12
 ```
 
 This value affects only the fallback path exploration. For a very branching
@@ -63,7 +63,7 @@ codebase, increasing it can confirm whether depth truncation is the cause:
 
 ```yaml
 analysis:
-  codeql_max_hops: 20
+  engine_max_hops: 20
 ```
 
 Increase this value carefully: it can substantially increase indexing time and

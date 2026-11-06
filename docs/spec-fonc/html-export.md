@@ -120,7 +120,7 @@ persisted internal code flows displays their count, so services with discovered
 flows can be identified directly on the graph. The inspector does not display
 an inventory of input and output ports. When a persisted code flow links an
 input endpoint to an output endpoint of the same service, it displays only that
-source-evidenced potential internal flow and any CodeQL-resolved intermediate
+source-evidenced potential internal flow and any engine-resolved intermediate
 method calls. It does not imply that every input reaches every output.
 
 The Architecture graph renders persisted JPA entity declarations as `Entité JPA`

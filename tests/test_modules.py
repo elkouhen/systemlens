@@ -247,7 +247,7 @@ def test_workspace_federation_namespaces_direct_indexes_with_duplicate_artifacts
         with Store(service) as store:
             index_repo(
                 service,
-                Config(codeql_enabled=False, call_graph_engine="none"),
+                Config(call_graph_engine="none"),
                 store,
             )
 
@@ -1066,7 +1066,7 @@ def test_index_persists_source_evidenced_jpa_entities(
     )
     with Store(tmp_path) as store:
         index_repo(
-            tmp_path, Config(codeql_enabled=False, call_graph_engine="none"),
+            tmp_path, Config(call_graph_engine="none"),
             store, full=True,
         )
         entities = store.all_modules()[0].jpa_entities

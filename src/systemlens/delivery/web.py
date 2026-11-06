@@ -90,7 +90,7 @@ class SystemLensWebApplication:
                 "architecture_relations": inventory.relations,
                 "code_flows": inventory.code_flows,
                 "integration_methods": projection.integration_methods,
-                "codeql_call_edges": inventory.codeql_call_edges,
+                "call_graph_edges": inventory.call_graph_edges,
             },
         ))
         return HTTPStatus.OK, document

@@ -91,3 +91,54 @@ def test_store_depends_on_module_facts_not_module_discovery() -> None:
     imported = _imported_modules(SOURCE_ROOT / "storage" / "sqlite.py")
 
     assert "systemlens.domain.module_inventory" in imported
+
+
+def test_engine_names_stay_in_engine_packages_and_the_registry() -> None:
+    """ADR-85: outside ``engines/`` and the registry, code is engine-neutral.
+
+    The names are the declared external engines plus a fixed floor, so a
+    declaration that disappears cannot weaken the rule. Persisted names
+    that predate ADR-85 live in ``storage/persisted_names.py``; Python code
+    must use those constants, and a non-Python asset may spell only them.
+    """
+    import re
+
+    from systemlens.callgraph.registry import declarations
+    import systemlens.storage.persisted_names as persisted_names
+
+    names = {"codeql", "joern"} | {
+        item.name for item in declarations() if item.factory.startswith("systemlens.engines.")
+    }
+    pattern = re.compile("|".join(sorted(map(re.escape, names))), re.IGNORECASE)
+    persisted = sorted(
+        (
+            value for key, value in vars(persisted_names).items()
+            if key.isupper() and isinstance(value, str)
+        ),
+        key=len,
+        reverse=True,
+    )
+    allowed = {
+        SOURCE_ROOT / "callgraph" / "registry.py",
+        SOURCE_ROOT / "storage" / "persisted_names.py",
+    }
+    offenders: list[str] = []
+    for path in sorted(SOURCE_ROOT.rglob("*")):
+        relative = path.relative_to(SOURCE_ROOT)
+        if (
+            not path.is_file()
+            or relative.parts[0] == "engines"
+            or "__pycache__" in relative.parts
+            or path in allowed
+        ):
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        if path.suffix != ".py":
+            for value in persisted:
+                text = text.replace(value, "")
+        offenders.extend(
+            f"{relative}:{number}: {line.strip()}"
+            for number, line in enumerate(text.splitlines(), 1)
+            if pattern.search(line)
+        )
+    assert not offenders, "engine names outside engines/ and the registry:\n" + "\n".join(offenders)

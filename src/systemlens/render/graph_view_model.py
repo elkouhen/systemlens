@@ -25,6 +25,7 @@ from systemlens.domain.module_inventory import (
 from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.domain.message_types import message_type_key
 from systemlens.domain.mongo_operations import mongo_facets
+from systemlens.storage.persisted_names import EXPORT_CALL_GRAPH_KEY
 from systemlens.render.namespaces import project_namespace, project_namespace_path
 from systemlens.render.software_layers import software_layer
 from systemlens.render._graph_view_helpers import (
@@ -152,7 +153,7 @@ def build_graph_view_model(
     architecture_relations: list[ArchitectureRelation] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
     code_flows: list[CodeFlow] | None = None,
-    codeql_call_edges: list[CallGraphEdge] | None = None,
+    call_graph_edges: list[CallGraphEdge] | None = None,
 ) -> dict[str, object]:
     """Render an interactive Sigma.js graph as a self-contained HTML document.
 
@@ -333,7 +334,7 @@ def build_graph_view_model(
     }
     method_by_id = {method.id: method for method in integration_methods or []}
     callees_by_caller_id: dict[str, set[str]] = {}
-    for call_edge in codeql_call_edges or []:
+    for call_edge in call_graph_edges or []:
         callees_by_caller_id.setdefault(call_edge.caller_id, set()).add(call_edge.callee_id)
 
     def call_tree_consume_signature(endpoint: MessageEndpoint) -> dict[str, object] | None:
@@ -537,7 +538,7 @@ def build_graph_view_model(
                 continue
             direction = "in" if endpoint.role in {"serve", "consume"} else "out"
             # A port label identifies an architecture vertex.  It must not use
-            # the position of one CodeQL route: the same port can be incident
+            # the position of one engine route: the same port can be incident
             # to several independently evidenced interaction-graph arcs.
             ports.append({
                 "label": port_label_by_endpoint_id[endpoint.id],
@@ -1526,7 +1527,7 @@ def build_graph_view_model(
                 root_path,
                 diagnostics,
             ),
-            "codeql_call_graph": {
+            EXPORT_CALL_GRAPH_KEY: {
                 "nodes": [
                     {
                         "id": method.id,
@@ -1554,7 +1555,7 @@ def build_graph_view_model(
                         "inferred": edge.inferred,
                     }
                     for edge in sorted(
-                        codeql_call_edges or [],
+                        call_graph_edges or [],
                         key=lambda item: (
                             item.caller_id,
                             item.callee_id,

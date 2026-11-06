@@ -79,7 +79,7 @@ class ArchitectureInventory:
     profile: AnalysisProfile
     code_flows: list[CodeFlow] = field(default_factory=list)
     integration_methods: list[IntegrationMethod] = field(default_factory=list)
-    codeql_call_edges: list[CallGraphEdge] = field(default_factory=list)
+    call_graph_edges: list[CallGraphEdge] = field(default_factory=list)
     # Nodes of the persisted call graph, including engine methods that are
     # not integration methods; every persisted edge references them.
     call_graph_methods: list[PersistedCallGraphMethod] = field(default_factory=list)
@@ -174,7 +174,7 @@ def load_architecture_inventory(
         relations = store.all_architecture_relations()
         code_flows = store.all_code_flows()
         integration_methods = store.all_integration_methods()
-        codeql_call_edges = store.all_call_edges()
+        call_graph_edges = store.all_call_edges()
         call_graph_methods = store.all_call_graph_methods()
         diagnostics = store.all_extraction_diagnostics()
         kafka_dto_definitions = store.all_kafka_dto_definitions()
@@ -222,7 +222,7 @@ def load_architecture_inventory(
         relations=relations,
         code_flows=code_flows,
         integration_methods=integration_methods,
-        codeql_call_edges=codeql_call_edges,
+        call_graph_edges=call_graph_edges,
         call_graph_methods=call_graph_methods,
         diagnostics=diagnostics,
         warnings=[warning] if warning else [],

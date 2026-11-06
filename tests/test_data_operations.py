@@ -11,7 +11,7 @@ from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
 from systemlens.storage.sqlite import SCHEMA_VERSION, Store
 
-CONFIG = Config(codeql_enabled=False, call_graph_engine="none")
+CONFIG = Config(call_graph_engine="none")
 
 
 def _write(path: Path, content: str) -> None:

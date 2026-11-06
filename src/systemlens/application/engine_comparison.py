@@ -9,7 +9,7 @@ code.
 
 Call edges are compared inside the universe both engines share, the indexed
 integration methods. An edge that touches a method only one engine knows,
-such as a CodeQL helper method, is counted apart instead of being reported
+such as a helper method only a typed engine reports, is counted apart instead of being reported
 as a difference.
 """
 
@@ -87,7 +87,7 @@ def _engine_run(
     flows = materialize_call_graph_flows(
         methods, inputs.flow_endpoints, calls, repo_root=repo_root, modules=inputs.modules,
         operations=inputs.operations,
-        source_paths=paths, max_hops=max_hops, codeql_edge_confidence=edge_confidence,
+        source_paths=paths, max_hops=max_hops, edge_confidence=edge_confidence,
         reachability=reachability, call_graph_sink=graphs.append,
         closed_world=not engine.resolves_types,
         module_dependencies=store.all_module_dependencies(),
@@ -162,7 +162,7 @@ def compare_engines(
         },
         "flows": _diff(runs[left].flows, runs[right].flows, left, right),
         "edges": _diff(runs[left].edges, runs[right].edges, left, right),
-        # Edges touching a method only one engine models (CodeQL helpers):
+        # Edges touching a method only one engine models (engine helpers):
         # outside the shared universe, so never a difference by themselves.
         "edges_outside_shared_methods": {
             name: {

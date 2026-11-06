@@ -1966,3 +1966,55 @@ query and ADR-78's rules stay available to other callers.
 `.systemlens/`, which the inventory already skips. A change to one Java
 file still recreates the whole database. Reachability no longer appears
 in the index's progress lines.
+
+## ADR-85: Let each engine own its options and add Joern
+
+**Status:** Accepted on 2026-11-06. Amends ADR-61 and ADR-66.
+
+**Context:** ADR-61 put the engine behind a seam, but the rest of the
+application still speaks CodeQL. The CLI exposes `--codeql-database`,
+`--codeql-progress`, `--refresh-codeql-view`, `--resume-codeql-join` and
+`--codeql-edge-confidence`. The configuration holds `codeql_*` settings,
+some of which bound every engine, such as the timeout and the hop limit.
+
+The registry and the `init` profiles list engine names by hand. Adding a
+third engine would mean editing the CLI, the configuration, the indexing
+stage and the registry. The user asked for Joern as a third engine, with
+an application that does not depend on which engine is chosen.
+
+**Decision:** An engine package declares its name, label, capabilities,
+availability check, configuration section, CLI options and `init`
+profile. The registry discovers engines from that declaration; the core
+lists no engine name. Outside `engines/` and the registry, code names
+only engine-neutral concepts: `call_graph_*` or `engine_*`.
+
+Settings that bound any engine become generic `analysis.engine_*` keys:
+timeout, threads, RAM, hop limit and edge confidence. Settings owned by
+one engine move under `analysis.engines.<name>`, for example
+`analysis.engines.codeql.database`. CLI options follow the same split.
+The old `codeql_*` keys and `--codeql-*` flags are removed, not aliased.
+
+Joern lives in `engines/joern/`. It builds a code property graph from
+the Java sources with `joern-parse` (`javasrc2cpg`, no build needed). A
+Joern script exports methods and calls with their file, line and
+resolved target as JSON, which the adapter maps to `MethodCall` and
+`SourceMethod`.
+
+A call Joern cannot resolve stays `possible` or is dropped; the adapter
+never guesses a target. The Joern version enters `input_fingerprint`.
+Joern reports no reachability, no Kafka payload type and no module
+refresh; the shared source passes keep those duties.
+
+**Consequences:** A new engine is one package and one registry entry,
+with no change to the CLI, the configuration loader or the indexing
+stage. A test fails when a named engine appears outside its package.
+
+Existing `config.yaml` files and scripts that use `codeql_*` keys or
+`--codeql-*` flags break and must be rewritten. Persisted names stay as
+they are (SQLite tables, `codeql_*` meta keys, the export's
+`codeql_call_graph` key), so existing indexes still load.
+
+Joern needs a JDK and adds a JVM start-up and a graph build to each
+index. Its precision against CodeQL and `source` is measured with
+`analyze compare-engines` on train-ticket before the engine is
+documented as recommended for any use.

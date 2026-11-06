@@ -145,7 +145,7 @@ class CallGraphEdge:
 
 @dataclass(frozen=True)
 class PersistedCallGraphMethod:
-    """One source-backed method in the persisted CodeQL projection."""
+    """One source-backed method in the persisted call-graph projection."""
 
     id: str
     module: str

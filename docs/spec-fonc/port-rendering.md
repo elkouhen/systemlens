@@ -83,7 +83,7 @@ otherwise the method remains unknown.
 
 ## Flow catalogue
 
-Detected CodeQL call cycles and concrete Kafka topic cycles are retained as
+Detected call-graph cycles and concrete Kafka topic cycles are retained as
 potential `cycle` flows. They are visually
 distinguished and listed before non-cyclic flows; within each category, flows
 traversing more distinct microservices appear first.
@@ -126,7 +126,7 @@ relations, or source configuration.
 
 The HTML export opens on the Explorer tab with the global architecture graph.
 Before a flow selection it shows only the high-level node cards and persisted
-topology edges: it does not show CodeQL input/output ports, port-to-port
+topology edges: it does not show method-level input/output ports, port-to-port
 relations, or internal links. Hovering a microservice, topic, collection, or
 topology edge shows a concise contextual tooltip; the Flux tab presents a compact
 list of persisted potential flows whose endpoint evidence spans at least two

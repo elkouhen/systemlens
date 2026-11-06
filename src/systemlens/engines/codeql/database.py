@@ -17,7 +17,11 @@ from pathlib import Path
 
 from systemlens.engines.codeql.errors import CodeQLError
 from systemlens.engines.codeql.queries import _QLPACK
-from systemlens.indexing.file_inventory import is_build_output
+from systemlens.indexing.source_projection import (
+    executable_identity,
+    project_java_sources as _prepare_source_only_root,
+    projection_fingerprint,
+)
 from systemlens.indexing.source_generation import (
     generate_sources as _generate_sources,
     prepare_generation_workspace as _prepare_generation_workspace,
@@ -130,53 +134,6 @@ def verify_database_sources(
     return compared
 
 
-def _prepare_source_only_root(
-    repo_root: Path, destination: Path, *, include_target_java_sources: bool = False,
-    allowed_paths: Sequence[str] | None = None,
-) -> int:
-    """Copy application and generated Java sources without build descriptors.
-
-    Maven projects may keep generated Java sources below ``target``. They are
-    needed to resolve calls whose signatures use generated DTOs, while the rest
-    of ``target`` remains an untrusted build artifact and is excluded unless
-    source generation was explicitly requested for this index.
-    """
-    excluded_directories = {".git", ".systemlens"}
-    allowed = set(allowed_paths or ())
-    copied = 0
-    for source in repo_root.rglob("*.java"):
-        if not source.is_file():
-            continue
-        relative = source.relative_to(repo_root)
-        if allowed and relative.as_posix() not in allowed:
-            continue
-        parts = relative.parts
-        # Build directories are rooted at a module, never below ``src``: a
-        # Java package named ``target`` or ``out`` is application source.
-        build_directories = [
-            index for index, part in enumerate(parts)
-            if part in {"target", "out"} and "src" not in parts[:index]
-        ]
-        generated_target = any(
-            parts[index:index + 2] == ("target", "generated-sources")
-            for index in build_directories
-        )
-        target_java_source = generated_target
-        if include_target_java_sources and any(parts[index] == "target" for index in build_directories):
-            target_java_source = True
-        if (
-            any(part in excluded_directories for part in parts)
-            or build_directories
-            or is_build_output(relative.as_posix())
-        ) and not target_java_source:
-            continue
-        target = destination / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, target)
-        copied += 1
-    return copied
-
-
 def _decode_bqrs(
     executable: str, bqrs: Path, output: Path, *, timeout: float,
 ) -> subprocess.CompletedProcess[str]:
@@ -266,18 +223,9 @@ CODEQL_CACHE_DIRECTORY = Path(".systemlens") / "codeql"
 
 def _projection_fingerprint(source_root: Path, executable: str) -> str:
     """Hash the projected sources and the CodeQL executable that reads them."""
-    digest = hashlib.sha256(b"build-mode=none\n")
-    resolved = shutil.which(executable) or executable
-    try:
-        stat = Path(resolved).resolve().stat()
-        digest.update(f"{Path(resolved).resolve()}|{stat.st_size}|{stat.st_mtime_ns}\n".encode())
-    except OSError:
-        digest.update(f"{resolved}\n".encode())
-    for path in sorted(source_root.rglob("*")):
-        if path.is_file():
-            digest.update(path.relative_to(source_root).as_posix().encode() + b"\0")
-            digest.update(hashlib.sha256(path.read_bytes()).digest())
-    return digest.hexdigest()
+    return projection_fingerprint(
+        source_root, "build-mode=none\n" + executable_identity(executable) + "\n",
+    )
 
 
 def _cached_database_matches(cached: Path, stamp: Path, fingerprint: str) -> bool:

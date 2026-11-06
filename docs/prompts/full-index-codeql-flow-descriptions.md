@@ -21,11 +21,11 @@ Procedure:
 
    uv run systemlens index --full \
      --call-graph-engine codeql \
-     --codeql-database <CODEQL_DATABASE_PATH> \
-     --codeql-progress
+     --engine-database <CODEQL_DATABASE_PATH> \
+     --engine-progress
 
 4. Treat a failed index as a blocking error. Do not silently fall back to AST-only
-   flows, and do not use --no-codeql.
+   flows, and do not use --call-graph-engine source.
 5. Verify the resulting inventory with:
 
    uv run systemlens flows list --json

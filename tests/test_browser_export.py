@@ -439,7 +439,7 @@ def test_strategy1_call_tree_shows_called_consume_signature() -> None:
         {"publisher": [producer], "orders": [consumer]},
         [GraphEdge("kafka", "publisher", "orders", producer, consumer)],
         code_flows=[flow], integration_methods=[listener, consume],
-        codeql_call_edges=[CallGraphEdge(
+        call_graph_edges=[CallGraphEdge(
             "listener", "consume", "Listener.java", 5, "exact",
         )],
         strategy1=True,

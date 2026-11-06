@@ -6,7 +6,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, cast
 
-from systemlens.callgraph.engine import EngineRequest
+from systemlens.callgraph.engine import EngineRequest, EngineSettings
 from systemlens.callgraph.model import (
     MethodCall,
     MethodReachability,
@@ -16,6 +16,7 @@ from systemlens.callgraph.model import (
 from systemlens.domain.code_flows import IntegrationMethod
 import systemlens.engines.codeql.database as database
 import systemlens.engines.codeql.extraction as extraction
+from systemlens.engines.codeql.declaration import DECLARATION
 from systemlens.engines.codeql.errors import CodeQLError, CodeQLTimeout
 
 
@@ -50,7 +51,7 @@ class _CodeQLSession:
     def _logging(self) -> dict[str, object]:
         verbose = self._request.verbose
         return {
-            "verbosity": "progress++" if verbose else None,
+            "verbosity": self._engine.verbosity or ("progress++" if verbose else None),
             "progress": self._request.progress if verbose else None,
         }
 
@@ -88,16 +89,17 @@ class _CodeQLSession:
 class CodeQLEngine:
     """CodeQL as a call-graph engine: typed virtual dispatch, needs the CLI."""
 
-    name = "codeql"
-    label = "CodeQL"
-    supports_module_refresh = True
-    resolves_types = True
+    name = DECLARATION.name
+    label = DECLARATION.label
+    supports_module_refresh = DECLARATION.supports_module_refresh
+    resolves_types = DECLARATION.resolves_types
 
     def __init__(self, *, database: Path | None = None, threads: int = 1,
-                 ram_mb: int | None = None) -> None:
+                 ram_mb: int | None = None, verbosity: str | None = None) -> None:
         self.database = database
         self.threads = threads
         self.ram_mb = ram_mb
+        self.verbosity = verbosity
 
     def available(self) -> bool:
         return self.database is not None or database.codeql_executable() is not None
@@ -128,6 +130,8 @@ class CodeQLEngine:
         }
         if request.verbose:
             options.update(verbosity="progress++", progress=request.progress)
+        if self.verbosity is not None:
+            options.update(verbosity=self.verbosity)
         if request.include_generated_sources:
             # Source generation already ran before the inventory; reuse its
             # files instead of running the build tool twice.
@@ -143,7 +147,13 @@ class CodeQLEngine:
             raise CodeQLTimeout(list(exc.cmd or ["codeql"]), exc.timeout) from exc
 
 
-def create_engine(*, database: Path | None = None, threads: int = 1,
-                  ram_mb: int | None = None) -> CodeQLEngine:
+def create_engine(settings: EngineSettings) -> CodeQLEngine:
     """Registry entry point used by ``systemlens.callgraph.registry``."""
-    return CodeQLEngine(database=database, threads=threads, ram_mb=ram_mb)
+    database = settings.options.get("database")
+    verbosity = settings.options.get("verbosity")
+    return CodeQLEngine(
+        database=Path(str(database)) if database is not None else None,
+        threads=settings.threads,
+        ram_mb=settings.ram_mb,
+        verbosity=str(verbosity) if verbosity is not None else None,
+    )

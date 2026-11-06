@@ -6,7 +6,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 
 | Command | Behaviour |
 |---|---|
-| `systemlens init [--profile default\|codeql]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--profile default` (the default) selects the `source` call-graph engine and needs no external tool; `--profile codeql` selects the `codeql` engine and warns when the `codeql` CLI is not on `PATH`. An unknown profile exits with code 2 and writes nothing. |
+| `systemlens init [--profile NAME]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--profile default` (the default) selects the `source` call-graph engine and needs no external tool. Every engine that declares a profile (today `codeql`) can be named instead: the profile selects that engine, writes its `analysis.engines.NAME` defaults, and warns when the engine's prerequisite is missing. An unknown profile exits with code 2 and writes nothing. |
 | `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index` | Incrementally indexes architecture facts. See [indexing options and output](#indexing-options-and-output). |
@@ -14,7 +14,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | `systemlens export facts FILE [--namespace NAME] [--partial]` | Exports one persisted enrichment namespace as a `systemlens-ai-graph-v1` manifest. The result preserves fact IDs, evidence, status, confidence, metadata and edge endpoints, and can be reviewed and passed to `import-facts`. `--partial` marks the manifest as an incremental pass; the default is a complete namespace snapshot. |
 | `systemlens microservices`, `topics`, `apis`, `dtos`, `mongodb`, `projects` | Browse the indexed catalog; `microservices`, `topics` and `mongodb` list the corresponding architecture objects directly, each with a `kind` and `name`, and support the documented list/show/neighbors actions and JSON output where applicable. `systemlens topics dynamic` lists every unresolved Kafka endpoint occurrence with its role, module, framework and source location. |
 | `systemlens flows list` | Lists persisted potential code flows. See [module queries](#module-queries) for filters and evidence fields. |
-| `systemlens flows calculate [--root DIR] [--json] [--module NAME]` | Reconstructs persisted source-backed flows from the stored AST, CodeQL and enrichment snapshots. It does not rerun indexation, and it preserves the independent AI fact layer. With `--module`, it reconstructs only flows whose indexed input method belongs to that module, while retaining the global persisted method graph for helper calls. |
+| `systemlens flows calculate [--root DIR] [--json] [--module NAME]` | Reconstructs persisted source-backed flows from the stored AST, call-graph and enrichment snapshots. It does not rerun indexation, and it preserves the independent AI fact layer. With `--module`, it reconstructs only flows whose indexed input method belongs to that module, while retaining the global persisted method graph for helper calls. |
 | `systemlens flows show ID_OR_QUERY [--root DIR] [--json]` | Shows the ordered steps and source evidence of one unambiguously selected potential code flow. A data step adds its raw operation and action, resource identity (`mongo:`, `jpa:`, or `jdbc:`), key, guard, and transaction, each stated as unknown when not established. Text output also renders the downstream call-flow tree; JSON includes the same tree under `tree`, the derived `root` attribute, and every persisted step field including `operation_id`. |
 | `systemlens flows stats [--root DIR] [--json] [--by-module]` | Reports the number of persisted internal HTTP and Kafka connections. Only cross-module edges with both indexed endpoint sides count; dynamic or targetless integrations are excluded. `--by-module` instead counts source-backed IN-to-OUT flows for each module and includes its indexed IN and OUT port counts. |
 | `systemlens microservices topics\|apis\|mongodb\|properties\|openapi NAME [--root DIR] [--json]` | Follow one linked object kind from a single named microservice. |
@@ -45,9 +45,10 @@ Parent: [Functional specification](../SPEC-FONC.md).
 
 After a global index, use `systemlens flows list --module NAME` for a
 read-only module query. This command reads the persisted flow snapshot and
-does not rerun AST extraction or CodeQL. The `index --module NAME` option is
-still an indexing command: it limits the diagnostic output, while its source
-inventory and CodeQL analysis remain global.
+does not rerun AST extraction or the call-graph engine. The
+`index --module NAME` option is still an indexing command: it limits the
+diagnostic output, while its source inventory and engine analysis remain
+global.
 
 Each listed flow identifies its owning and target modules, input and output
 flows, and known Java types. The JSON result keeps `input_topic` and
@@ -59,7 +60,7 @@ the persisted topology snapshot.
 `--publishes-to-topic` keeps flows with a Kafka publication. `--module NAME`
 keeps flows owned by that module whose first and last endpoints are its IN and
 OUT ports; scheduled flows without an IN port are excluded. With `--explain`,
-text output names the receiving method, indexed CodeQL transitions, the
+text output names the receiving method, indexed call-graph transitions, the
 external invocation when its source evidence is available, and the OUT port.
 JSON output also includes `found`, indexed ports, ordered call steps, and
 excluded flows.
@@ -69,50 +70,56 @@ Like the rest of the CLI, the `flows` help and text output are in French.
 `Réconciliation topologique`, the ordered steps, and `Arbre d'appel`. JSON
 keys and the `key=value` evidence tokens of a step keep their spelling.
 
-To populate or refresh the persisted CodeQL method view one module at a time,
-run `systemlens index --module NAME --refresh-codeql-view`. The option requires
-CodeQL and a previously completed global CodeQL call graph. It should reuse the
-global database supplied with `--codeql-database`; the command then queries the
-selected module's methods and reuses the persisted global calls. Other module
-rows remain in the SQLite snapshot. Use `--full` as well when the normal file
-delta should also be forced.
+To populate or refresh the persisted engine method view one module at a time,
+run `systemlens index --module NAME --refresh-call-graph-view`. The option
+requires an engine that declares module refresh (today `codeql`) and a
+previously completed global call graph. It should reuse the global database
+supplied with `--engine-database`; the command then queries the selected
+module's methods and reuses the persisted global calls. Other module rows
+remain in the SQLite snapshot. Use `--full` as well when the normal file delta
+should also be forced.
 
 With `systemlens flows list --module NAME --explain`, the diagnostic includes
 the tested graph metrics and up to ten partial call paths when no internal flow
-is found. A path can end at an indexed method with no persisted CodeQL edge;
+is found. A path can end at an indexed method with no persisted call edge;
 this explains why the search stopped without hiding the attempted node.
 
 ## Call-edge diagnosis
 
 Use `systemlens analyze call-edge CALLER CALLEE [--module MODULE]` when one
 expected Java call is missing from a flow or graph view. The command reads the
-method inventory, persisted CodeQL graph, flow snapshot status, and configured
-edge confidence. It does not run CodeQL.
+method inventory, persisted call graph, flow snapshot status, and configured
+edge confidence. It does not run the engine.
 
 For an interface selector, indexed source symbols can match a persisted edge
 whose target is a compatible concrete implementation. Text and JSON output
-report AST and CodeQL presence for both methods and their directed edge as
-`present`, `absent`, or `unknown`.
+report AST and engine presence (`ast`, `engine`) for both methods and their
+directed edge as `present`, `absent`, or `unknown`.
 
 Without `--module`, the command keeps the repository-wide candidate set and
 reports ambiguity when a selector matches several projects. Use `--module` only
 to restrict both selectors and interface implementation matching to one module.
 
-An absent AST method is provable; missing raw CodeQL or AST-call evidence stays
-`unknown`. JSON output also includes the proof basis for each presence value,
-the matched method facts, persisted edge evidence, flow IDs, and the pipeline
-stage associated with the verdict. A persisted integration-method fact proves
-an AST node; only a persisted non-inferred CodeQL call edge proves a CodeQL
-node or edge.
+An absent AST method is provable; missing raw engine or AST-call evidence
+stays `unknown`. JSON output also includes the proof basis for each presence
+value (`proof_ast`, `proof_engine`), the matched method facts, persisted edge
+evidence, flow IDs, and the pipeline stage associated with the verdict. A
+persisted integration-method fact proves an AST node; only a persisted
+non-inferred call edge proves an engine node or edge.
 
-Pass `--codeql-database DIR` to query node presence directly from an existing
-CodeQL database during the diagnostic. Query outputs are temporary and are not
-copied into the SystemLens index. This option requires the database to match
-the indexed source paths and revision; without it, node presence falls back to
-the persisted snapshot.
+The stage of a missing edge is `engine_extraction_or_join`; the status is
+`call_graph_disabled`, `engine_unavailable` or `edge_not_persisted`.
 
-When `index --show-call-chains` is given the same `--codeql-database`, the module
-diagnostic re-queries CodeQL for the complete source call graph when needed.
+Pass `--engine-database DIR` to query node presence directly from an existing
+analyzer database during the diagnostic. The database belongs to the
+configured engine, or to the one named by `--call-graph-engine`; that engine
+must accept a database. Query outputs are temporary and are not copied into
+the SystemLens index. The database must match the indexed source paths and
+revision; without it, node presence falls back to the persisted snapshot.
+
+When `index --show-call-chains` is given the same `--engine-database`, the
+module diagnostic re-queries the engine for the complete source call graph
+when needed.
 This keeps ordinary intermediate methods visible even when no source file was
 rescanned and the persisted edge snapshot contains only endpoint anchors.
 
@@ -123,14 +130,17 @@ manifests:
 
 - Input and scope: `--manifest FILE`, `--module NAME_OR_PATH`, `--full`,
   `--strategy default|strategy1`, and `--disable TYPE`.
-- Module diagnostics: `--refresh-codeql-view`, `--internal-flows-only`, and
-  `--show-call-chains`.
+- Module diagnostics: `--refresh-call-graph-view`, `--internal-flows-only`,
+  and `--show-call-chains`.
 - Runtime inventory: `--kubernetes` and `--kubernetes-namespace NAME`.
-- Method calls: `--call-graph-engine codeql|source|none`,
-  `--codeql-edge-confidence exact|possible`, `--codeql-database DIR`,
-  `--generate-sources`, and the `--no-codeql` alias.
-- Progress and recovery: `--codeql-progress`, `--codeql-progress-html FILE`,
-  and `--resume-codeql-join`.
+- Method calls: `--call-graph-engine NAME`,
+  `--engine-edge-confidence exact|possible`, `--engine-database DIR`,
+  `--engine-option NAME=VALUE`, and `--generate-sources`.
+- Progress and recovery: `--engine-progress`,
+  `--call-graph-progress-html FILE`, and `--resume-call-graph-join`.
+
+No option names an engine. [Call-graph engines](#call-graph-engines) lists
+the engines and what each option requires of them.
 
 Only one `systemlens index` writes to an index at a time. A second one waits
 up to five seconds for the lock, then prints
@@ -139,11 +149,11 @@ with code 2, without a traceback. Read-only commands keep working meanwhile.
 
 `systemlens index` reports the main stages in order: module discovery, file
 inventory, incremental delta, AST extraction, endpoint persistence, module and
-property persistence, architecture relations, CodeQL/interprocedural flows,
+property persistence, architecture relations, interprocedural flows,
 and final statistics. Each completed stage reports its elapsed duration.
 
 AST extraction receives all changed files in one pass and reports the
-`AST 1/1` checkpoint. CodeQL creates one global database, then processes each
+`AST 1/1` checkpoint. An external engine builds one global database, then processes each
 source-owning Maven/Gradle module as `module <current>/<total>` with its
 extracted-call count and elapsed duration. Interactive terminals colour phase
 headers in cyan, module progress in yellow and completed work in green; the
@@ -169,17 +179,18 @@ persisted snapshot and prints only the selected module's internal-flow
 diagnosis. The snapshot can include shared Java methods and cross-module call
 edges from the preceding global index.
 
-With `--no-codeql` or `--call-graph-engine source`, interprocedural calls come
+With `--call-graph-engine source`, interprocedural calls come
 from the tree-sitter source engine: declared receiver types, imports,
 inheritance, and unique interface implementations. Dynamic calls, lambdas,
 and generic dispatch may remain incomplete. After
 `systemlens import-facts`, the JSON result remains on stdout; the CLI prints
 `systemlens flows calculate` on stderr as the next step for interactive users.
 
-## Reuse an externally created CodeQL database
+## Reuse an externally created analyzer database
 
-Create the CodeQL database from the repository root, then pass that global
-database to SystemLens:
+`--engine-database DIR` hands a prebuilt database to the selected engine,
+which must declare a database option. With `codeql`, create the database from
+the repository root, then pass that global database to SystemLens:
 
 ```bash
 codeql database create .codeql/systemlens-java \
@@ -189,7 +200,7 @@ codeql database create .codeql/systemlens-java \
 
 systemlens index --full \
   --call-graph-engine codeql \
-  --codeql-database .codeql/systemlens-java
+  --engine-database .codeql/systemlens-java
 ```
 
 SystemLens reuses the database for method-call extraction and still performs
@@ -210,8 +221,8 @@ SystemLens checks the database against the indexed sources before using it
 
 A file CodeQL did not archive, such as `package-info.java`, is accepted.
 
-`--codeql-database` requires the `codeql` call-graph engine and cannot be
-combined with `--generate-sources`. Source generation, when needed, must finish
+`--engine-database` fails with code 2 when the selected engine accepts no
+database, and cannot be combined with `--generate-sources`. Source generation, when needed, must finish
 before the external database is created. SystemLens does not replace the
 supplied database with its automatic temporary source-only database.
 
@@ -230,15 +241,16 @@ index; non-Java build outputs remain excluded. SystemLens does not invoke
 compile or test tasks. Maven must find its plugins and dependencies in the
 local cache.
 
-## CodeQL progress and recovery
+## Engine progress and recovery
 
-When CodeQL reaches its time limit, the CLI prints
-`systemlens index --resume-codeql-join` as the recovery path.
+When the engine reaches its time limit, the CLI prints
+`systemlens index --resume-call-graph-join` as the recovery path.
 
-Automatic method-call analysis creates one source-only Java database for the
-whole repository with `codeql`. It is cached in `.systemlens/codeql/` and
-reused by the next index while the projected Java sources and the CodeQL
-executable are unchanged; any change creates it again (ADR-84). Progress reports the completed project over the
+Automatic method-call analysis by an external engine creates one source-only
+database for the whole repository. The engine caches it under
+`.systemlens/<engine>/` and reuses it while the projected Java sources and the
+analyzer are unchanged; any change creates it again (ADR-84, ADR-85).
+Progress reports the completed project over the
 total and the calls processed from the global result. By default, SystemLens
 persists the flow snapshot once after all modules have been processed; this
 avoids rewriting the complete SQLite flow table for every module. When
@@ -263,7 +275,7 @@ Direct IN-to-OUT calls show the indexed entry method before the output in the
 final flow report. Every live line includes the current call depth, and every
 terminal line includes the depth and the exact stop reason. If the selected
 snapshot is unchanged and no indexing stage runs, the command replays this
-diagnostic from the persisted CodeQL graph without rewriting the index.
+diagnostic from the persisted call graph without rewriting the index.
 Interactive terminals render constructed chains in green; redirected output
 remains plain text.
 
@@ -273,7 +285,7 @@ edges found before an interruption.
 The final reconciliation replaces this partial snapshot and marks it complete.
 SystemLens maps module-relative evidence paths back to the repository root,
 aggregates all calls, and only then joins them to the global method inventory.
-An explicit `--codeql-database` remains a caller-managed global-database
+An explicit `--engine-database` remains a caller-managed global-database
 override. Its calls and methods are queried once globally, then processed by
 source-owning project for the same module progress reporting.
 
@@ -282,38 +294,57 @@ every indexing pass, incremental or full, applies `analysis.strategy` from
 `.systemlens/config.yml`; set `strategy: strategy1` there to keep Strategy1.
 The strategy of the last pass is persisted with the index, so derived views
 read the snapshot's profile, and a change of strategy forces a full refresh.
-`analysis.call_graph_engine` accepts `source` (default), `codeql`, or `none`.
+## Call-graph engines
 
-- `codeql` resolves calls from CodeQL's typed program model. It needs the
-  CodeQL CLI. When the CLI is missing, indexing says so and uses `source`.
-  A call whose argument type CodeQL cannot resolve reaches every matching
-  same-name overload as `possible` instead of one as `exact`.
-- `source` resolves calls from tree-sitter syntax and declared types. It needs
-  no external tool. It types fields, parameters, locals, `var` initializers,
-  chained calls by declared return type, field accesses and constants, static
-  calls on a type name, method references, and calls inside lambdas. Literal
-  and typed arguments choose between same-arity overloads. Overrides typed
-  through an external wildcard import still match their contract. A call is
-  `exact` when one concrete source body can receive it, including the unique
-  implementation of an interface; several implementations stay `possible`.
-  A Spring Data query method declared in the sources is a `possible`,
-  non-inferred target: the receiver type declares it.
+`analysis.call_graph_engine` and `--call-graph-engine` accept every declared
+engine and `none`. The selector, the options and the help text come from the
+engines' declarations (ADR-85); the CLI lists no engine by hand.
+
+- `source` (default) resolves calls from tree-sitter syntax and declared
+  types. It needs no external tool. It types fields, parameters, locals,
+  `var` initializers, chained calls by declared return type, field accesses
+  and constants, static calls on a type name, method references, and calls
+  inside lambdas. Literal and typed arguments choose between same-arity
+  overloads. Overrides typed through an external wildcard import still match
+  their contract. A call is `exact` when one concrete source body can receive
+  it, including the unique implementation of an interface; several
+  implementations stay `possible`. A Spring Data query method declared in the
+  sources is a `possible`, non-inferred target: the receiver type declares it.
   Library methods and unknown argument types stay unresolved.
+- `codeql` resolves calls from CodeQL's typed program model. It needs the
+  CodeQL CLI. A call whose argument type CodeQL cannot resolve reaches every
+  matching same-name overload as `possible` instead of one as `exact`. It
+  accepts `--engine-database` and refreshes one module.
 - `none` builds no interprocedural path: only same-method flows remain.
-`analysis.codeql_edge_confidence` accepts `exact` or `possible`. The default
-`possible` keeps possible dispatch and inferred bridges as low-confidence flow
-evidence; `exact` excludes them from flow reconstruction.
 
-The automatic CodeQL projection preserves Java sources below
+When the selected engine is unavailable, indexing says so and uses `source`.
+
+| Option | Requirement |
+|---|---|
+| `--engine-database DIR` | The engine declares a database option. |
+| `--engine-option NAME=VALUE` | `NAME` is an option the engine declares; the value is validated like the configuration. |
+| `--refresh-call-graph-view` | The engine declares module refresh; `--module` is set. |
+| `--call-graph-progress-html FILE`, `--resume-call-graph-join` | Any engine but `none`. |
+| `--engine-progress`, `--engine-edge-confidence` | None. |
+
+`--engine-edge-confidence` overrides `analysis.engine_edge_confidence`, which
+accepts `exact` or `possible`. The default `possible` keeps possible dispatch
+and inferred bridges as low-confidence flow evidence; `exact` excludes them
+from flow reconstruction.
+
+The automatic projection of an external engine preserves Java sources below
 `target/generated-sources` so generated AsyncAPI/OpenAPI types remain
 available; other build outputs and build descriptors are excluded.
-`--call-graph-engine` selects the method-call engine for one run and does not modify
-`.systemlens/config.yml`. `--no-codeql` is an alias of `--call-graph-engine source`.
+`--call-graph-engine` and `--engine-option` apply to one run and do not modify
+`.systemlens/config.yml`.
 
-`systemlens analyze compare-engines [--engines codeql,source] [--root DIR]
-[--json]` rebuilds interprocedural flows from the persisted index with two
-engines and reports the flows and call edges both find, those only one finds,
-and confidence changes. It persists nothing. Both engines must be available.
+`systemlens analyze compare-engines --engines A,B [--root DIR] [--json]`
+rebuilds interprocedural flows from the persisted index with two engines
+and reports the flows and call edges both find, those only one finds,
+and confidence changes. It persists nothing. `--engines` is required and
+names two distinct declared engines; both must be available. Each engine
+receives its `analysis.engines.NAME` options and the generic `engine_*`
+settings.
 
 Each engine joins the inputs indexing uses: persisted endpoints, integration
 methods, modules, data operations and module dependencies. A flow is keyed by
@@ -324,11 +355,11 @@ Call edges are compared only between indexed integration methods, which both
 engines share. An edge is keyed by caller, callee, source path and call line;
 its dispatch confidence and `inferred` label are compared as its value.
 `confidence_changes_count` counts the edges whose labels differ. Edges that
-touch a method only one engine models, such as a CodeQL helper, appear under
+touch a method only one engine models, such as a helper of a typed engine, appear under
 `edges_outside_shared_methods` with a count and examples per engine.
 
-`--codeql-progress-html FILE` is an opt-in progress aid: after each completed
-CodeQL project it atomically replaces `FILE` with a graph labelled as
+`--call-graph-progress-html FILE` is an opt-in progress aid: after each
+completed engine project it atomically replaces `FILE` with a graph labelled as
 provisional, including the completed-project count. Users may refresh that
 file in a browser to inspect the current method-call coverage. It is generated
 by filtering the once-materialized global flows to reported call sites; direct
@@ -337,47 +368,46 @@ These in-progress indexing facts must not be treated as an exportable or
 complete architecture snapshot; the normal `export microservices --html`
 command remains the authoritative post-index export.
 
-CodeQL diagnostics are silent by default, including for repositories whose
-older configuration still contains `analysis.codeql_verbosity`. The explicit
-`--codeql-progress` option temporarily enables `progress++` for one command.
-CodeQL's messages are diagnostic progress only; they do not provide a
+Engine diagnostics are silent by default. The explicit `--engine-progress`
+option relays the engine's own progress messages for one command; `codeql`
+then runs with `progress++` unless `analysis.engines.codeql.verbosity` sets
+another level. The engine's messages are diagnostic progress only; they do not provide a
 guaranteed percentage or remaining-time estimate. During the Python-side join,
 SystemLens reports the call-attachment phase and the input-method exploration
 at least every five seconds while work continues. These messages include
 processed calls or methods, explored transitions, and elapsed time.
 
-`analysis.codeql_timeout_seconds` sets the positive wall-clock budget for the
-complete CodeQL pass, including source generation, temporary database creation,
-query execution and BQRS decoding; its default is `600` seconds. The remaining
+`analysis.engine_timeout_seconds` sets the positive wall-clock budget for the
+complete engine pass, including source generation, database creation and
+query execution; its default is `600` seconds. The remaining
 budget is propagated to every subprocess. The deadline includes live progress
 reading, even when a subprocess stops producing output. On POSIX, timeout or
 interrupted progress handling terminates and reaps the complete process group.
 
 A timeout is a soft boundary for the index: SystemLens keeps AST facts and
-the CodeQL calls of a call query that completed before the deadline, even
+the engine calls of a call query that completed before the deadline, even
 when a later query times out. A query cut by the deadline yields no call.
 SystemLens then executes the remaining relation, flow, reconciliation and
 statistics post-processing, and commits the resulting partial snapshot so it
 can be exported to HTML. The
-CLI reports that the graph is partial. A timed-out CodeQL pass does not update
+CLI reports that the graph is partial. A timed-out engine pass does not update
 the code-flow signature, so the next index retries the interprocedural analysis
-even when source files are unchanged. Other CodeQL failures remain fatal and
+even when source files are unchanged. Other engine failures remain fatal and
 preserve the previous committed snapshot.
 
 When the join itself is interrupted after one or more committed batches,
-`systemlens index --resume-codeql-join` reuses the compatible repository
+`systemlens index --resume-call-graph-join` reuses the compatible repository
 checkpoint and skips the completed IN methods. The option rejects changed
 analysis inputs, incompatible settings, or a non-partial snapshot; generated
 presentation files such as HTML exports do not invalidate it. If the persisted
 method list no longer
 matches the current indexed method list, the command discards the stale join
-cursor and restarts the CodeQL join from the beginning.
+cursor and restarts the join from the beginning.
 
-`analysis.codeql_threads` sets the number of threads passed to CodeQL database
-creation and query execution; its default is `0`, which delegates one thread
-per available core to CodeQL. `analysis.codeql_ram_mb` optionally sets
-the positive RAM limit in MiB for those operations; it defaults to `null`, so
-CodeQL chooses its own limit.
+`analysis.engine_threads` sets the number of threads an external engine may
+use; its default is `0`, which means one thread per available core.
+`analysis.engine_ram_mb` optionally sets the positive RAM limit in MiB; it
+defaults to `null`, so the engine chooses its own limit.
 `--disable` accepts `properties`,
 `module-architecture`, and `module-tree-sitter`.
 

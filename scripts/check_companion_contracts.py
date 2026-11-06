@@ -120,7 +120,7 @@ def _validate_lab(
             ], cwd=application)
             _run([
                 str(systemlens), "index", "--full", "--call-graph-engine", "codeql",
-                "--codeql-database", ".codeql/systemlens-java",
+                "--engine-database", ".codeql/systemlens-java",
             ], cwd=application)
         else:
             # The skill's documented alternative when CodeQL is unavailable.

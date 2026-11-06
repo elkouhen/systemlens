@@ -52,7 +52,7 @@ the persisted `codeql_methods` and `codeql_call_edges` tables are the durable
 SystemLens projections used by exports and flow reconstruction. Exports never
 reopen the database or reparse source files.
 
-With `index --module NAME --refresh-codeql-view`, the method projection is
+With `index --module NAME --refresh-call-graph-view`, the method projection is
 refreshed only for source paths below the selected module. Existing rows for
 other modules are retained, while the call-edge graph remains global so helper
 methods outside the module can still be traversed. The refresh is additive to

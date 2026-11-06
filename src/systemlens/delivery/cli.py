@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Literal, Optional, cast
@@ -72,7 +71,7 @@ from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_d
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
-from systemlens.infrastructure.config import INIT_PROFILES, ConfigError, init_config, load_config
+from systemlens.infrastructure.config import INIT_PROFILES, Config, ConfigError, init_config, load_config
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import (
     GraphEdge,
@@ -87,7 +86,8 @@ from systemlens.application.engine_comparison import (
     compare_engines,
     render_engine_comparison_text,
 )
-from systemlens.callgraph.registry import load_engine
+from systemlens.callgraph.engine import EngineSettings
+from systemlens.callgraph.registry import NO_ENGINE, declaration, declarations, engine_names, load_engine
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
@@ -114,6 +114,7 @@ from systemlens.render import (
 )
 
 from systemlens.infrastructure.paths import config_path, db_path
+from systemlens.storage.persisted_names import META_CALL_GRAPH_STATUS
 from systemlens.storage.sqlite import Store, StoreError
 from systemlens.application.graph_facts import import_graph_facts
 from systemlens.application.workspace import (
@@ -138,6 +139,46 @@ from systemlens.delivery.cli_support import (
     trace_index as _trace_index,
 )
 
+
+
+_ENGINE_CHOICES = engine_names()
+_ENGINE_HELP = ", ".join(
+    [f"{item.name} ({item.description})" for item in declarations()]
+    + [f"{NO_ENGINE} (flux d'une seule méthode)"]
+)
+
+
+def _parse_engine_options(values: list[str]) -> dict[str, object]:
+    """Split repeated ``--engine-option NAME=VALUE`` values."""
+    parsed: dict[str, object] = {}
+    for value in values:
+        name, separator, option_value = value.partition("=")
+        if not separator or not name.strip():
+            raise ConfigError(f"`--engine-option` attend NOM=VALEUR, reçu {value!r}.")
+        parsed[name.strip()] = option_value.strip()
+    return parsed
+
+
+def _database_engine_settings(
+    repo_root: Path, engine_name: str | None, database: Path,
+) -> tuple[str, EngineSettings]:
+    """Settings of the engine that owns a supplied analyzer database."""
+    try:
+        config = load_config(repo_root)
+    except ConfigError:
+        config = Config()
+    name = engine_name or config.call_graph_engine
+    if name == NO_ENGINE:
+        raise ConfigError("Le moteur `none` n'a pas de base à interroger.")
+    database_option = declaration(name).database_option
+    if database_option is None:
+        raise ConfigError(
+            f"`--engine-database` requiert un moteur qui accepte une base ; "
+            f"`{name}` n'en accepte pas."
+        )
+    return name, config.engine_settings(
+        name, repo_root=repo_root, overrides={database_option: str(database.expanduser().resolve())},
+    )
 
 app = typer.Typer(
     help=(
@@ -945,7 +986,7 @@ def flows_root(
                 inventory.endpoints,
                 module,
                 inventory.integration_methods,
-                inventory.codeql_call_edges,
+                inventory.call_graph_edges,
             )
             typer.echo(json.dumps(debug) if _option_json(json_output) else render_internal_flow_debug_text(debug))
             return
@@ -990,7 +1031,7 @@ def flows_list(
             inventory.endpoints,
             module,
             inventory.integration_methods,
-            inventory.codeql_call_edges,
+            inventory.call_graph_edges,
         )
         typer.echo(json.dumps(debug) if _option_json(json_output) else render_internal_flow_debug_text(debug))
         return
@@ -1184,9 +1225,16 @@ def analyze_call_edge(
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."
     ),
-    codeql_database: Path | None = typer.Option(
-        None, "--codeql-database",
-        help="Base CodeQL à interroger directement pour la présence des nœuds.",
+    engine_database: Path | None = typer.Option(
+        None, "--engine-database",
+        help=(
+            "Base existante du moteur à interroger directement pour la présence des nœuds. "
+            "Le moteur est celui de la configuration ou de `--call-graph-engine`."
+        ),
+    ),
+    call_graph_engine: str | None = typer.Option(
+        None, "--call-graph-engine",
+        help="Moteur propriétaire de `--engine-database` (défaut : celui de la configuration).",
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
@@ -1198,17 +1246,25 @@ def analyze_call_edge(
             key: store.get_meta(key)
             for key in (
                 "code_flow_signature",
-                "codeql_call_graph_status",
+                META_CALL_GRAPH_STATUS,
                 "code_flow_snapshot_status",
             )
         }
-    direct_codeql_methods = (
-        _database_session_query(repo_root, codeql_database, lambda session: session.methods())
-        if codeql_database is not None else None
-    )
+    direct_engine_methods = None
+    if engine_database is not None:
+        try:
+            engine_name, settings = _database_engine_settings(
+                repo_root, call_graph_engine, engine_database,
+            )
+            direct_engine_methods = _database_session_query(
+                repo_root, engine_name, settings, lambda session: session.methods(),
+            )
+        except (ConfigError, ValueError, RuntimeError) as exc:
+            typer.echo(f"Diagnostic impossible : {exc}", err=True)
+            raise typer.Exit(code=2) from exc
     result = diagnose_call_edge(
         inventory, caller, callee, module=module, snapshot_metadata=metadata,
-        codeql_methods=direct_codeql_methods,
+        engine_methods=direct_engine_methods,
     )
     typer.echo(
         json.dumps(result)
@@ -1227,7 +1283,7 @@ def analyze_call_edges(
     ),
     json_output: bool = typer.Option(False, "--json"),
 ) -> None:
-    """Lister les arêtes CodeQL persistées, indépendamment des flux."""
+    """Lister les arêtes du graphe d'appel persistées, indépendamment des flux."""
     result = list_call_edges(load_architecture_inventory(_option_root(root)), module=module)
     typer.echo(
         json.dumps(result)
@@ -1239,8 +1295,8 @@ def analyze_call_edges(
 @analyze_app.command("compare-engines")
 def analyze_compare_engines(
     engines: str = typer.Option(
-        "codeql,source", "--engines",
-        help="Deux moteurs séparés par une virgule, parmi codeql et source.",
+        ..., "--engines",
+        help=f"Deux moteurs séparés par une virgule, parmi {', '.join(_ENGINE_CHOICES)}.",
     ),
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."
@@ -1253,7 +1309,7 @@ def analyze_compare_engines(
     try:
         config = load_config(repo_root)
         loaded = [
-            load_engine(name, threads=config.codeql_threads, ram_mb=config.codeql_ram_mb)
+            load_engine(name, config.engine_settings(name, repo_root=repo_root))
             for name in names
         ]
         if any(engine is None for engine in loaded):
@@ -1262,9 +1318,9 @@ def analyze_compare_engines(
             result = compare_engines(
                 store,
                 [engine for engine in loaded if engine is not None],
-                timeout_seconds=config.codeql_timeout_seconds,
-                max_hops=config.codeql_max_hops,
-                edge_confidence=config.codeql_edge_confidence,
+                timeout_seconds=config.engine_timeout_seconds,
+                max_hops=config.engine_max_hops,
+                edge_confidence=config.engine_edge_confidence,
             )
     except (ConfigError, StoreError, ValueError, RuntimeError) as exc:
         typer.echo(f"Comparaison impossible : {exc}", err=True)
@@ -1443,14 +1499,15 @@ def init(
         "--profile",
         help=(
             "Profil de configuration : default (moteur source, aucun outil externe) "
-            "ou codeql (moteur CodeQL, requiert la CLI codeql)."
+            "ou le nom d'un moteur qui propose un profil "
+            f"({', '.join(INIT_PROFILES[1:]) or 'aucun'})."
         ),
     ),
 ) -> None:
     """Initialiser la configuration .systemlens/config.yml du projet.
 
     L'analyse des sources Java/Spring est entièrement locale et fondée sur AST.
-    Exemples : `systemlens init`, `systemlens init --profile codeql`.
+    Exemples : `systemlens init`, `systemlens init --profile NAME`.
     """
     if profile not in INIT_PROFILES:
         typer.echo(
@@ -1472,9 +1529,10 @@ def init(
         raise typer.Exit(code=1) from exc
 
     typer.echo(f"Configuration créée : {path} (profil {profile}).")
-    if profile == "codeql" and shutil.which("codeql") is None:
+    reason = None if profile == "default" else declaration(profile).unavailable_reason()
+    if reason is not None:
         typer.echo(
-            "CLI codeql introuvable dans le PATH : installez-la avant `systemlens index`, "
+            f"{reason} Installez le prérequis avant `systemlens index`, "
             "ou recréez la configuration avec `--profile default`.",
             err=True,
         )
@@ -1494,12 +1552,12 @@ def index_cmd(
             "L'indexation reste globale."
         ),
     ),
-    refresh_codeql_view: bool = typer.Option(
+    refresh_call_graph_view: bool = typer.Option(
         False,
-        "--refresh-codeql-view",
+        "--refresh-call-graph-view",
         help=(
-            "Forcer la création ou l'actualisation de la vue des méthodes CodeQL "
-            "pour le module sélectionné. Requiert --module."
+            "Forcer la création ou l'actualisation de la vue des méthodes du moteur "
+            "pour le module sélectionné. Requiert --module et un moteur qui la prend en charge."
         ),
     ),
     internal_flows_only: bool = typer.Option(
@@ -1518,10 +1576,10 @@ def index_cmd(
             "Requiert --module."
         ),
     ),
-    resume_codeql_join: bool = typer.Option(
+    resume_call_graph_join: bool = typer.Option(
         False,
-        "--resume-codeql-join",
-        help="Reprendre une jointure CodeQL interrompue depuis son dernier checkpoint.",
+        "--resume-call-graph-join",
+        help="Reprendre une jointure du graphe d'appel interrompue depuis son dernier checkpoint.",
     ),
     manifests: Optional[list[Path]] = typer.Option(  # noqa: UP007
         None, "--manifest", help="Manifeste de topics Markdown ou JSON (répétable)."
@@ -1541,46 +1599,49 @@ def index_cmd(
         "--kubernetes-namespace",
         help="Namespace Kubernetes à interroger (tous par défaut).",
     ),
-    codeql_database: Optional[Path] = typer.Option(
+    engine_database: Optional[Path] = typer.Option(
         None,
-        "--codeql-database",
-        help="Base Java CodeQL existante à réutiliser au lieu de la base temporaire automatique.",
-    ),
-    codeql_progress_html: Optional[Path] = typer.Option(
-        None,
-        "--codeql-progress-html",
+        "--engine-database",
         help=(
-            "Fichier HTML provisoire réécrit après chaque projet CodeQL terminé "
+            "Base existante du moteur sélectionné à réutiliser au lieu de sa base automatique. "
+            "Requiert un moteur qui accepte une base."
+        ),
+    ),
+    engine_option: Optional[list[str]] = typer.Option(  # noqa: UP007
+        None,
+        "--engine-option",
+        help=(
+            "Option propre au moteur sélectionné, au format NOM=VALEUR (répétable). "
+            "Remplace analysis.engines.<moteur>.<NOM> pour cette indexation."
+        ),
+    ),
+    call_graph_progress_html: Optional[Path] = typer.Option(
+        None,
+        "--call-graph-progress-html",
+        help=(
+            "Fichier HTML provisoire réécrit après chaque projet analysé par le moteur "
             "(à actualiser dans le navigateur)."
         ),
     ),
-    codeql_progress: bool = typer.Option(
+    engine_progress: bool = typer.Option(
         False,
-        "--codeql-progress",
-        help="Afficher en direct les messages de progression détaillés de CodeQL.",
+        "--engine-progress",
+        help="Afficher en direct les messages de progression détaillés du moteur.",
     ),
     generate_sources: bool = typer.Option(
         False,
         "--generate-sources",
         help="Générer les sources dans le dépôt indexé, sans lancer la compilation ni les tests.",
     ),
-    no_codeql: bool = typer.Option(
-        False,
-        "--no-codeql",
-        help="Désactiver CodeQL pour cette indexation ; équivaut à `--call-graph-engine source`.",
-    ),
-    call_graph_engine: Optional[Literal["codeql", "source", "none"]] = typer.Option(
+    call_graph_engine: Optional[str] = typer.Option(
         None,
         "--call-graph-engine",
-        help=(
-            "Moteur des flux interprocéduraux : codeql (types résolus, CLI CodeQL requise), "
-            "source (tree-sitter, sans dépendance) ou none (flux d'une seule méthode)."
-        ),
+        help=f"Moteur des flux interprocéduraux : {_ENGINE_HELP}.",
     ),
-    codeql_edge_confidence: Optional[Literal["exact", "possible"]] = typer.Option(
+    engine_edge_confidence: Optional[Literal["exact", "possible"]] = typer.Option(
         None,
-        "--codeql-edge-confidence",
-        help="Niveau minimal accepté pour les arêtes CodeQL : exact ou possible.",
+        "--engine-edge-confidence",
+        help="Niveau minimal accepté pour les arêtes du graphe d'appel : exact ou possible.",
     ),
     disable: list[str] = typer.Option(
         None,
@@ -1594,7 +1655,7 @@ def index_cmd(
     """Indexer le code avec les extracteurs AST (incrémental par défaut).
 
     Exemples : `systemlens index`, `systemlens index --full`,
-    `systemlens index --strategy strategy1`, `systemlens index --no-codeql`,
+    `systemlens index --strategy strategy1`, `systemlens index --call-graph-engine source`,
     `systemlens index --manifest TOPICS.md`,
     `systemlens index --manifest kafka-flow-graph-anonymous.json`.
     """
@@ -1636,8 +1697,8 @@ def index_cmd(
     if show_call_chains and module is None:
         typer.echo("`--show-call-chains` requiert `--module`.", err=True)
         raise typer.Exit(code=2)
-    if refresh_codeql_view and module is None:
-        typer.echo("`--refresh-codeql-view` requiert `--module`.", err=True)
+    if refresh_call_graph_view and module is None:
+        typer.echo("`--refresh-call-graph-view` requiert `--module`.", err=True)
         raise typer.Exit(code=2)
     if show_call_chains and internal_flows_only:
         typer.echo(
@@ -1655,16 +1716,16 @@ def index_cmd(
         raise typer.Exit(code=2)
     disabled = frozenset(disable or [])
     if internal_flows_only and (
-        resume_codeql_join
-        or codeql_progress
-        or codeql_progress_html is not None
+        resume_call_graph_join
+        or engine_progress
+        or call_graph_progress_html is not None
         or generate_sources
         or kubernetes
         or kubernetes_namespace is not None
-        or no_codeql
         or call_graph_engine is not None
-        or codeql_edge_confidence is not None
-        or codeql_database is not None
+        or engine_edge_confidence is not None
+        or engine_database is not None
+        or engine_option
         or disabled
     ):
         typer.echo(
@@ -1694,81 +1755,93 @@ def index_cmd(
             err=True,
         )
         raise typer.Exit(code=2)
-    if no_codeql and codeql_database is not None:
-        typer.echo("`--no-codeql` ne peut pas être combiné avec `--codeql-database`.", err=True)
+    if resume_call_graph_join and full:
+        typer.echo("`--resume-call-graph-join` ne peut pas être combiné avec `--full`.", err=True)
         raise typer.Exit(code=2)
-    if refresh_codeql_view and no_codeql:
-        typer.echo("`--refresh-codeql-view` requiert CodeQL.", err=True)
+    if generate_sources and engine_database is not None:
+        typer.echo("`--generate-sources` ne peut pas être combiné avec `--engine-database`.", err=True)
         raise typer.Exit(code=2)
-    if resume_codeql_join and full:
-        typer.echo("`--resume-codeql-join` ne peut pas être combiné avec `--full`.", err=True)
-        raise typer.Exit(code=2)
-    if resume_codeql_join and no_codeql:
-        typer.echo("`--resume-codeql-join` requiert CodeQL.", err=True)
-        raise typer.Exit(code=2)
-    if no_codeql and codeql_progress_html is not None:
-        typer.echo("`--codeql-progress-html` requiert CodeQL.", err=True)
-        raise typer.Exit(code=2)
-    if generate_sources and no_codeql:
-        typer.echo("`--generate-sources` requiert CodeQL.", err=True)
-        raise typer.Exit(code=2)
-    if codeql_database is not None and call_graph_engine not in (None, "codeql"):
-        typer.echo("`--codeql-database` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
-        raise typer.Exit(code=2)
-    if generate_sources and codeql_database is not None:
-        typer.echo("`--generate-sources` ne peut pas être combiné avec `--codeql-database`.", err=True)
-        raise typer.Exit(code=2)
-    if no_codeql and call_graph_engine not in (None, "source"):
-        typer.echo("`--no-codeql` ne peut pas être combiné avec un autre moteur que `source`.", err=True)
+    if call_graph_engine is not None and call_graph_engine not in engine_names():
+        typer.echo(
+            f"Moteur de graphe d'appel inconnu : {call_graph_engine!r}. "
+            f"Valeurs : {', '.join(engine_names())}.",
+            err=True,
+        )
         raise typer.Exit(code=2)
     try:
         config = load_config(repo_root)
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
-    if no_codeql:
-        config = replace(config, codeql_enabled=False, call_graph_engine="source")
-    elif call_graph_engine is not None:
+    if call_graph_engine is not None:
         config = replace(config, call_graph_engine=call_graph_engine)
-    if codeql_edge_confidence is not None:
-        config = replace(config, codeql_edge_confidence=codeql_edge_confidence)
-    if refresh_codeql_view and config.call_graph_engine != "codeql":
+    if engine_edge_confidence is not None:
+        config = replace(config, engine_edge_confidence=engine_edge_confidence)
+    selected_engine = config.call_graph_engine
+    engine_declaration = None if selected_engine == NO_ENGINE else declaration(selected_engine)
+    if engine_declaration is None and (
+        engine_database is not None or engine_option or refresh_call_graph_view
+        or call_graph_progress_html is not None or resume_call_graph_join
+    ):
         typer.echo(
-            "`--refresh-codeql-view` requiert le moteur d'appels de méthodes `codeql`.",
+            "Le moteur `none` ne construit aucun graphe d'appel : retirez les options "
+            "`--engine-*`, `--refresh-call-graph-view`, `--resume-call-graph-join` "
+            "et `--call-graph-progress-html`.",
             err=True,
         )
         raise typer.Exit(code=2)
-    if codeql_progress_html is not None and config.call_graph_engine != "codeql":
-        typer.echo("`--codeql-progress-html` requiert le moteur d'appels de méthodes `--call-graph-engine codeql`.", err=True)
+    if refresh_call_graph_view and not (
+        engine_declaration is not None and engine_declaration.supports_module_refresh
+    ):
+        typer.echo(
+            f"`--refresh-call-graph-view` requiert un moteur qui rafraîchit un module ; "
+            f"`{selected_engine}` ne le fait pas.",
+            err=True,
+        )
         raise typer.Exit(code=2)
-    if refresh_codeql_view:
+    engine_settings: EngineSettings | None = None
+    if engine_declaration is not None and (engine_database is not None or engine_option):
+        try:
+            overrides = _parse_engine_options(engine_option or [])
+            if engine_database is not None:
+                if engine_declaration.database_option is None:
+                    raise ConfigError(
+                        f"`--engine-database` requiert un moteur qui accepte une base ; "
+                        f"`{selected_engine}` n'en accepte pas."
+                    )
+                overrides[engine_declaration.database_option] = str(engine_database.expanduser().resolve())
+            engine_settings = config.engine_settings(repo_root=repo_root, overrides=overrides)
+        except ConfigError as exc:
+            typer.echo(str(exc), err=True)
+            raise typer.Exit(code=2) from exc
+    if refresh_call_graph_view:
         graph_status = None
         if db_path(repo_root).is_file():
             with Store(repo_root, readonly=True) as state:
-                graph_status = state.get_meta("codeql_call_graph_status")
+                graph_status = state.get_meta(META_CALL_GRAPH_STATUS)
         if graph_status != "complete":
             typer.echo(
-                "Rafraîchissement impossible : aucun graphe CodeQL global complet "
+                "Rafraîchissement impossible : aucun graphe d'appel global complet "
                 "n'est disponible.",
                 err=True,
             )
             typer.echo(
                 "Lancez d'abord `systemlens index --full`, puis relancez "
-                "`systemlens index --module NAME --refresh-codeql-view`.",
+                "`systemlens index --module NAME --refresh-call-graph-view`.",
                 err=True,
             )
             raise typer.Exit(code=2)
 
-    def write_codeql_progress(checkpoint: CallGraphProgress) -> None:
-        assert codeql_progress_html is not None
-        _write_call_graph_progress_html(repo_root, codeql_progress_html, checkpoint)
+    def write_call_graph_progress(checkpoint: CallGraphProgress) -> None:
+        assert call_graph_progress_html is not None
+        _write_call_graph_progress_html(repo_root, call_graph_progress_html, checkpoint)
         progress_label = (
             f"{checkpoint.completed_units}/{checkpoint.total_units} méthode(s) IN"
             if checkpoint.phase == "join" else
             f"{checkpoint.completed_projects}/{checkpoint.total_projects} projet(s)"
         )
         typer.echo(
-            f"  ✓ HTML de progression CodeQL : {codeql_progress_html} ({progress_label})"
+            f"  ✓ HTML de progression du graphe d'appel : {call_graph_progress_html} ({progress_label})"
         )
 
     _trace_index("store.open.begin")
@@ -1783,10 +1856,10 @@ def index_cmd(
                     full=full,
                     progress=(
                         None
-                        if internal_flows_only and not codeql_progress
+                        if internal_flows_only and not engine_progress
                         else (
                             _echo_only_constructed_chains
-                            if show_call_chains and not codeql_progress
+                            if show_call_chains and not engine_progress
                             else (
                                 _echo_index_progress_with_green_chains
                                 if show_call_chains
@@ -1800,19 +1873,18 @@ def index_cmd(
                     kubernetes=kubernetes,
                     kubernetes_namespace=kubernetes_namespace,
                     call_graph_engine=(
-                        load_engine(
-                            "codeql", database=codeql_database,
-                            threads=config.codeql_threads, ram_mb=config.codeql_ram_mb,
-                        )
-                        if codeql_database is not None else None
+                        load_engine(selected_engine, engine_settings)
+                        if engine_settings is not None else None
                     ),
-                    call_graph_progress=write_codeql_progress if codeql_progress_html is not None else None,
-                    codeql_progress=codeql_progress,
+                    call_graph_progress=(
+                        write_call_graph_progress if call_graph_progress_html is not None else None
+                    ),
+                    engine_progress=engine_progress,
                     generate_sources=generate_sources,
-                    resume_codeql_join=resume_codeql_join,
+                    resume_call_graph_join=resume_call_graph_join,
                     show_call_chains=show_call_chains,
                     show_call_chains_module=selected_module.name if selected_module else None,
-                    refresh_codeql_view=refresh_codeql_view,
+                    refresh_call_graph_view=refresh_call_graph_view,
                 )
             except (RuntimeError, ValueError) as exc:
                 typer.echo(f"Indexation impossible : {exc}", err=True)
@@ -1829,19 +1901,14 @@ def index_cmd(
             f"scanned={report.scanned} skipped={report.skipped} "
             f"+integrations={report.endpoints_added} -integrations={report.endpoints_removed}"
         )
-        if report.codeql_timed_out:
+        if report.call_graph_timed_out:
             typer.echo(
-                "CodeQL a atteint son délai : le graphe publié est partiel et "
-                "sera complété lors de la prochaine indexation."
+                "Le moteur de graphe d'appel a atteint son délai : le graphe publié est "
+                "partiel et sera complété lors de la prochaine indexation."
             )
             typer.echo(
                 "Pour reprendre la jointure interrompue : "
-                "systemlens index --resume-codeql-join"
-            )
-        if no_codeql:
-            typer.echo(
-                "CodeQL désactivé : les flux interprocéduraux reposent sur "
-                "l'analyse AST et peuvent être incomplets pour les appels dynamiques."
+                "systemlens index --resume-call-graph-join"
             )
         typer.echo(
             "Prochaine étape : systemlens export microservices --html architecture.html "
@@ -1856,7 +1923,7 @@ def index_cmd(
         with Store(repo_root, readonly=True) as store:
             debug_flows = store.all_code_flows()
             direct_methods = store.all_integration_methods()
-            persisted_codeql_methods = store.all_call_graph_methods()
+            persisted_call_graph_methods = store.all_call_graph_methods()
             debug_methods: list[IntegrationMethod] | None = [
                 *direct_methods,
                 *[
@@ -1870,17 +1937,20 @@ def index_cmd(
                         input_endpoint_ids=(),
                         output_endpoint_ids=(),
                     )
-                    for method in persisted_codeql_methods
+                    for method in persisted_call_graph_methods
                     if method.id not in {item.id for item in direct_methods}
                 ],
             ]
             debug_edges: list[CallGraphEdge] | None = store.all_call_edges()
-            if codeql_database is not None and not persisted_codeql_methods:
+            if (
+                engine_settings is not None and engine_database is not None
+                and not persisted_call_graph_methods
+            ):
                 # Persisted call edges intentionally contain only the endpoint
                 # anchors. Re-query the supplied database so ordinary methods
                 # between IN and OUT remain visible in this diagnostic.
                 direct_calls = _database_session_query(
-                    repo_root, codeql_database, lambda session: session.calls(),
+                    repo_root, selected_engine, engine_settings, lambda session: session.calls(),
                 )
                 direct_flows = materialize_call_graph_flows(
                     direct_methods,
@@ -1896,14 +1966,14 @@ def index_cmd(
                     module=selected_module.name,
                     modules=store.all_modules(),
                     operations=store.all_data_operations() or None,
-                    codeql_edge_confidence=config.codeql_edge_confidence,
+                    edge_confidence=config.engine_edge_confidence,
                 )
                 debug_flows = direct_flows
                 debug_methods = None
                 debug_edges = None
-            if report.scanned == 0 and codeql_database is None:
+            if report.scanned == 0 and engine_database is None:
                 # No indexing stage ran. Replay the live reverse walk from the
-                # persisted CodeQL graph so --show-call-chains remains useful
+                # persisted call graph so --show-call-chains remains useful
                 # on an unchanged snapshot.
                 materialize_call_graph_flows(
                     store.all_integration_methods(),
@@ -1948,7 +2018,7 @@ class _MicroserviceGraphData:
     code_flows: list[CodeFlow] | None = None
     integration_methods: list[IntegrationMethod] | None = None
     architecture_relations: list[ArchitectureRelation] | None = None
-    codeql_call_edges: list[CallGraphEdge] | None = None
+    call_graph_edges: list[CallGraphEdge] | None = None
     flow_descriptions: dict[str, str] | None = None
     runtime_observations: list[RuntimeObservation] | None = None
     runtime_errors: list[RuntimeErrorGroup] | None = None
@@ -2018,7 +2088,7 @@ def _load_microservice_graph(
         inventory.code_flows,
         projection.integration_methods,
         architecture_relations,
-        inventory.codeql_call_edges,
+        inventory.call_graph_edges,
         _load_flow_descriptions(repo_root),
         runtime_observations,
         runtime_errors,
@@ -2228,7 +2298,7 @@ def export_microservices_cmd(
                     "architecture_relations": getattr(graph_data, "architecture_relations", []),
                     "code_flows": getattr(graph_data, "code_flows", []),
                     "integration_methods": getattr(graph_data, "integration_methods", []),
-                    "codeql_call_edges": getattr(graph_data, "codeql_call_edges", []),
+                    "call_graph_edges": getattr(graph_data, "call_graph_edges", []),
                     "flow_descriptions": getattr(graph_data, "flow_descriptions", {}),
                     "call_graphs_only": call_graphs_only,
                     "include_call_graph_annotations": not no_call_graph_annotations,

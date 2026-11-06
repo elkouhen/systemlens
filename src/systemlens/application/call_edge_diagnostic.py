@@ -8,6 +8,7 @@ from systemlens.application.architecture_inventory import ArchitectureInventory
 from systemlens.domain.code_flows import CodeFlow, CallGraphEdge, IntegrationMethod
 from systemlens.callgraph.model import SourceMethod
 from systemlens.indexing.java_symbols import JavaSymbols
+from systemlens.storage.persisted_names import META_CALL_GRAPH_STATUS
 
 
 def _method_fact(method: IntegrationMethod) -> dict[str, object]:
@@ -29,7 +30,7 @@ def _presence(
     callees: Sequence[IntegrationMethod],
     *,
     callee_alias_ids: set[str] | None = None,
-    codeql_method_ids: set[str] | None = None,
+    engine_method_ids: set[str] | None = None,
 ) -> dict[str, object]:
     """Report only presence facts that the persisted snapshot can prove."""
     callee_ids = {method.id for method in callees} | (callee_alias_ids or set())
@@ -43,33 +44,33 @@ def _presence(
     def node(methods: Sequence[IntegrationMethod]) -> dict[str, str]:
         if not methods:
             return {
-                "ast": "absent", "codeql": "unknown",
+                "ast": "absent", "engine": "unknown",
                 "proof_ast": "method_not_in_persisted_inventory",
-                "proof_codeql": "not_proven",
+                "proof_engine": "not_proven",
             }
         if len(methods) != 1:
             return {
-                "ast": "present", "codeql": "unknown",
+                "ast": "present", "engine": "unknown",
                 "proof_ast": "multiple_persisted_integration_methods",
-                "proof_codeql": "not_proven",
+                "proof_engine": "not_proven",
             }
         method_ids = {methods[0].id}
         if methods[0] in callees:
             method_ids |= callee_alias_ids or set()
-        codeql_present = bool(method_ids & (
-            codeql_method_ids if codeql_method_ids is not None else incident_method_ids
+        engine_present = bool(method_ids & (
+            engine_method_ids if engine_method_ids is not None else incident_method_ids
         ))
         return {
             "ast": "present",
-            "codeql": "present" if codeql_present else "unknown",
+            "engine": "present" if engine_present else "unknown",
             "proof_ast": "persisted_integration_method",
-            "proof_codeql": (
+            "proof_engine": (
                 (
-                    "direct_codeql_method_query" if codeql_method_ids is not None
+                    "direct_engine_method_query" if engine_method_ids is not None
                     else "incident_non_inferred_call_edge"
-                ) if codeql_present else (
-                    "not_found_by_direct_codeql_method_query"
-                    if codeql_method_ids is not None
+                ) if engine_present else (
+                    "not_found_by_direct_engine_method_query"
+                    if engine_method_ids is not None
                     else "not_proven_by_persisted_non_inferred_edge"
                 )
             ),
@@ -88,10 +89,10 @@ def _presence(
         "caller_node": node(callers),
         "callee_node": node(callees),
         "edge": {
-            "codeql": "present" if matching_edge else "unknown",
+            "engine": "present" if matching_edge else "unknown",
             "ast": "unknown",
             "proof_ast": "no_persisted_ast_call_edge_projection",
-            "proof_codeql": (
+            "proof_engine": (
                 "persisted_non_inferred_call_edge" if matching_edge
                 else "no_matching_persisted_non_inferred_call_edge"
             ),
@@ -123,7 +124,7 @@ def _interface_implementation_ids(
 ) -> set[str]:
     """Return indexed concrete implementations of an interface method.
 
-    CodeQL may persist a dynamic call against the concrete implementation while
+    An engine may persist a dynamic call against the concrete implementation while
     the user asks for the interface declaration.  Reuse the source-backed Java
     symbol resolver here so method-name coincidence cannot create an alias.
     """
@@ -145,14 +146,14 @@ def _interface_implementation_ids(
     return set()
 
 
-def _direct_codeql_method_ids(
+def _direct_engine_method_ids(
     methods: Sequence[IntegrationMethod],
-    codeql_methods: Sequence[SourceMethod],
+    engine_methods: Sequence[SourceMethod],
 ) -> set[str]:
-    """Join selected persisted methods with methods returned directly by CodeQL."""
+    """Join selected persisted methods with methods returned directly by the engine."""
     facts = {
         (method.qualified_method, method.path, method.start_line)
-        for method in codeql_methods
+        for method in engine_methods
     }
     return {
         method.id for method in methods
@@ -254,13 +255,13 @@ def diagnose_call_edge(
     *,
     module: str | None = None,
     snapshot_metadata: Mapping[str, str | None] | None = None,
-    codeql_methods: Sequence[SourceMethod] | None = None,
+    engine_methods: Sequence[SourceMethod] | None = None,
 ) -> dict[str, object]:
     """Classify where one expected call edge disappears from the pipeline."""
     metadata = dict(snapshot_metadata or {})
     settings = _signature_settings(metadata.get("code_flow_signature"))
     snapshot = {
-        "call_graph_status": metadata.get("codeql_call_graph_status") or "unknown",
+        "call_graph_status": metadata.get(META_CALL_GRAPH_STATUS) or "unknown",
         "flow_snapshot_status": metadata.get("code_flow_snapshot_status") or "unknown",
         **settings,
     }
@@ -277,15 +278,15 @@ def diagnose_call_edge(
         )
         if len(callees) == 1 else set()
     )
-    codeql_method_ids = None
-    if codeql_methods is not None:
+    engine_method_ids = None
+    if engine_methods is not None:
         selected_methods = [*callers, *callees]
         selected_methods.extend(
             method for method in inventory.integration_methods
             if method.id in callee_alias_ids
         )
-        codeql_method_ids = _direct_codeql_method_ids(
-            selected_methods, codeql_methods,
+        engine_method_ids = _direct_engine_method_ids(
+            selected_methods, engine_methods,
         )
     result: dict[str, object] = {
         "kind": "call_edge_diagnostic",
@@ -298,11 +299,11 @@ def diagnose_call_edge(
         "edges": [],
         "flow_ids": [],
         "presence": _presence(
-            inventory.codeql_call_edges,
+            inventory.call_graph_edges,
             callers,
             callees,
             callee_alias_ids=callee_alias_ids,
-            codeql_method_ids=codeql_method_ids,
+            engine_method_ids=engine_method_ids,
         ),
     }
 
@@ -313,7 +314,7 @@ def diagnose_call_edge(
             "stage": "method_inventory",
             "conclusion": (
                 f"La méthode {missing} ne figure pas dans l'inventaire AST persisté. "
-                "CodeQL ne peut pas être rattaché à cette méthode."
+                "Le moteur de graphe d'appel ne peut pas être rattaché à cette méthode."
             ),
             "recommended_action": (
                 "Relancez `systemlens index --full`, puis vérifiez les diagnostics "
@@ -341,7 +342,7 @@ def diagnose_call_edge(
         if method.id in callee_alias_ids
     }
     matching_edges = [
-        edge for edge in inventory.codeql_call_edges
+        edge for edge in inventory.call_graph_edges
         if edge.caller_id == caller.id and edge.callee_id in callee_ids
     ]
     result["edges"] = [
@@ -362,28 +363,28 @@ def diagnose_call_edge(
             status = "snapshot_incomplete"
             stage = "snapshot"
             conclusion = "Le snapshot est partiel et peut ne pas contenir cette arête."
-            action = "Reprenez ou relancez l'indexation CodeQL avant de conclure sur l'appel."
+            action = "Reprenez ou relancez l'indexation avant de conclure sur l'appel."
         elif engine == "none":
             status = "call_graph_disabled"
-            stage = "codeql_extraction_or_join"
+            stage = "engine_extraction_or_join"
             conclusion = "Le snapshot a été créé sans moteur de graphe d'appels."
-            action = "Relancez l'indexation avec `--call-graph-engine codeql`."
+            action = "Relancez l'indexation avec `--call-graph-engine NAME`."
         elif available is False:
-            status = "codeql_unavailable"
-            stage = "codeql_extraction_or_join"
-            conclusion = "CodeQL était indisponible pendant la création du snapshot."
+            status = "engine_unavailable"
+            stage = "engine_extraction_or_join"
+            conclusion = "Le moteur de graphe d'appel était indisponible pendant la création du snapshot."
             action = "Exécutez `systemlens doctor`, puis relancez l'indexation."
         else:
             status = "edge_not_persisted"
-            stage = "codeql_extraction_or_join"
+            stage = "engine_extraction_or_join"
             conclusion = (
                 "Aucune arête A vers B n'a été persistée. Le snapshot actuel ne conserve "
-                "pas les lignes CodeQL rejetées, donc il ne sépare pas une omission CodeQL "
-                "d'un échec de rattachement CodeQL vers AST."
+                "pas les appels rejetés par le moteur, donc il ne sépare pas une omission "
+                "du moteur d'un échec de rattachement du moteur vers l'AST."
             )
             action = (
-                "Relancez l'indexation avec `--codeql-progress`; utilisez une base CodeQL "
-                "conservée pour comparer ensuite la requête brute."
+                "Relancez l'indexation avec `--engine-progress` ; utilisez une base du moteur "
+                "conservée (`--engine-database`) pour comparer ensuite la requête brute."
             )
         result.update({
             "status": status,
@@ -404,7 +405,7 @@ def diagnose_call_edge(
                 "le snapshot de flux accepte seulement les arêtes exactes."
             ),
             "recommended_action": (
-                "Relancez l'indexation avec `--codeql-edge-confidence possible` si cette "
+                "Relancez l'indexation avec `--engine-edge-confidence possible` si cette "
                 "incertitude est acceptable."
             ),
         })
@@ -432,11 +433,11 @@ def diagnose_call_edge(
                 "L'arête est persistée, mais le snapshot des flux est partiel et peut ne pas "
                 "contenir le chemin IN vers OUT correspondant."
             ),
-            "recommended_action": "Reprenez ou relancez l'indexation CodeQL.",
+            "recommended_action": "Reprenez ou relancez l'indexation.",
         })
         return result
 
-    effective = _effective_edges(inventory.codeql_call_edges, edge_confidence)
+    effective = _effective_edges(inventory.call_graph_edges, edge_confidence)
     input_methods = {
         method.id for method in inventory.integration_methods
         if method.input_endpoint_ids
@@ -503,9 +504,9 @@ def render_call_edge_diagnostic_text(result: Mapping[str, object]) -> str:
             values = presence.get(key)
             if isinstance(values, dict):
                 lines.append(
-                    f"- {label} : CodeQL={values.get('codeql', 'unknown')} · "
+                    f"- {label} : moteur={values.get('engine', 'unknown')} · "
                     f"AST={values.get('ast', 'unknown')} · "
-                    f"preuve CodeQL={values.get('proof_codeql', 'not_proven')} · "
+                    f"preuve moteur={values.get('proof_engine', 'not_proven')} · "
                     f"preuve AST={values.get('proof_ast', 'not_proven')}"
                 )
     for role in ("caller", "callee"):
@@ -540,7 +541,7 @@ def list_call_edges(
     """List persisted method-call edges, including edges unused by flows."""
     methods_by_id = {method.id: method for method in inventory.integration_methods}
     selected: list[dict[str, object]] = []
-    for edge in inventory.codeql_call_edges:
+    for edge in inventory.call_graph_edges:
         caller = methods_by_id.get(edge.caller_id)
         callee = methods_by_id.get(edge.callee_id)
         if module is not None and (caller is None or caller.module != module):

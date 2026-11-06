@@ -201,11 +201,12 @@ does not override `lb://`.
 
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
-materializes conservative same-method code flows and, when CodeQL is
-available, creates a global source-only Java database to follow resolved
-static method calls from an indexed entry method to an indexed output method.
+materializes conservative same-method code flows and, with an external
+engine such as `codeql`, creates a global source-only Java database to follow
+resolved method calls from an indexed entry method to an indexed output
+method. The rules below that name CodeQL describe that engine's rows.
 
-When CodeQL is disabled or unavailable, a local Java symbol pass may also
+When no external engine runs or it is unavailable, a local Java symbol pass may also
 connect an entry to an output through a uniquely resolved receiver type and
 method signature. These source-declared calls remain `potential` with low
 confidence. Ambiguous receivers and overloads remain unresolved.
@@ -238,14 +239,14 @@ contract edge remains visible in the persisted call-edge listing. At a call
 site where CodeQL resolved the exact implementation, the witness expands to
 that implementation only, and the source symbol fallback adds no other
 candidate there: the witness opens no route (ADR-70).
-Calls are aggregated before the global flow join. `--codeql-database DIR`
-reuses an existing global CodeQL database instead.
+Calls are aggregated before the global flow join. `--engine-database DIR`
+reuses an existing global database of the selected engine instead.
 
 The automatic database is cached in `.systemlens/codeql/` and reused while
 the projected Java sources and the CodeQL executable are unchanged; a change
 creates it again (ADR-84). Neither its path nor the supplied database path
 is recorded in the index. If
-the selected engine is unavailable, indexing reports the CodeQL limitation
+the selected engine is unavailable, indexing reports it, uses `source`,
 and retains same-method and source-symbol flows. A uniquely resolved dispatch
 yields a `potential` flow with medium confidence. When CodeQL identifies several compatible virtual
 method implementations, SystemLens retains each candidate as a `potential`

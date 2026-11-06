@@ -281,26 +281,26 @@ def audit_indexing(inventory: ArchitectureInventory) -> dict[str, object]:
     ])
 
     # A persisted edge may join engine methods that are not integration
-    # methods (CodeQL helpers); both node sets are persisted graph nodes.
+    # methods (engine helpers); both node sets are persisted graph nodes.
     method_ids = {method.id for method in methods} | {
         method.id for method in inventory.call_graph_methods
     }
     add_many("orphan_call_graph_edge", lambda: [
         _issue(
             "orphan_call_graph_edge", "warning",
-            f"L'arête CodeQL {edge.caller_id} → {edge.callee_id} référence une méthode absente.",
+            f"L'arête du graphe d'appel {edge.caller_id} → {edge.callee_id} référence une méthode absente.",
         )
-        for edge in inventory.codeql_call_edges
+        for edge in inventory.call_graph_edges
         if edge.caller_id not in method_ids or edge.callee_id not in method_ids
     ])
     add_many("uncertain_call_graph_edge", lambda: [
         _issue(
             "uncertain_call_graph_edge", "info",
-            f"L'arête CodeQL {edge.caller_id} → {edge.callee_id} "
+            f"L'arête du graphe d'appel {edge.caller_id} → {edge.callee_id} "
             f"utilise une résolution {'inférée' if edge.inferred else 'possible'}.",
             source={"path": edge.path, "start_line": edge.line, "end_line": edge.line},
         )
-        for edge in inventory.codeql_call_edges
+        for edge in inventory.call_graph_edges
         if edge.dispatch_confidence == "possible" or edge.inferred
     ])
 

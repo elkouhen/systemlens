@@ -30,6 +30,10 @@ from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER, path_module_resolver
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
+from systemlens.storage.persisted_names import (
+    CALL_GRAPH_METHOD_ID_PREFIX,
+    DIRECT_REACHABILITY_FLOW_MARKER,
+)
 
 
 CODE_FLOW_SIGNATURE = "code-flow-v47-checked-reachability"
@@ -163,7 +167,7 @@ def _deduplicate_code_flows(
     def route_signature(flow: CodeFlow) -> tuple[tuple[object, ...], ...]:
         """Return the evidence-bearing shape of one candidate route.
 
-        AST and CodeQL can emit the same route independently.  They must be
+        AST and an engine can emit the same route independently.  They must be
         collapsed into one represented alternative, while genuinely different
         intermediate routes must remain countable.
         """
@@ -623,7 +627,7 @@ def _build_call_graph(
     def normalized_method_name(name: str) -> str:
         """Align analyzer method names with Java source declarations."""
         normalized = name.replace("$", ".").split(":", 1)[0]
-        # CodeQL uses ``$`` as the qualified-name marker for a type in the
+        # An engine may use ``$`` as the qualified-name marker for a type in the
         # unnamed package.  Replacing it with the nested-type separator would
         # otherwise leave a leading ``..`` and prevent the source join.
         normalized = normalized.lstrip(".")
@@ -659,7 +663,7 @@ def _build_call_graph(
     )
 
     def placeholder(name: str, path: str, line: int) -> IntegrationMethod:
-        """Represent a non-port CodeQL method only inside the transient graph.
+        """Represent a non-port engine method only inside the transient graph.
 
         Its module is the discovered build module owning the path, the same
         identity indexed methods carry, so application boundaries apply to
@@ -667,7 +671,7 @@ def _build_call_graph(
         """
         normalized_path = normalized_path_value(path)
         module = module_by_path.get(normalized_path) or module_of_path(normalized_path) or ""
-        method_id = "codeql:" + hashlib.sha256(
+        method_id = CALL_GRAPH_METHOD_ID_PREFIX + hashlib.sha256(
             f"{module}|{normalized_path}|{line}|{normalized_method_name(name)}".encode()
         ).hexdigest()[:24]
         return IntegrationMethod(
@@ -774,7 +778,7 @@ def _build_call_graph(
         name: str, path: str, line: int, *, allow_signature_fallback: bool = False,
         parameter_types: tuple[str, ...] | None = None,
     ) -> tuple[IntegrationMethod, bool] | None:
-        """Resolve one CodeQL method to an indexed method.
+        """Resolve one engine method to an indexed method.
 
         Same-name overloads declared on one line share the locator; the
         engine's ``parameter_types``, when known, choose between them.
@@ -990,7 +994,7 @@ def _build_call_graph(
             )
             if exact_call is not None and implementation is not None:
                 # ADR-70 witness: the interface method the call names is a
-                # declared target, like CodeQL's row, and the join adds the
+                # declared target, like a typed engine's row, and the join adds the
                 # possible dispatch to the site's exact implementation, the
                 # shape the engine-call join builds above. No other
                 # implementation is added: the witness opens no new route.
@@ -1035,7 +1039,7 @@ def materialize_call_graph_flows(
     resume_from_entry: int = 0,
     initial_flows: Sequence[CodeFlow] = (),
     call_graph_sink: Callable[[CallGraph], None] | None = None,
-    codeql_edge_confidence: str = "possible",
+    edge_confidence: str = "possible",
     persisted_edges: Sequence[CallGraphEdge] | None = None,
     persisted_methods: Sequence[PersistedCallGraphMethod] = (),
     modules: Sequence[DiscoveredModule] = (),
@@ -1175,12 +1179,12 @@ def materialize_call_graph_flows(
     synthetic_calls = call_graph.synthetic_calls
     call_count = call_graph.call_count
     locate = call_graph.locate
-    if codeql_edge_confidence not in {"exact", "possible"}:
+    if edge_confidence not in {"exact", "possible"}:
         raise ValueError(
-            f"Invalid call-graph edge confidence {codeql_edge_confidence!r}; "
+            f"Invalid call-graph edge confidence {edge_confidence!r}; "
             "expected 'exact' or 'possible'."
         )
-    if codeql_edge_confidence == "exact":
+    if edge_confidence == "exact":
         adjacency = {
             caller_id: [
                 (target, call, inferred)
@@ -1706,7 +1710,7 @@ def materialize_call_graph_flows(
         ) -> list[tuple[IntegrationMethod, MethodCall, bool]]:
             """Shortest route that passes every rule of the main join, or ``[]``.
 
-            A reachability row only says that CodeQL reaches the output. The
+            A reachability row only says that the engine reaches the output. The
             flow it yields must still respect the application boundary on
             every hop, the entry's dispatch and the hop limit (review F1).
             """
@@ -1722,7 +1726,7 @@ def materialize_call_graph_flows(
                     if depth >= max_hops:
                         continue
                     for candidate, call, inferred in adjacency.get(current.id, []):
-                        # A direct CodeQL witness must not contain synthetic
+                        # A direct engine witness must not contain synthetic
                         # AST edges or a weaker dispatch than the proven pair.
                         if (
                             inferred
@@ -1754,7 +1758,7 @@ def materialize_call_graph_flows(
             item.target_path, item.target_line, item.target,
         )):
             # ``medium`` is an exact-only route; ``low`` needs possible dispatch.
-            if codeql_edge_confidence == "exact" and relation.confidence != "medium":
+            if edge_confidence == "exact" and relation.confidence != "medium":
                 continue
             source_location = locate(relation.source, relation.source_path, relation.source_line)
             target_location = locate(relation.target, relation.target_path, relation.target_line)
@@ -1795,7 +1799,7 @@ def materialize_call_graph_flows(
                     flow_id = compute_code_flow_id(
                         source_method.module, source_method.path, source_method.qualified_method,
                         _endpoint_step(trigger, 1).kind,
-                        f"{trigger.topic}|{output.id}|direct-codeql",
+                        f"{trigger.topic}|{output.id}|{DIRECT_REACHABILITY_FLOW_MARKER}",
                     )
                     direct_flows[(input_id, output_id)] = CodeFlow(
                         id=flow_id, module=source_method.module, method=source_method.qualified_method,

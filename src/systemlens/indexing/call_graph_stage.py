@@ -52,6 +52,16 @@ from systemlens.indexing.integration_methods import (
 from systemlens.indexing.relations import build_architecture_relations
 from systemlens.infrastructure.config import Config
 from systemlens.scanner import local_spring_application_names
+from systemlens.storage.persisted_names import (
+    CALL_GRAPH_METHOD_ID_PREFIX,
+    META_CALL_GRAPH_EDGE_COUNT,
+    META_CALL_GRAPH_STATUS,
+    META_INPUT_OUTPUT_FLOW_COUNT,
+    META_INPUT_OUTPUT_STATUS,
+    META_JOIN_COMPLETED_ENTRIES,
+    META_JOIN_METHODS_SIGNATURE,
+    META_JOIN_SIGNATURE,
+)
 from systemlens.storage.sqlite import Store
 
 
@@ -102,12 +112,12 @@ CallGraphProgressCallback = Callable[[CallGraphProgress], None]
 def _call_graph_module_roots(
     repo_root: Path, java_paths: Sequence[str], modules: Sequence[DiscoveredModule]
 ) -> list[tuple[str, Path, str]]:
-    """Return the source-owning build roots for module-scoped CodeQL runs.
+    """Return the source-owning build roots for module-scoped engine runs.
 
     Each Java source belongs to its deepest discovered build module. This
     avoids treating an aggregator as a second analysis unit for its children,
     while preserving a root-level fallback for sources outside a descriptor.
-    The returned prefix maps CodeQL's module-relative paths to repository
+    The returned prefix maps an engine's module-relative paths to repository
     relative evidence paths.
     """
     modules_by_path = {
@@ -142,7 +152,7 @@ def _partition_calls(
     calls: Sequence[MethodCall],
     roots: Sequence[tuple[str, Path, str]],
 ) -> list[tuple[str, list[MethodCall]]]:
-    """Partition global CodeQL results by caller project for checkpoints."""
+    """Partition global engine results by caller project for checkpoints."""
     by_project: dict[str, list[MethodCall]] = {
         name: [] for name, _root, _prefix in roots
     }
@@ -232,11 +242,11 @@ def run_call_graph_stage(
     flow_signature: str,
     join_signature: str,
     resume: JoinResume | None,
-    refresh_codeql_view: bool,
+    refresh_call_graph_view: bool,
     show_call_chains: bool,
     show_call_chains_module: str | None,
     generate_sources: bool,
-    codeql_progress: bool,
+    engine_progress: bool,
     progress: ProgressCallback | None,
     call_graph_progress: CallGraphProgressCallback | None,
     timer: StageTimer,
@@ -247,11 +257,11 @@ def run_call_graph_stage(
     from the first input method. The result reports whether the engine
     reached its deadline, in which case the persisted snapshot stays partial.
     """
-    resume_codeql_join = resume is not None
+    resume_call_graph_join = resume is not None
     resume_join_entries = resume.entries if resume is not None else 0
     resume_join_flows: list[CodeFlow] = list(resume.flows) if resume is not None else []
     resume_join_methods_signature = resume.methods_signature if resume is not None else None
-    codeql_timed_out = False
+    call_graph_timed_out = False
     timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
     all_endpoints = store.all_endpoints()
     _mark_flow_snapshot_in_progress(store, current_hashes, all_endpoints)
@@ -311,18 +321,18 @@ def run_call_graph_stage(
             )
             _report_progress(progress, f"  ↳ Chaîne construite : {rendered}")
 
-    persisted_codeql_edges: list[CallGraphEdge] = []
-    persisted_codeql_methods: list[PersistedCallGraphMethod] = []
-    if refresh_codeql_view:
-        persisted_codeql_edges = store.all_call_edges()
-        persisted_codeql_methods = store.all_call_graph_methods()
+    persisted_call_edges: list[CallGraphEdge] = []
+    persisted_call_graph_methods: list[PersistedCallGraphMethod] = []
+    if refresh_call_graph_view:
+        persisted_call_edges = store.all_call_edges()
+        persisted_call_graph_methods = store.all_call_graph_methods()
     else:
         store.replace_call_edges([])
         store.replace_call_graph_methods([])
-        store.delete_meta("codeql_call_graph_status")
-        store.delete_meta("codeql_call_graph_edge_count")
-    store.delete_meta("codeql_input_output_status")
-    store.delete_meta("codeql_input_output_flow_count")
+        store.delete_meta(META_CALL_GRAPH_STATUS)
+        store.delete_meta(META_CALL_GRAPH_EDGE_COUNT)
+    store.delete_meta(META_INPUT_OUTPUT_STATUS)
+    store.delete_meta(META_INPUT_OUTPUT_FLOW_COUNT)
 
     def enrich_strategy1_kafka_types(session: CallGraphSession) -> None:
         """Complete missing Strategy1 producer types from engine evidence."""
@@ -385,30 +395,30 @@ def run_call_graph_stage(
 
     def persist_call_graph(call_graph: CallGraph) -> None:
         edges = list(call_graph.edges())
-        if refresh_codeql_view and codeql_view_prefix:
-            prefix = codeql_view_prefix.rstrip("/") + "/"
+        if refresh_call_graph_view and call_graph_view_prefix:
+            prefix = call_graph_view_prefix.rstrip("/") + "/"
             methods_projection = [
                 method for method in store.all_call_graph_methods()
                 if not (
-                    method.path == codeql_view_prefix
+                    method.path == call_graph_view_prefix
                     or method.path.startswith(prefix)
                 )
             ]
         else:
             methods_projection = []
         graph_methods = call_graph.methods
-        if refresh_codeql_view and codeql_view_prefix:
+        if refresh_call_graph_view and call_graph_view_prefix:
             graph_methods = tuple(
                 method for method in graph_methods
                 if not (
-                    method.path == codeql_view_prefix
+                    method.path == call_graph_view_prefix
                     or method.path.startswith(prefix)
                 )
             )
         methods_projection.extend(graph_methods)
         # An engine method is the indexed method of the same name whose line
         # range holds its line: the engine locates the declaration, the index
-        # starts at its first annotation, and CodeQL spells nested types
+        # starts at its first annotation, and an engine may spell nested types
         # with ``$`` (call-graph review Q10).
         ranges_by_name: dict[tuple[str, str], list[tuple[int, int]]] = {}
         for known in methods_projection:
@@ -417,7 +427,7 @@ def run_call_graph_stage(
             )
         eligible_paths = set(current_hashes)
         module_of_path = path_module_resolver(repo_root, relation_modules)
-        for method in codeql_method_projection:
+        for method in engine_method_projection:
             if method.path not in eligible_paths:
                 continue
             name = _engine_method_name(method.qualified_method)
@@ -426,7 +436,7 @@ def run_call_graph_stage(
                 continue
             module = module_of_path(method.path) or ""
             methods_projection.append(PersistedCallGraphMethod(
-                id="codeql:" + hashlib.sha256(
+                id=CALL_GRAPH_METHOD_ID_PREFIX + hashlib.sha256(
                     f"{module}|{method.path}|{method.start_line}|{name}".encode()
                 ).hexdigest()[:24],
                 module=module,
@@ -439,10 +449,10 @@ def run_call_graph_stage(
         store.replace_call_graph_methods(methods_projection)
         store.replace_call_edges(edges)
         store.set_meta(
-            "codeql_call_graph_status",
-            "partial" if codeql_timed_out else "complete",
+            META_CALL_GRAPH_STATUS,
+            "partial" if call_graph_timed_out else "complete",
         )
-        store.set_meta("codeql_call_graph_edge_count", str(len(edges)))
+        store.set_meta(META_CALL_GRAPH_EDGE_COUNT, str(len(edges)))
         store.commit_checkpoint()
         _report_progress(
             progress,
@@ -450,7 +460,7 @@ def run_call_graph_stage(
         )
 
     current_join_methods_signature = call_graph_join_methods_signature(methods)
-    if resume_codeql_join:
+    if resume_call_graph_join:
         input_method_count = sum(bool(method.input_endpoint_ids) for method in methods)
         checkpoint_matches = (
             resume_join_methods_signature == current_join_methods_signature
@@ -464,27 +474,27 @@ def run_call_graph_stage(
             )
             resume_join_entries = 0
             resume_join_flows = []
-            store.set_meta("codeql_join_completed_entries", "0")
-            store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
+            store.set_meta(META_JOIN_COMPLETED_ENTRIES, "0")
+            store.set_meta(META_JOIN_METHODS_SIGNATURE, current_join_methods_signature)
     else:
-        store.set_meta("codeql_join_methods_signature", current_join_methods_signature)
+        store.set_meta(META_JOIN_METHODS_SIGNATURE, current_join_methods_signature)
     flows = materialize_code_flows(
         repo_root, all_endpoints, relation_modules, data_operations,
     )
-    if (methods or refresh_codeql_view) and engine is not None:
-        if not resume_codeql_join:
-            store.delete_meta("codeql_join_completed_entries")
-            store.set_meta("codeql_join_signature", join_signature)
-            store.set_meta("codeql_join_completed_entries", "0")
+    if (methods or refresh_call_graph_view) and engine is not None:
+        if not resume_call_graph_join:
+            store.delete_meta(META_JOIN_COMPLETED_ENTRIES)
+            store.set_meta(META_JOIN_SIGNATURE, join_signature)
+            store.set_meta(META_JOIN_COMPLETED_ENTRIES, "0")
             store.set_meta("code_flow_snapshot_status", "partial")
         _report_progress(progress, f"→ {engine_label} : préparation de l'analyse interprocédurale...")
-        prepared_codeql_flows: list[CodeFlow] | None = None
-        codeql_stats: dict[str, int] = {}
+        prepared_call_graph_flows: list[CodeFlow] | None = None
+        call_graph_stats: dict[str, int] = {}
         calls: list[MethodCall] = []
-        codeql_method_projection: list[SourceMethod] = []
-        codeql_view_prefix = ""
+        engine_method_projection: list[SourceMethod] = []
+        call_graph_view_prefix = ""
         selected_view_module: DiscoveredModule | None = None
-        if refresh_codeql_view and show_call_chains_module is not None:
+        if refresh_call_graph_view and show_call_chains_module is not None:
             selected_view_module = next(
                 (
                     item for item in relation_modules
@@ -497,7 +507,7 @@ def run_call_graph_stage(
                 relative_module_path = selected_view_module.path.resolve().relative_to(
                     repo_root.resolve()
                 ).as_posix()
-                codeql_view_prefix = (
+                call_graph_view_prefix = (
                     "" if relative_module_path == "." else relative_module_path
                 )
 
@@ -511,10 +521,10 @@ def run_call_graph_stage(
         ) -> None:
             if skip_materialization:
                 progress_flows = []
-            elif prepared_codeql_flows is not None:
+            elif prepared_call_graph_flows is not None:
                 available_sites = {(call.caller_path, call.call_line) for call in calls}
                 progress_flows = [
-                    flow for flow in prepared_codeql_flows
+                    flow for flow in prepared_call_graph_flows
                     if completed_projects == total_projects or (
                         any(step.kind == "method_call" for step in flow.steps)
                         and all(
@@ -529,8 +539,8 @@ def run_call_graph_stage(
                     modules=relation_modules,
                     operations=data_operations,
                     source_paths=list(current_hashes),
-                    max_hops=config.codeql_max_hops,
-                    codeql_edge_confidence=config.codeql_edge_confidence,
+                    max_hops=config.engine_max_hops,
+                    edge_confidence=config.engine_edge_confidence,
                     closed_world=not engine.resolves_types,
                     module_dependencies=relation_dependencies,
                     progress=progress,
@@ -596,20 +606,20 @@ def run_call_graph_stage(
                 ))
 
         def publish_join_checkpoint(
-            partial_codeql_flows: list[CodeFlow],
+            partial_call_graph_flows: list[CodeFlow],
             completed_methods: int,
             total_methods: int,
         ) -> None:
             partial_flows = _ensure_unique_code_flow_ids(
                 _deduplicate_code_flows(
-                    [*flows, *partial_codeql_flows], all_endpoints
+                    [*flows, *partial_call_graph_flows], all_endpoints
                 )
             )
             report_built_chains(partial_flows)
             store.replace_code_flows(partial_flows)
             store.delete_meta("code_flow_signature")
             store.set_meta("code_flow_snapshot_status", "partial")
-            store.set_meta("codeql_join_completed_entries", str(completed_methods))
+            store.set_meta(META_JOIN_COMPLETED_ENTRIES, str(completed_methods))
             store.commit_checkpoint()
             _report_progress(
                 progress,
@@ -665,7 +675,7 @@ def run_call_graph_stage(
                     f"en {time.perf_counter() - module_started_at:.2f} s.",
                 )
 
-        engine_deadline = time.monotonic() + config.codeql_timeout_seconds
+        engine_deadline = time.monotonic() + config.engine_timeout_seconds
         roots = _call_graph_module_roots(
             repo_root,
             [path for path in current_hashes if path.endswith(".java")],
@@ -676,45 +686,45 @@ def run_call_graph_stage(
             timer.begin(
                 stage,
                 f"→ {engine_label} : préparation et rafraîchissement du module..."
-                if refresh_codeql_view
+                if refresh_call_graph_view
                 else f"→ {engine_label} : préparation et extraction globale...",
             )
             with engine.open(EngineRequest(
                 repo_root=repo_root,
                 allowed_paths=list(current_hashes),
-                timeout_seconds=config.codeql_timeout_seconds,
+                timeout_seconds=config.engine_timeout_seconds,
                 deadline=engine_deadline,
                 include_generated_sources=generate_sources,
                 progress=progress,
-                verbose=codeql_progress,
+                verbose=engine_progress,
             )) as session:
                 enrich_strategy1_kafka_types(session)
-                if refresh_codeql_view and selected_view_module is not None:
+                if refresh_call_graph_view and selected_view_module is not None:
                     roots = [(
                         module_identity(selected_view_module),
                         selected_view_module.path,
-                        codeql_view_prefix,
+                        call_graph_view_prefix,
                     )]
                     calls = []
                 else:
                     calls = session.calls()
-                codeql_method_projection = session.methods(
-                    codeql_view_prefix if refresh_codeql_view else ""
+                engine_method_projection = session.methods(
+                    call_graph_view_prefix if refresh_call_graph_view else ""
                 )
                 scoped_project_calls = _partition_calls(calls, roots)
                 # The reachability query adds no flow since ADR-78: a row
                 # becomes a flow only through a route the join already
                 # checks. The index no longer runs it (ADR-84).
-            prepared_codeql_flows = materialize_call_graph_flows(
+            prepared_call_graph_flows = materialize_call_graph_flows(
                 methods, flow_endpoints(), calls, repo_root=repo_root,
                 modules=relation_modules,
                 operations=data_operations,
                 source_paths=list(current_hashes),
-                max_hops=config.codeql_max_hops,
-                codeql_edge_confidence=config.codeql_edge_confidence,
+                max_hops=config.engine_max_hops,
+                edge_confidence=config.engine_edge_confidence,
                 closed_world=not engine.resolves_types,
                 module_dependencies=relation_dependencies,
-                stats=codeql_stats,
+                stats=call_graph_stats,
                 progress=progress,
                 call_chain_progress=progress if show_call_chains else None,
                 call_chain_module=show_call_chains_module,
@@ -722,21 +732,21 @@ def run_call_graph_stage(
                 resume_from_entry=resume_join_entries,
                 initial_flows=resume_join_flows,
                 call_graph_sink=persist_call_graph,
-                persisted_edges=persisted_codeql_edges if refresh_codeql_view else None,
-                persisted_methods=persisted_codeql_methods,
+                persisted_edges=persisted_call_edges if refresh_call_graph_view else None,
+                persisted_methods=persisted_call_graph_methods,
             )
             if not engine.resolves_types:
                 # Without typed calls, a same-method path is already an
                 # AST flow; only interprocedural paths add evidence.
-                prepared_codeql_flows = [
-                    flow for flow in prepared_codeql_flows
+                prepared_call_graph_flows = [
+                    flow for flow in prepared_call_graph_flows
                     if any(step.kind == "method_call" for step in flow.steps)
                 ]
             report_module_progress(scoped_project_calls, roots)
             timer.end(
                 stage,
                 f"préparation et rafraîchissement du module {engine_label}"
-                if refresh_codeql_view
+                if refresh_call_graph_view
                 else f"préparation et extraction globale {engine_label}",
             )
         except CallGraphTimeout as exc:
@@ -746,7 +756,7 @@ def run_call_graph_stage(
             # deadline in a later query (methods, payload types) keeps the
             # calls the completed call query already returned.
             calls = exc.calls or calls
-            codeql_timed_out = True
+            call_graph_timed_out = True
             _report_progress(
                 progress,
                 f"→ {engine_label} : délai dépassé ; poursuite avec les faits déjà indexés "
@@ -754,7 +764,7 @@ def run_call_graph_stage(
             )
         except (CallGraphError, OSError) as exc:
             raise RuntimeError(str(exc)) from exc
-        if refresh_codeql_view:
+        if refresh_call_graph_view:
             _report_progress(
                 progress,
                 f"→ {engine_label} : graphe global réutilisé, "
@@ -767,16 +777,16 @@ def run_call_graph_stage(
                 "jointure des méthodes...",
             )
         timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
-        codeql_flows = prepared_codeql_flows if prepared_codeql_flows is not None else materialize_call_graph_flows(
+        call_graph_flows = prepared_call_graph_flows if prepared_call_graph_flows is not None else materialize_call_graph_flows(
             methods, flow_endpoints(), calls, repo_root=repo_root,
             modules=relation_modules,
             operations=data_operations,
             source_paths=list(current_hashes),
-            max_hops=config.codeql_max_hops,
-            codeql_edge_confidence=config.codeql_edge_confidence,
+            max_hops=config.engine_max_hops,
+            edge_confidence=config.engine_edge_confidence,
             closed_world=not engine.resolves_types,
             module_dependencies=relation_dependencies,
-            stats=codeql_stats,
+            stats=call_graph_stats,
             progress=progress,
             call_chain_progress=progress if show_call_chains else None,
             call_chain_module=show_call_chains_module,
@@ -787,34 +797,34 @@ def run_call_graph_stage(
         )
         # AST and the interprocedural engine can describe the same
         # endpoint-to-endpoint flow. Keep one representative while the
-        # CodeQL call graph remains the source of internal call edges.
+        # engine call graph remains the source of internal call edges.
         flows = _ensure_unique_code_flow_ids(
-            _deduplicate_code_flows([*flows, *codeql_flows], all_endpoints)
+            _deduplicate_code_flows([*flows, *call_graph_flows], all_endpoints)
         )
         report_built_chains(flows)
         store.replace_code_flows(flows)
         store.delete_meta("code_flow_signature")
         store.set_meta(
-            "codeql_input_output_status",
-            "partial" if codeql_timed_out else "complete",
+            META_INPUT_OUTPUT_STATUS,
+            "partial" if call_graph_timed_out else "complete",
         )
-        store.set_meta("codeql_input_output_flow_count", str(len(codeql_flows)))
-        store.set_meta("codeql_join_completed_entries", str(
+        store.set_meta(META_INPUT_OUTPUT_FLOW_COUNT, str(len(call_graph_flows)))
+        store.set_meta(META_JOIN_COMPLETED_ENTRIES, str(
             sum(bool(method.input_endpoint_ids) for method in methods)
         ))
         store.commit_checkpoint()
         _report_progress(
             progress,
             f"→ {engine_label} : checkpoint input → output persisté · "
-            f"{len(codeql_flows)} flux interprocédural(aux).",
+            f"{len(call_graph_flows)} flux interprocédural(aux).",
         )
         timer.end("call-graph-join", f"jointure {engine_label} et matérialisation des flux")
         _report_progress(
             progress,
             f"→ {engine_label} : "
-            f"{codeql_stats['calls']} appel(s), {codeql_stats['joined_calls']} jointure(s), "
-            f"{codeql_stats['explored_paths']} transition(s), "
-            f"{len(codeql_flows)} flux interprocédural(aux).",
+            f"{call_graph_stats['calls']} appel(s), {call_graph_stats['joined_calls']} jointure(s), "
+            f"{call_graph_stats['explored_paths']} transition(s), "
+            f"{len(call_graph_flows)} flux interprocédural(aux).",
         )
     service_aliases = {
         module_identity(module): local_spring_application_names(module.path, None)
@@ -834,17 +844,17 @@ def run_call_graph_stage(
         ),
     )
     store.replace_code_flows(_ensure_unique_code_flow_ids(flows))
-    if codeql_timed_out:
+    if call_graph_timed_out:
         # Do not mark an incomplete interprocedural pass as current. The
-        # next incremental index must retry CodeQL even when source files
+        # next incremental index must retry the engine even when source files
         # are unchanged.
         store.delete_meta("code_flow_signature")
         store.set_meta("code_flow_snapshot_status", "partial")
     else:
         store.set_meta("code_flow_signature", flow_signature)
         store.set_meta("code_flow_snapshot_status", "complete")
-        store.delete_meta("codeql_join_signature")
-        store.delete_meta("codeql_join_completed_entries")
+        store.delete_meta(META_JOIN_SIGNATURE)
+        store.delete_meta(META_JOIN_COMPLETED_ENTRIES)
     data_path_count = sum(
         bool(flow.steps) and flow.steps[-1].kind in DATA_STEP_KINDS
         for flow in flows
@@ -855,4 +865,4 @@ def run_call_graph_stage(
         f"et {data_path_count} annotation(s) d'accès aux données collectée(s).",
     )
     timer.end("flows", "matérialisation des flux de code")
-    return CallGraphStageResult(flows=flows, timed_out=codeql_timed_out)
+    return CallGraphStageResult(flows=flows, timed_out=call_graph_timed_out)

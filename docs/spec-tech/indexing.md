@@ -28,15 +28,15 @@ Parent: [Technical specification](../SPEC-TECH.md).
 The CLI `index --module NAME_OR_PATH` keeps the repository snapshot and the
 CodeQL analysis global, then filters the final flow listing to the selected
 build module. This preserves cross-module call resolution. A supplied global
-`--codeql-database` avoids rebuilding the CodeQL database during repeatable
+`--engine-database` avoids rebuilding the CodeQL database during repeatable
 debug runs.
 
-`index --module NAME --refresh-codeql-view` forces the interprocedural stage
+`index --module NAME --refresh-call-graph-view` forces the interprocedural stage
 and queries source-backed CodeQL methods under the selected module path. The
 result replaces that module's method rows while preserving rows from other
 modules, so the persisted graph can still traverse shared helpers. The option
 is intentionally module-scoped to support creating the method view gradually;
-passing `--codeql-database` reuses the same global CodeQL database for each
+passing `--engine-database` reuses the same global CodeQL database for each
 module refresh.
 
 The `systemlens flows calculate` command reconstructs the complete persisted
@@ -179,7 +179,7 @@ symbol fallback then skips the invocation whose candidates include that
 target, so it cannot reopen the other implementations. A witness without an
 exact row at its site still expands to every compatible implementation.
 
-`--codeql-database` reuses one global database supplied by the caller
+`--engine-database` reuses one global database supplied by the caller
 (ADR-83). Before any query, the engine reads `sourceLocationPrefix` from
 `codeql-database.yml` and compares each indexed Java file with its copy in
 the database's source archive, `src.zip` or `src/`. One differing file
@@ -208,6 +208,36 @@ pack cache; indexing never runs `codeql pack install` or downloads analyzer
 dependencies. The configured CodeQL thread count and optional RAM limit are
 passed to database creation and query execution only; they tune performance and
 do not alter or invalidate persisted architecture facts.
+
+### Engine declarations and settings
+
+Every engine publishes an `EngineDeclaration` (ADR-85): `name`, `label`,
+`description`, a lazy `factory` (`"module:function"`), an
+`unavailable_reason()` check, `supports_module_refresh`, `resolves_types`,
+its `EngineOption`s, the option that holds a prebuilt database, an `init`
+profile flag, default exclusions, and an artifact-directory predicate.
+`callgraph/registry.py` lists the declaration modules and is the only core
+module that names them; importing a declaration never imports an adapter.
+
+`Config.engine_settings()` builds the `EngineSettings` a factory receives:
+the generic `engine_threads` and `engine_ram_mb`, and the engine's options.
+Options merge in this order: declared defaults, then
+`analysis.engines.NAME`, then `--engine-option` and `--engine-database`
+for one run. Each value passes the option's `parse()`; a `path` option is
+resolved against the indexed root and never persisted.
+
+The CLI builds an explicit engine only when one run overrides options;
+otherwise `index_repo` builds the configured one. `engine_timeout_seconds`
+reaches the engine as `EngineRequest.timeout_seconds` and its deadline;
+`engine_max_hops` and `engine_edge_confidence` bound the join and enter the
+code-flow signature, with the engine's `input_fingerprint()`.
+
+Persisted names written before ADR-85 keep their spelling: the
+`codeql_call_edges` and `codeql_methods` tables, the `codeql_*` meta keys,
+the `codeql:` method identifier prefix, the `direct-codeql` flow marker and
+the export's `codeql_call_graph` key. Code refers to them only through
+`storage/persisted_names.py`, so existing indexes, exports and flow
+descriptions stay readable.
 
 Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A
@@ -476,12 +506,12 @@ annotation while CodeQL locates the declaration line. Module-scoped method
 and call queries match the whole relative path against the module prefix,
 as CodeQL's `regexpMatch` requires. Exact input-to-output reachability is
 persisted with medium confidence; CodeQL-reported possible dispatch is
-persisted with low confidence. With `codeql_edge_confidence = "exact"`, only `medium`
+persisted with low confidence. With `engine_edge_confidence = "exact"`, only `medium`
 relations are kept, because they are the routes made of exact edges.
 
 A reachability row becomes a flow only through a representative route of the
 indexed call graph that passes the join's rules: the application boundary on
-every hop, the entry's dispatch and `codeql_max_hops` (ADR-78). The route is
+every hop, the entry's dispatch and `engine_max_hops` (ADR-78). The route is
 a shortest path from a predecessor tree cached per source and confidence. A
 row without such a route creates no flow, and a pair the join already
 connects keeps the join's flows.
@@ -567,7 +597,7 @@ rehydrated during a persisted flow reconstruction. A non-inferred
 caller-to-callee edge proves CodeQL edge presence. Inferred edges do not count
 as CodeQL proof; unsupported absence checks remain `unknown`.
 
-When `--codeql-database` is supplied to `analyze call-edge`, node presence is
+When `--engine-database` is supplied to `analyze call-edge`, node presence is
 queried directly from the source-backed CodeQL `Method` entities instead of
 being inferred from the persisted call-edge snapshot. The BQRS/CSV query
 artifacts are temporary and are not persisted; the database must correspond to

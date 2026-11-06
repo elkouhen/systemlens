@@ -243,7 +243,7 @@ def test_export_includes_persisted_codeql_call_graph() -> None:
         {"orders": []},
         [],
         integration_methods=[caller, callee],
-        codeql_call_edges=[CallGraphEdge("a", "b", "Orders.java", 3, "exact")],
+        call_graph_edges=[CallGraphEdge("a", "b", "Orders.java", 3, "exact")],
     ))
 
     assert data["codeql_call_graph"] == {
@@ -304,7 +304,7 @@ def test_strategy1_call_tree_signature_uses_unique_called_consume_method() -> No
         data = _html_graph_data(render_graph_html(
             {"orders": [endpoint]}, [],
             integration_methods=[listener, consume, other_consume],
-            codeql_call_edges=[call, *extra_edges],
+            call_graph_edges=[call, *extra_edges],
             strategy1=strategy1,
         ))
         return next(

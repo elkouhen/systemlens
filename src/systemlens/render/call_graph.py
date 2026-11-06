@@ -581,7 +581,7 @@ def _distinct_export_flows(
     """Collapse flows that render to the same inter-service interaction graph.
 
     Indexing keeps distinct evidence and diagnostics. The HTML flow picker,
-    however, should not present the same graph repeatedly just because CodeQL
+    however, should not present the same graph repeatedly just because the engine
     found several equivalent dispatch routes.
     """
     confidence_rank = {"high": 0, "medium": 1, "low": 2}

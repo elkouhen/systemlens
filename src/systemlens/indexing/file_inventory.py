@@ -5,6 +5,7 @@ import hashlib
 import os
 from pathlib import Path
 
+from systemlens.callgraph.registry import is_engine_artifact
 from systemlens.discovery.build.projects import outermost_build_directories
 from systemlens.infrastructure.config import Config
 from systemlens.domain.module_inventory import DiscoveredModule
@@ -69,7 +70,7 @@ def is_git_metadata(rel_path: str) -> bool:
 def is_build_output(rel_path: str) -> bool:
     """Exclude standard Maven/Gradle output trees from source evidence.
 
-    A CodeQL capture or a local Maven build can populate ``target/classes``
+    An engine capture or a local Maven build can populate ``target/classes``
     with copied YAML files.  Treating those as source duplicates REST gateway
     ports and makes an index depend on whether someone compiled beforehand.
     """
@@ -120,26 +121,19 @@ def is_in_excluded_module(path: Path, excluded_module_paths: tuple[Path, ...]) -
     return any(module_path == path.parent or module_path in path.parents for module_path in excluded_module_paths)
 
 
-CODEQL_DATABASE_MARKER = "codeql-database.yml"
-
-
-def is_codeql_database(directory: Path) -> bool:
-    """Whether a directory is a CodeQL database, never a source tree."""
-    return (directory / CODEQL_DATABASE_MARKER).is_file()
-
-
 def _repository_files(repo_root: Path) -> list[Path]:
-    """Return the repository files in path order, without CodeQL databases.
+    """Return the repository files in path order, without engine artifacts.
 
-    A CodeQL database holds a copy of the sources and its own data, wherever
-    it lives; walking into it would hash and inventory thousands of files.
+    An analyzer database holds a copy of the sources and its own data,
+    wherever it lives; walking into it would hash and inventory thousands
+    of files. Each engine declares how to recognize its artifacts.
     """
     files: list[Path] = []
     for directory, subdirectories, names in os.walk(repo_root):
         current = Path(directory)
         subdirectories[:] = [
             name for name in subdirectories
-            if not is_codeql_database(current / name)
+            if not is_engine_artifact(current / name)
         ]
         files.extend(
             current / name for name in names if (current / name).is_file()

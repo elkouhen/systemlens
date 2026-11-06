@@ -12,22 +12,35 @@ min_severity: INFO
 root_path: .
 analysis:
   strategy: default
-  codeql: false
   call_graph_engine: source
-  codeql_timeout_seconds: 600
-  codeql_threads: 0
-  codeql_ram_mb: null
-  codeql_verbosity: null
-  codeql_max_hops: 12
-  codeql_edge_confidence: possible
+  engine_timeout_seconds: 600
+  engine_threads: 0
+  engine_ram_mb: null
+  engine_max_hops: 12
+  engine_edge_confidence: possible
   disabled_extractors: []
 ```
 
-`systemlens init --profile codeql` writes the same file with `codeql: true`
-and `call_graph_engine: codeql`, so every index without a
-`--call-graph-engine` option uses CodeQL. A profile only chooses the
-call-graph engine: the strategy and every other key keep their defaults,
-and the file stays editable afterwards.
+The `.codeql/**` exclusion comes from the `codeql` engine's declaration:
+each declared engine may add the directories it writes.
+
+`systemlens init --profile NAME`, where `NAME` is an engine that declares a
+profile, writes the same file with `call_graph_engine: NAME` and the
+engine's own options under `analysis.engines.NAME`, so every index without
+a `--call-graph-engine` option uses that engine. With `--profile codeql`:
+
+```yaml
+analysis:
+  call_graph_engine: codeql
+  # generic engine_* keys as above
+  engines:
+    codeql:
+      database: null
+      verbosity: null
+```
+
+A profile only chooses the call-graph engine: the strategy and every other
+key keep their defaults, and the file stays editable afterwards.
 
 `analysis.strategy` (`default` or `strategy1`) is the strategy of every
 indexing pass that has no `--strategy` option, including incremental passes
@@ -45,19 +58,37 @@ sets (`src/test`, `src/componentTest`, and names ending in `Test`) are always
 excluded. Maven modules whose artifact identifier or directory name has a
 `test` or `tests` name token (`orders-test-support`) or contains `archetype`
 are also excluded from the production index; `attestation-service` stays
-indexed. A CodeQL database, any directory holding `codeql-database.yml`,
-is never inventoried, whatever `exclude` says: it copies the sources and
-holds thousands of analyzer files. The
+indexed. An engine artifact that the engine's declaration recognizes, such
+as a CodeQL database (any directory holding `codeql-database.yml`), is never
+inventoried, whatever `exclude` says: it copies the sources and holds
+thousands of analyzer files. The
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
 
 `analysis` is the versionable source of truth for the topic convention,
-method-call engine, and disabled extractors. `call_graph_engine` is `source`
-(the default), `codeql`, or `none`; with an explicit `codeql: true` and no
-engine, it is `codeql`, as in configurations written before the source
-default. `codeql_timeout_seconds`, `codeql_max_hops`, and
-`codeql_edge_confidence` apply to every engine; their names are kept for
-compatibility with existing configurations. Under Strategy1, listener and
+method-call engine, and disabled extractors. `call_graph_engine` names a
+declared engine (`source` by default, `codeql`) or `none`.
+
+| Key | Default | Meaning |
+|---|---|---|
+| `engine_timeout_seconds` | `600` | Wall-clock budget of the engine pass, source generation included. |
+| `engine_threads` | `0` | Threads an external engine may use; `0` is one per core. |
+| `engine_ram_mb` | `null` | RAM limit in MiB of an external engine; `null` lets it choose. |
+| `engine_max_hops` | `12` | Longest call chain the flow join follows. |
+| `engine_edge_confidence` | `possible` | `exact` drops possible and inferred edges from flows. |
+| `engines.NAME.OPTION` | per engine | An option the engine `NAME` declares. |
+
+Engine-owned options of `codeql` are `database` (a prebuilt database, a
+path relative to the indexed root or absolute) and `verbosity` (`errors`,
+`progress`, `progress+`, `progress++` or `progress+++`).
+
+`analysis` accepts only the keys above, plus `strategy`, `topic_strategy`
+and `disabled_extractors`. Any other key, such as the removed `codeql`
+switch or a `codeql_*` setting, fails with
+`Clé(s) inconnue(s) dans analysis : ...`. An unknown engine under
+`engines`, or an option it does not declare, fails the same way.
+
+Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after
 normalization.
 An optional `runtime` section maps APM service names to indexed services for

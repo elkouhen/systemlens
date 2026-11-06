@@ -10,7 +10,7 @@ from systemlens.application.engine_comparison import (
     compare_engines,
     render_engine_comparison_text,
 )
-from systemlens.callgraph.engine import EngineRequest
+from systemlens.callgraph.engine import EngineRequest, EngineSettings
 from systemlens.callgraph.model import (
     CallGraphTimeout,
     MethodCall,
@@ -18,7 +18,7 @@ from systemlens.callgraph.model import (
     PayloadTypeEvidence,
     SourceMethod,
 )
-from systemlens.callgraph.registry import load_engine
+from systemlens.callgraph.registry import declarations, engine_names, init_profiles, load_engine
 from systemlens.callgraph.source import SourceEngine
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.engines import codeql
@@ -27,13 +27,19 @@ from systemlens.infrastructure.config import Config, ConfigError, init_config, l
 from systemlens.storage.sqlite import Store
 
 
-def test_the_core_never_imports_the_codeql_adapter() -> None:
+def test_the_core_never_imports_an_engine_adapter() -> None:
+    """The core reads engine declarations only; adapters load when built."""
     script = (
         "import sys\n"
         "import systemlens.indexing.service, systemlens.indexing.code_flows\n"
         "import systemlens.application.flow_calculation, systemlens.application.engine_comparison\n"
         "import systemlens.delivery.cli, systemlens.render\n"
-        "assert 'systemlens.engines.codeql' not in sys.modules, 'core imported CodeQL'\n"
+        "from systemlens.callgraph.registry import declarations\n"
+        "declarations()\n"
+        "loaded = sorted(name for name in sys.modules if name.startswith('systemlens.engines.')\n"
+        "                and not name.endswith('.declaration')\n"
+        "                and name.count('.') > 2)\n"
+        "assert not loaded, f'core imported an engine adapter: {loaded}'\n"
     )
     completed = subprocess.run(
         [sys.executable, "-c", script], capture_output=True, text=True, check=False,
@@ -41,15 +47,33 @@ def test_the_core_never_imports_the_codeql_adapter() -> None:
     assert completed.returncode == 0, completed.stderr
 
 
-def test_registry_loads_engines_by_name() -> None:
+def test_registry_builds_declared_engines_from_their_settings() -> None:
     assert load_engine("none") is None
     assert isinstance(load_engine("source"), SourceEngine)
-    engine = load_engine("codeql", database=Path("/db"), threads=2, ram_mb=512)
+    engine = load_engine("codeql", EngineSettings(
+        threads=2, ram_mb=512, options={"database": "/db", "verbosity": "progress"},
+    ))
     assert isinstance(engine, codeql.CodeQLEngine)
-    assert (engine.database, engine.threads, engine.ram_mb) == (Path("/db"), 2, 512)
+    assert (engine.database, engine.threads, engine.ram_mb, engine.verbosity) == (
+        Path("/db"), 2, 512, "progress",
+    )
     assert engine.available()
     with pytest.raises(ValueError, match="inconnu"):
         load_engine("javaparser")
+
+
+def test_each_declaration_matches_the_engine_it_builds() -> None:
+    names = engine_names()
+    assert names[-1] == "none" and "source" in names
+    for item in declarations():
+        engine = load_engine(item.name)
+        assert engine is not None
+        assert (engine.name, engine.label) == (item.name, item.label)
+        assert engine.supports_module_refresh == item.supports_module_refresh
+        assert engine.resolves_types == item.resolves_types
+        if item.database_option is not None:
+            assert item.option(item.database_option).kind == "path"
+    assert init_profiles()[0] == "default"
 
 
 def test_configuration_defaults_to_the_source_engine(tmp_path: Path) -> None:
@@ -57,7 +81,6 @@ def test_configuration_defaults_to_the_source_engine(tmp_path: Path) -> None:
     config_file = tmp_path / ".systemlens" / "config.yml"
     text = config_file.read_text(encoding="utf-8")
     assert "call_graph_engine: source" in text
-    assert "codeql: false" in text
     assert load_config(tmp_path).call_graph_engine == "source"
     assert Config().call_graph_engine == "source"
 
@@ -68,13 +91,11 @@ def test_configuration_defaults_to_the_source_engine(tmp_path: Path) -> None:
     config_file.write_text(text.replace("call_graph_engine: source", "call_graph_engine: codeql"), encoding="utf-8")
     assert load_config(tmp_path).call_graph_engine == "codeql"
 
-    # An explicit ``codeql: true`` without an engine keeps selecting CodeQL,
-    # as configurations written before the source default did.
-    config_file.write_text(
-        text.replace("codeql: false", "codeql: true").replace("  call_graph_engine: source\n", ""),
-        encoding="utf-8",
-    )
-    assert load_config(tmp_path).call_graph_engine == "codeql"
+    # The removed ``codeql`` switch no longer selects an engine: it is an
+    # unknown key (ADR-85).
+    config_file.write_text("analysis:\n  codeql: true\n", encoding="utf-8")
+    with pytest.raises(ConfigError, match="inconnue"):
+        load_config(tmp_path)
 
     config_file.write_text(text.replace("call_graph_engine: source", "call_graph_engine: javaparser"), encoding="utf-8")
     with pytest.raises(ConfigError, match="call_graph_engine"):
@@ -422,7 +443,7 @@ def test_a_deadline_after_the_call_query_keeps_its_calls(tmp_path: Path) -> None
         flows = store.all_code_flows()
         status = store.get_meta("code_flow_snapshot_status")
 
-    assert report.codeql_timed_out is True
+    assert report.call_graph_timed_out is True
     assert status == "partial"
     assert [[step.kind for step in flow.steps] for flow in flows] == [
         ["http_entry", "method_call", "message_publish"],

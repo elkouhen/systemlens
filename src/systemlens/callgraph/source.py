@@ -9,7 +9,7 @@ With this engine that pass is the whole call graph.
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 
-from systemlens.callgraph.engine import EngineRequest
+from systemlens.callgraph.engine import EngineDeclaration, EngineRequest, EngineSettings
 from systemlens.callgraph.model import (
     MethodCall,
     MethodReachability,
@@ -48,3 +48,17 @@ class SourceEngine:
     @contextmanager
     def open(self, request: EngineRequest) -> Iterator[_SourceSession]:
         yield _SourceSession()
+
+
+def create_engine(settings: EngineSettings) -> SourceEngine:
+    """Registry entry point; the source engine has no setting."""
+    return SourceEngine()
+
+
+DECLARATION = EngineDeclaration(
+    name=SourceEngine.name,
+    label=SourceEngine.label,
+    description="tree-sitter, sans dépendance externe",
+    factory="systemlens.callgraph.source:create_engine",
+    unavailable_reason=lambda: None,
+)

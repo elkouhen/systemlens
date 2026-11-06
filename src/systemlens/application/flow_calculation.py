@@ -88,7 +88,7 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
     persisted_flows = store.all_code_flows()
     current_endpoint_ids = {endpoint.id for endpoint in endpoints}
     persisted_call_edges = store.all_call_edges()
-    persisted_codeql_methods = store.all_call_graph_methods()
+    persisted_call_graph_methods = store.all_call_graph_methods()
     facts = store.all_graph_facts()
     endpoints_by_service = group_endpoints_by_module(endpoints)
     strategy = store.get_meta("topic_strategy") or "default"
@@ -114,7 +114,7 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
             module=module,
             modules=modules,
             persisted_edges=persisted_call_edges,
-            persisted_methods=persisted_codeql_methods,
+            persisted_methods=persisted_call_graph_methods,
             operations=inputs.operations,
         )
         if methods

@@ -247,15 +247,15 @@ def _flow_construction(
 def internal_flow_debug(
     flows: list[CodeFlow], endpoints: list[MessageEndpoint], module: str,
     integration_methods: list[IntegrationMethod] | None = None,
-    codeql_call_edges: list[CallGraphEdge] | None = None,
+    call_graph_edges: list[CallGraphEdge] | None = None,
 ) -> dict[str, object]:
     """Describe found or missing internal flows for one module."""
     endpoint_by_id = {endpoint.id: endpoint for endpoint in endpoints}
-    graph_mode = integration_methods is not None and codeql_call_edges is not None
+    graph_mode = integration_methods is not None and call_graph_edges is not None
     if graph_mode:
-        assert integration_methods is not None and codeql_call_edges is not None
+        assert integration_methods is not None and call_graph_edges is not None
         selected = _call_graph_flow_examples(
-            endpoints, module, integration_methods, codeql_call_edges
+            endpoints, module, integration_methods, call_graph_edges
         )
         selected_keys: set[tuple[object, object]] = set()
         for item in selected:
@@ -278,7 +278,7 @@ def internal_flow_debug(
             selected_keys.add(key)
         attempted_paths = (
             _call_graph_flow_attempts(
-                endpoints, module, integration_methods, codeql_call_edges
+                endpoints, module, integration_methods, call_graph_edges
             )
             if not selected
             else []
@@ -322,7 +322,7 @@ def internal_flow_debug(
             for method in integration_methods or []
             if method.module == module
         ),
-        "edge_count": len(codeql_call_edges or []),
+        "edge_count": len(call_graph_edges or []),
     }
     return {
         "module": module,
@@ -346,7 +346,7 @@ def internal_flow_debug(
             None
             if selected
             else (
-                "Aucun chemin interprocédural CodeQL ne relie une entrée indexée "
+                "Aucun chemin interprocédural du graphe d'appel ne relie une entrée indexée "
                 "à un effet indexé dans ce module."
                 if graph_mode
                 else "Aucun chemin source-backed ne relie une entrée indexée à un effet indexé dans ce module."
@@ -506,7 +506,7 @@ def _call_graph_flow_attempts(
                         method_path,
                         edge_path,
                         methods_by_id,
-                        "aucune arête CodeQL sortante depuis cette méthode",
+                        "aucune arête d'appel sortante depuis cette méthode",
                     )
                 )
                 continue
@@ -699,7 +699,7 @@ def render_internal_flow_debug_text(debug: dict[str, object]) -> str:
             "  Graphe testé : "
             f"{graph_metrics['input_method_count']} méthode(s) IN, "
             f"{graph_metrics['output_method_count']} méthode(s) OUT, "
-            f"{graph_metrics['edge_count']} arête(s) CodeQL"
+            f"{graph_metrics['edge_count']} arête(s) d'appel"
         )
     for item in flows:
         assert isinstance(item, dict)

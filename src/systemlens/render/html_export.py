@@ -22,6 +22,7 @@ from systemlens.domain.models import (
     MessageEndpoint,
 )
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
+from systemlens.storage.persisted_names import EXPORT_CALL_GRAPH_KEY
 from systemlens.render.graph_view_model import build_graph_view_model
 from systemlens.render.call_graph import (
     _all_export_flows,
@@ -123,7 +124,7 @@ def render_graph_html(
     architecture_relations: list[ArchitectureRelation] | None = None,
     code_flows: list[CodeFlow] | None = None,
     integration_methods: list[IntegrationMethod] | None = None,
-    codeql_call_edges: list[CallGraphEdge] | None = None,
+    call_graph_edges: list[CallGraphEdge] | None = None,
     flow_descriptions: dict[str, str] | None = None,
     progress_notice: str | None = None,
     call_graphs_only: bool = False,
@@ -165,7 +166,7 @@ def render_graph_html(
         architecture_relations=architecture_relations,
         integration_methods=integration_methods,
         code_flows=code_flows,
-        codeql_call_edges=codeql_call_edges,
+        call_graph_edges=call_graph_edges,
     )
     export_flows = list(code_flows or [])
     call_flows = [
@@ -603,7 +604,7 @@ def render_graph_html(
             "asyncapi_contracts", "indexing_issues",
         ):
             view_model[key] = []
-        view_model["codeql_call_graph"] = {"nodes": [], "edges": []}
+        view_model[EXPORT_CALL_GRAPH_KEY] = {"nodes": [], "edges": []}
         view_model["call_graphs_only"] = True
     if indexed_at:
         # UTC time of the latest file indexation (SQLite `files.indexed_at`);

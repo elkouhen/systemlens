@@ -489,8 +489,8 @@ def test_internal_flow_debug_lists_attempted_paths_when_no_flow_is_found() -> No
         "edge_count": 1,
     }
     assert "Chemins tentés (1)" in rendered
-    assert "Graphe testé : 1 méthode(s) IN, 1 méthode(s) OUT, 1 arête(s) CodeQL" in rendered
-    assert "aucune arête CodeQL sortante" in rendered
+    assert "Graphe testé : 1 méthode(s) IN, 1 méthode(s) OUT, 1 arête(s) d'appel" in rendered
+    assert "aucune arête d'appel sortante" in rendered
 
 
 def test_materialize_code_flows_disambiguates_overload_ids(tmp_path: Path) -> None:
@@ -982,7 +982,7 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
     with Store(repo) as store:
         index_repo(
             repo,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
         )
         flows = store.all_code_flows()
@@ -1057,7 +1057,7 @@ def test_index_persists_and_cli_exposes_same_method_flow(tmp_path: Path) -> None
     with Store(repo) as store:
         index_repo(
             repo,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
         )
         flows_after_removal = store.all_code_flows()
@@ -1081,7 +1081,7 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
 
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
     result = RUNNER.invoke(
-        app, ["index", "--module", "orders", "--show-call-chains", "--no-codeql"]
+        app, ["index", "--module", "orders", "--show-call-chains", "--call-graph-engine", "source"]
     )
 
     assert result.exit_code == 0, result.output
@@ -1093,7 +1093,7 @@ def test_index_module_focus_lists_internal_flows_without_rebuilding_codeql(
     assert "app/OrderConsumer.java" in result.output
 
     replay = RUNNER.invoke(
-        app, ["index", "--module", "orders", "--show-call-chains", "--no-codeql"]
+        app, ["index", "--module", "orders", "--show-call-chains", "--call-graph-engine", "source"]
     )
     assert replay.exit_code == 0, replay.output
     assert "scanned=0" in replay.output
@@ -1135,11 +1135,11 @@ def test_module_codeql_refresh_explains_missing_global_graph(
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
 
     result = RUNNER.invoke(
-        app, ["index", "--module", "orders", "--refresh-codeql-view", "--call-graph-engine", "codeql"]
+        app, ["index", "--module", "orders", "--refresh-call-graph-view", "--call-graph-engine", "codeql"]
     )
 
     assert result.exit_code == 2, result.output
-    assert "aucun graphe CodeQL global complet" in result.output
+    assert "aucun graphe d'appel global complet" in result.output
     assert "systemlens index --full" in result.output
 
 
@@ -1157,7 +1157,7 @@ def test_index_internal_flows_only_suppresses_general_summary(
     monkeypatch.chdir(repo)
 
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
-    initial = RUNNER.invoke(app, ["index", "--module", "orders", "--no-codeql"])
+    initial = RUNNER.invoke(app, ["index", "--module", "orders", "--call-graph-engine", "source"])
     assert initial.exit_code == 0, initial.output
     def fail_index(*args: object, **kwargs: object) -> None:
         raise AssertionError("fast flow diagnostics must not reindex")
@@ -1175,7 +1175,7 @@ def test_index_internal_flows_only_suppresses_general_summary(
 
 
 def test_index_internal_flows_only_requires_module() -> None:
-    result = RUNNER.invoke(app, ["index", "--internal-flows-only", "--no-codeql"])
+    result = RUNNER.invoke(app, ["index", "--internal-flows-only", "--call-graph-engine", "source"])
 
     assert result.exit_code == 2
     assert "requiert `--module`" in result.output
@@ -1195,7 +1195,7 @@ def test_flows_calculate_reuses_index_after_ai_fact_import(tmp_path: Path, monke
     with Store(repo) as store:
         index_repo(
             repo,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
         )
         initial_flows = store.all_code_flows()
@@ -1533,7 +1533,7 @@ def test_index_uses_automatic_codeql_database_when_available(
     join_progress_html = tmp_path / "codeql-join-progress.html"
     cli._write_call_graph_progress_html(repo, join_progress_html, join_checkpoints[-1])
     join_content = join_progress_html.read_text(encoding="utf-8")
-    assert "jointure CodeQL : 1/1 méthode(s) IN traitée(s)" in join_content
+    assert "jointure : 1/1 méthode(s) IN traitée(s)" in join_content
 
 
 def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
@@ -1587,7 +1587,7 @@ def test_module_codeql_view_refresh_reuses_the_persisted_call_graph(
             Config(),
             store,
             call_graph_engine=codeql.CodeQLEngine(database=tmp_path / "codeql-db"),
-            refresh_codeql_view=True,
+            refresh_call_graph_view=True,
             show_call_chains_module="orders",
         )
 
@@ -1617,7 +1617,7 @@ def test_codeql_timeout_commits_partial_snapshot_and_runs_post_processing(
 
     with Store(repo) as store:
         report = index_repo(repo, Config(call_graph_engine="codeql"), store, progress=progress.append)
-        assert report.codeql_timed_out is True
+        assert report.call_graph_timed_out is True
         assert store.all_endpoints()
         assert store.all_architecture_relations()
         assert store.all_code_flows()
@@ -1725,7 +1725,7 @@ def test_real_codeql_database_creation_timeout_is_soft_boundary(
 
     with Store(repo) as store:
         report = index_repo(repo, Config(call_graph_engine="codeql"), store, progress=progress.append)
-        assert report.codeql_timed_out is True
+        assert report.call_graph_timed_out is True
         assert store.all_architecture_relations()
         assert store.all_code_flows()
 
@@ -1786,7 +1786,7 @@ def test_global_codeql_calls_are_partitioned_without_losing_cross_project_edges(
     assert partitioned[1][1] == [calls[1]]
 
 
-def test_cli_no_codeql_keeps_ast_only_flow_indexing(
+def test_cli_source_engine_keeps_ast_only_flow_indexing(
     tmp_path: Path, monkeypatch
 ) -> None:
     repo = tmp_path / "repo"
@@ -1800,11 +1800,9 @@ def test_cli_no_codeql_keeps_ast_only_flow_indexing(
     monkeypatch.chdir(repo)
     assert RUNNER.invoke(app, ["init"]).exit_code == 0
 
-    result = RUNNER.invoke(app, ["index", "--no-codeql"])
+    result = RUNNER.invoke(app, ["index", "--call-graph-engine", "source"])
 
-    assert result.exit_code == 0
-    assert "CodeQL désactivé" in result.output
-    assert "peuvent être incomplets" in result.output
+    assert result.exit_code == 0, result.output
     with Store(repo, readonly=True) as store:
         assert [step.kind for step in store.all_code_flows()[0].steps] == [
             "message_entry", "http_call",
@@ -1846,7 +1844,7 @@ class Generator {
     )
 
     with Store(repo) as store:
-        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="source"), store, full=True)
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
         flows = store.all_code_flows()
 
     assert len(flows) == 1
@@ -1861,18 +1859,20 @@ class Generator {
     assert "resolved a static call path" in flows[0].reason
 
     with Store(repo) as store:
-        index_repo(repo, Config(codeql_enabled=False, call_graph_engine="none"), store, full=True)
+        index_repo(repo, Config(call_graph_engine="none"), store, full=True)
         assert store.all_code_flows() == []
 
 
-def test_cli_codeql_progress_html_requires_codeql(tmp_path: Path) -> None:
+def test_cli_call_graph_progress_html_requires_an_engine(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert RUNNER.invoke(app, ["init"]).exit_code == 0
     result = RUNNER.invoke(
         app,
-        ["index", "--no-codeql", "--codeql-progress-html", str(tmp_path / "progress.html")],
+        ["index", "--call-graph-engine", "none", "--call-graph-progress-html", str(tmp_path / "progress.html")],
     )
 
     assert result.exit_code == 2
-    assert "requiert CodeQL" in result.output
+    assert "Le moteur `none` ne construit aucun graphe d'appel" in result.output
 
 
 def test_store_additively_migrates_previous_schema_for_code_flows(
@@ -2205,10 +2205,10 @@ def test_codeql_edge_confidence_can_exclude_possible_dispatch(tmp_path: Path) ->
     )
 
     assert materialize_call_graph_flows(
-        methods, endpoints, [call], codeql_edge_confidence="exact"
+        methods, endpoints, [call], edge_confidence="exact"
     ) == []
     assert len(materialize_call_graph_flows(
-        methods, endpoints, [call], codeql_edge_confidence="possible"
+        methods, endpoints, [call], edge_confidence="possible"
     )) == 1
 
 
@@ -2239,7 +2239,7 @@ def test_exact_edge_confidence_excludes_low_confidence_reachability(tmp_path: Pa
         output.qualified_method, output.path, output.start_line, "low",
     )]
     assert materialize_call_graph_flows(
-        methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
+        methods, endpoints, [], reachability=reachability, edge_confidence="exact",
     ) == []
 
 
@@ -3119,7 +3119,7 @@ def test_reachability_without_a_checkable_route_creates_no_flow(tmp_path: Path) 
     )]
 
     flows = materialize_call_graph_flows(
-        methods, endpoints, [], reachability=reachability, codeql_edge_confidence="exact",
+        methods, endpoints, [], reachability=reachability, edge_confidence="exact",
     )
 
     assert flows == []

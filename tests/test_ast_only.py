@@ -826,7 +826,7 @@ def test_incremental_build_identity_change_reattributes_unchanged_endpoints(tmp_
     with Store(repo) as store:
         index_repo(
             repo,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
         )
 
@@ -835,7 +835,7 @@ def test_incremental_build_identity_change_reattributes_unchanged_endpoints(tmp_
         pom.write_text(pom.read_text().replace("order-service", "orders-renamed", 1))
         report = index_repo(
             repo,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
         )
         endpoint_modules = {endpoint.module for endpoint in store.all_endpoints()}
@@ -873,7 +873,7 @@ def test_index_persists_kafka_dto_source_definitions(tmp_path: Path) -> None:
     with Store(tmp_path) as store:
         index_repo(
             tmp_path,
-            Config(codeql_enabled=False, call_graph_engine="none"),
+            Config(call_graph_engine="none"),
             store,
             full=True,
         )

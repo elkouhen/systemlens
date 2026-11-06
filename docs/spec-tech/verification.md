@@ -65,14 +65,14 @@ and its Then assertions use the public text or JSON result.
 | Given | When | Then |
 |---|---|---|
 | The callee is indexed and the caller is absent. | The user diagnoses the expected call. | The command reports `caller_not_indexed` at `method_inventory`. |
-| Both methods exist in a complete snapshot without an edge. | The user diagnoses the expected call. | The command reports `edge_not_persisted` at `codeql_extraction_or_join`. |
+| Both methods exist in a complete snapshot without an edge. | The user diagnoses the expected call. | The command reports `edge_not_persisted` at `engine_extraction_or_join`. |
 | Both methods exist in a partial snapshot. | The user diagnoses the expected call. | The command reports `snapshot_incomplete` before assigning a CodeQL cause. |
 | A possible edge exists under exact-only reconstruction. | The user diagnoses the expected call. | The command reports `edge_filtered_by_confidence`. |
 | An exact edge belongs to a persisted IN-to-OUT flow. | The user diagnoses by method ID. | Text output includes the complete verdict, edge evidence, and flow ID. |
 | An exact edge has no path from an indexed IN method. | The user diagnoses the expected call. | The command reports `edge_outside_input_path` with its flow context. |
 
 Existing snapshots do not retain rejected raw CodeQL rows. The absent-edge
-scenario therefore verifies the combined `codeql_extraction_or_join` verdict
+scenario therefore verifies the combined `engine_extraction_or_join` verdict
 instead of claiming which of those two internal steps lost the call.
 
 ## Runtime policy

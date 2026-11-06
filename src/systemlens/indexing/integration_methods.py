@@ -60,7 +60,7 @@ def _method_id(
     """Return a stable method identity, including Java overload parameters.
 
     ``qualified_method`` intentionally remains class-and-method only because
-    CodeQL's call result uses that form.  It is not, however, a database key:
+    An engine's call result uses that form.  It is not, however, a database key:
     Java permits overloaded methods.  The AST parameter node distinguishes
     those declarations without making the identity depend on a source line.
     """
@@ -304,7 +304,7 @@ def materialize_integration_methods(
             ))
             module = next((endpoint.module for endpoint in contained if endpoint.module), None)
             if module is None:
-                # A CodeQL call chain may traverse a plain application method;
+                # An engine call chain may traverse a plain application method;
                 # attribute it from a sibling integration method in its file.
                 module = next((endpoint.module for endpoint in path_endpoints if endpoint.module), None)
             if module is None:
