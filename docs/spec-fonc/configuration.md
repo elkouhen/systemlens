@@ -89,6 +89,8 @@ and `disabled_extractors`. Any other key, such as the removed `codeql`
 switch or a `codeql_*` setting, fails with
 `Clé(s) inconnue(s) dans analysis : ...`. An unknown engine under
 `engines`, or an option it does not declare, fails the same way.
+`engines` must be a mapping: a list, even an empty one, fails with
+`analysis.engines doit être un objet YAML.`
 
 Under Strategy1, listener and
 sender topic keys match declared keys in `kafka.yml` or `kafka.yaml` after

@@ -606,4 +606,26 @@ def test_the_supplied_database_identity_enters_the_flow_signature(tmp_path: Path
 
     assert one and two and one != two
     assert str(tmp_path) not in one
+
+
+def test_the_codeql_cli_enters_the_flow_signature_of_the_automatic_database(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    """Review A6: an upgraded CodeQL recomputed nothing for unchanged sources.
+
+    ADR-84 keys the cached database on the executable; the flow signature
+    must follow it, without naming a local path.
+    """
+    from systemlens.engines.codeql import database as codeql_database
+
+    executable = tmp_path / "codeql"
+    executable.write_text("2.27.3", encoding="utf-8")
+    monkeypatch.setattr(codeql_database, "codeql_executable", lambda: str(executable))
+    before = codeql.CodeQLEngine().input_fingerprint()
+    executable.write_text("2.28.0 upgraded", encoding="utf-8")
+    after = codeql.CodeQLEngine().input_fingerprint()
+    monkeypatch.setattr(codeql_database, "codeql_executable", lambda: None)
+
+    assert before and after and before != after
+    assert str(tmp_path) not in before
     assert codeql.CodeQLEngine().input_fingerprint() == ""

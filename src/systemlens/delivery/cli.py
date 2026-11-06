@@ -71,7 +71,7 @@ from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_d
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
-from systemlens.infrastructure.config import INIT_PROFILES, Config, ConfigError, init_config, load_config
+from systemlens.infrastructure.config import INIT_PROFILES, ConfigError, init_config, load_config
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import (
     GraphEdge,
@@ -162,11 +162,11 @@ def _parse_engine_options(values: list[str]) -> dict[str, object]:
 def _database_engine_settings(
     repo_root: Path, engine_name: str | None, database: Path,
 ) -> tuple[str, EngineSettings]:
-    """Settings of the engine that owns a supplied analyzer database."""
-    try:
-        config = load_config(repo_root)
-    except ConfigError:
-        config = Config()
+    """Settings of the engine that owns a supplied analyzer database.
+
+    A broken configuration is reported as such, not replaced by defaults.
+    """
+    config = load_config(repo_root)
     name = engine_name or config.call_graph_engine
     if name == NO_ENGINE:
         raise ConfigError("Le moteur `none` n'a pas de base à interroger.")
@@ -1296,7 +1296,10 @@ def analyze_call_edges(
 def analyze_compare_engines(
     engines: str = typer.Option(
         ..., "--engines",
-        help=f"Deux moteurs séparés par une virgule, parmi {', '.join(_ENGINE_CHOICES)}.",
+        help=(
+            "Deux moteurs séparés par une virgule, parmi "
+            f"{', '.join(name for name in _ENGINE_CHOICES if name != NO_ENGINE)}."
+        ),
     ),
     root: Path | None = typer.Option(
         None, "--root", help="Répertoire indexé à analyser."

@@ -115,6 +115,13 @@ processing order, hashing provides the change decision, and pattern checks are
 applied once per file. Incrementality limits AST extraction to changed files,
 but it does not avoid this complete inventory pass.
 
+A changed build descriptor or Spring property file rescans the files of the
+module that owns it. A Spring Cloud Config file
+(`configurations/<application>.yml`, `.yaml` or `.properties`) configures
+the application it names, in any module, so its change rescans every file.
+A module-rooted `target`, `build` or `out` directory is build output for
+the inventory and for the engine projection alike.
+
 Steps 1 to 7 execute inside `Store.transaction()`, which starts with
 `BEGIN IMMEDIATE`. CodeQL stages can publish partial snapshots through
 `Store.commit_checkpoint()`: each checkpoint commits the pending changes and
@@ -203,7 +210,9 @@ The call rows are checked again: when CodeQL returns calls and none comes
 from an indexed Java file, the engine refuses the database instead of
 leaving only the symbol pass's edges under CodeQL's name. A hash of
 `codeql-database.yml`, never its path, enters the code-flow signature, so a
-recreated database recomputes the flows of unchanged sources.
+recreated database recomputes the flows of unchanged sources. For the
+automatic database, a hash of the CodeQL executable's identity enters the
+signature instead: a new CodeQL recomputes them as well (ADR-84).
 
 Once the source-backed call graph is constructed, its
 edges are committed as an explicit partial checkpoint before input-to-output
@@ -236,6 +245,11 @@ Options merge in this order: declared defaults, then
 `analysis.engines.NAME`, then `--engine-option` and `--engine-database`
 for one run. Each value passes the option's `parse()`; a `path` option is
 resolved against the indexed root and never persisted.
+
+An engine method that the index does not hold is persisted as a placeholder
+row of the call graph, except a method of an anonymous class
+(`<anonymous class>.run`): it has no identity (ADR-62), and the join
+attributes its calls to the creating method.
 
 The CLI builds an explicit engine only when one run overrides options;
 otherwise `index_repo` builds the configured one. `engine_timeout_seconds`

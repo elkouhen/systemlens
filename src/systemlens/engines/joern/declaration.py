@@ -17,7 +17,7 @@ def unavailable_reason() -> str | None:
     if platform.system() == "Darwin" and shutil.which("greadlink") is None:
         return (
             "greadlink introuvable dans le PATH : les lanceurs Joern l'utilisent sur macOS "
-            "(brew install coreutils)."
+            "(brew install coreutils ; si coreutils est déjà installé, brew link coreutils)."
         )
     return None
 

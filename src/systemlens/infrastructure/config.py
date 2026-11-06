@@ -115,7 +115,7 @@ def parse_engine_options(
         try:
             parsed[str(name)] = declared.option(str(name)).parse(value)
         except ValueError as exc:
-            raise ConfigError(f"{where}{engine}.{name} invalide : {exc}.") from exc
+            raise ConfigError(f"{where}{engine}.{name} invalide : {str(exc).rstrip('.')}.") from exc
     return parsed
 
 
@@ -127,7 +127,9 @@ def _positive_int(analysis: Mapping[str, object], key: str, default: int) -> int
 
 
 def _engine_options(analysis: Mapping[str, object]) -> dict[str, dict[str, object]]:
-    section = analysis.get("engines") or {}
+    section = analysis.get("engines")
+    if section is None:
+        section = {}
     if not isinstance(section, dict):
         raise ConfigError("analysis.engines doit être un objet YAML.")
     known = [item.name for item in declarations()]

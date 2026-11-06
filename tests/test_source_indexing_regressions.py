@@ -10,6 +10,7 @@ from systemlens.discovery.build.modules import discover_modules
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
+from systemlens.indexing.file_inventory import list_repo_files
 from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing.materializers import (
     materialize_asyncapi_contracts,
@@ -17,6 +18,7 @@ from systemlens.indexing.materializers import (
 )
 from systemlens.indexing.relations import build_architecture_relations
 from systemlens.indexing.service import index_repo
+from systemlens.indexing.source_projection import project_java_sources
 from systemlens.infrastructure.config import Config
 from systemlens.scanner import clear_analysis_caches
 from systemlens.scanner.kafka_ast import infer_kafka_endpoints
@@ -257,3 +259,54 @@ def test_an_index_persists_no_asyncapi_contract_from_an_excluded_path(tmp_path: 
         contracts = store.all_asyncapi_contracts()
 
     assert [contract["path"] for contract in contracts] == ["src/main/resources/asyncapi.yml"]
+
+
+def test_the_inventory_and_the_engine_projection_skip_the_same_out_directory(
+    tmp_path: Path,
+) -> None:
+    """Review P7: ``module/out/`` was extracted but never projected.
+
+    Both now treat a module-rooted ``out`` as build output; a package named
+    ``out`` below ``src`` stays source for both.
+    """
+    _write(tmp_path / "svc/pom.xml", POM.format(name="svc", deps=""))
+    _write(tmp_path / "svc/out/gen/com/a/Generated.java", "package com.a; class Generated {}")
+    _write(tmp_path / "svc/src/main/java/com/a/out/Kept.java", "package com.a.out; class Kept {}")
+
+    files = list_repo_files(tmp_path, Config())
+    projection = tmp_path / "projection"
+    copied = project_java_sources(tmp_path, projection, allowed_paths=list(files))
+
+    java = sorted(path for path in files if path.endswith(".java"))
+    assert java == ["svc/src/main/java/com/a/out/Kept.java"]
+    assert copied == 1 and (projection / java[0]).is_file()
+
+
+def test_a_config_server_file_change_rescans_the_application_it_configures(
+    tmp_path: Path,
+) -> None:
+    """Review P8: the consumer's ``${app.topic}`` stayed stale until ``--full``."""
+    repo = tmp_path / "repo"
+    _write(repo / "config-service/pom.xml", POM.format(name="config-service", deps=""))
+    config_file = repo / "config-service/src/main/resources/configurations/orders.yml"
+    _write(config_file, "app:\n  topic: orders-v1\n")
+    _write(repo / "orders/pom.xml", POM.format(name="orders", deps=""))
+    _write(repo / "orders/src/main/resources/application.yml",
+           "spring:\n  application:\n    name: orders\n")
+    _write(repo / "orders/src/main/java/com/a/Listener.java", """package com.a;
+import org.springframework.kafka.annotation.KafkaListener;
+class Listener {
+  @KafkaListener(topics = "${app.topic}")
+  void onOrder(String payload) {}
+}
+""")
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store)
+        first = {(e.topic, e.topic_dynamic) for e in store.all_endpoints() if e.system == "kafka"}
+        _write(config_file, "app:\n  topic: orders-v2\n")
+        index_repo(repo, Config(), store)
+        second = {(e.topic, e.topic_dynamic) for e in store.all_endpoints() if e.system == "kafka"}
+
+    assert first == {("orders-v1", False)}
+    assert second == {("orders-v2", False)}

@@ -73,9 +73,12 @@ class _RecordedEngine:
     supports_module_refresh = False
     resolves_types = True
 
-    def __init__(self, calls: list[MethodCall], timeouts: int = 0) -> None:
+    def __init__(
+        self, calls: list[MethodCall], timeouts: int = 0, methods: list[SourceMethod] | None = None,
+    ) -> None:
         self._calls = calls
         self._timeouts = timeouts
+        self._methods = methods or []
         self.runs = 0
 
     def available(self) -> bool:
@@ -95,7 +98,7 @@ class _RecordedEngine:
         return self._calls
 
     def methods(self, source_prefix: str = "") -> list[SourceMethod]:
-        return []
+        return self._methods
 
     def reachability(self, methods: Sequence[IntegrationMethod]) -> list[MethodReachability]:
         return []
@@ -317,3 +320,23 @@ public class Square {
     }
     assert len(edges) == 2
     assert all(confidence == "possible" for *_, confidence, _inferred in edges)
+
+
+def test_an_anonymous_class_method_of_an_engine_is_not_persisted(tmp_path: Path) -> None:
+    """Review A5: ``<anonymous class>.run`` became a placeholder method row.
+
+    ADR-62 gives an anonymous class method no identity; the join already
+    attributes its calls to the creating method.
+    """
+    repo = _orders(tmp_path / "repo")
+    engine = _RecordedEngine([], methods=[
+        SourceMethod("<anonymous class>.run", CONTROLLER, 7),
+        SourceMethod("example.Generator.generate", GENERATOR, 5),
+    ])
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True, call_graph_engine=engine)
+        names = [method.qualified_method for method in store.all_call_graph_methods()]
+
+    assert "example.Generator.generate" in names
+    assert not any(name.startswith("<anonymous") for name in names)

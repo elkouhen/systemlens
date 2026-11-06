@@ -7,7 +7,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 | Command | Behaviour |
 |---|---|
 | `systemlens init [--profile NAME]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--profile default` (the default) selects the `source` call-graph engine and needs no external tool. Every engine that declares a profile (`codeql`, `joern`) can be named instead: the profile selects that engine, writes its `analysis.engines.NAME` defaults, and warns when the engine's prerequisite is missing. An unknown profile exits with code 2 and writes nothing. |
-| `systemlens doctor [--json]` | Read-only check of configuration, local AST readiness and index state. |
+| `systemlens doctor [--json]` | Read-only check of configuration, of the configured call-graph engine, of local AST readiness and of the index state. An unavailable engine is a warning: indexing announces it and uses `source`. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index` | Incrementally indexes architecture facts. See [indexing options and output](#indexing-options-and-output). |
 | `systemlens import-facts FILE [--namespace NAME] [--complete]` | Validates and transactionally upserts a reviewable fact manifest, including one produced by an agent through the companion skill, into the separate enrichment layer. A `flow_data_access` node can annotate an existing flow by ID; an unknown ID rejects the import. `--complete` removes stale facts only within the selected namespace. |
@@ -317,8 +317,8 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   accepts `--engine-database` and refreshes one module.
 - `joern` builds a code property graph of the projected Java sources with
   `joern-parse` (`javasrc2cpg`, no build) and reads its call graph. It needs
-  Joern and a JDK on `PATH`, and on macOS `greadlink` (coreutils) for the
-  Joern launchers. One linked body is `exact`; a unique implementation is
+  Joern and a JDK on `PATH`, and on macOS `greadlink` (coreutils, installed
+  and linked) for the Joern launchers. One linked body is `exact`; a unique implementation is
   `exact` with its interface declaration as a `possible` witness; several
   implementations are all `possible`, as are the targets of a call that
   an anonymous class, a lambda or a library class can also receive. A

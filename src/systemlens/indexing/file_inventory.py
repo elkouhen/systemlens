@@ -75,11 +75,13 @@ def is_build_output(rel_path: str) -> bool:
     ports and makes an index depend on whether someone compiled beforehand.
     """
     parts = rel_path.split("/")
-    # Maven ``target`` and Gradle ``build`` output directories are rooted at
-    # the module level. A Java package or resource directory with one of
-    # these names remains source when it is below a ``src`` directory.
+    # Maven ``target``, Gradle ``build`` and IDE ``out`` output directories
+    # are rooted at the module level. A Java package or resource directory
+    # with one of these names remains source when it is below a ``src``
+    # directory. The engine projection skips the same directories, so a
+    # file the index extracts is a file the engine reads (review P7).
     return any(
-        part in {"target", "build"} and "src" not in parts[:index]
+        part in {"target", "build", "out"} and "src" not in parts[:index]
         for index, part in enumerate(parts)
     )
 
@@ -202,6 +204,19 @@ def changes_require_dependent_rescan(paths: set[str]) -> bool:
     )
 
 
+def is_spring_cloud_config_file(rel_path: str) -> bool:
+    """A Spring Cloud Config file: ``configurations/<application>.yml``.
+
+    The scanners read it for the application of that name, wherever that
+    application's module is (``scanner/_spring_properties.py``).
+    """
+    path = Path(rel_path)
+    return (
+        path.parent.name == "configurations"
+        and path.suffix.casefold() in {".yml", ".yaml", ".properties"}
+    )
+
+
 def dependent_rescan_paths(
     changed_paths: set[str],
     current_paths: set[str],
@@ -224,6 +239,11 @@ def dependent_rescan_paths(
     }
     if not invalidated:
         return set()
+    if any(is_spring_cloud_config_file(path) for path in invalidated):
+        # A config-server file configures the application it names, in
+        # whichever module that application lives: no module boundary
+        # bounds its readers (review P8).
+        return None
 
     module_roots = sorted(
         {module.path.resolve() for module in modules},

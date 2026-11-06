@@ -1,5 +1,6 @@
 """CodeQL as a ``CallGraphEngine``: typed virtual dispatch, needs the CLI."""
 
+import hashlib
 import subprocess
 from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
@@ -18,6 +19,7 @@ import systemlens.engines.codeql.database as database
 import systemlens.engines.codeql.extraction as extraction
 from systemlens.engines.codeql.declaration import DECLARATION
 from systemlens.engines.codeql.errors import CodeQLError, CodeQLTimeout
+from systemlens.indexing.source_projection import executable_identity
 
 
 def _deadline_bound(
@@ -105,9 +107,18 @@ class CodeQLEngine:
         return self.database is not None or database.codeql_executable() is not None
 
     def input_fingerprint(self) -> str:
-        """Identify a supplied database; the automatic one derives from the sources."""
+        """Identify a supplied database, or the CLI that builds the automatic one.
+
+        The automatic database is keyed on the CodeQL executable (ADR-84):
+        a new CodeQL recomputes the flows of unchanged sources. The value
+        is a hash, so no local path enters the flow signature.
+        """
         if self.database is None:
-            return ""
+            executable = database.codeql_executable()
+            if executable is None:
+                return ""
+            identity = executable_identity(executable)
+            return "codeql-cli-" + hashlib.sha256(identity.encode()).hexdigest()[:24]
         return database.database_fingerprint(self.database)
 
     @contextmanager

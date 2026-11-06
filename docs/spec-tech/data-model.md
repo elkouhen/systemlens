@@ -913,7 +913,7 @@ AsyncAPI documents are materialized from module source trees after build-module
 discovery, but only from files the inventory kept: a document under a test
 source set or an excluded path is not a contract. A file that is not UTF-8,
 or not valid YAML, is skipped; a non-string mapping key, such as a YAML
-date, is stored as its text. Build-output paths (`target/` and `build/`) are excluded at inventory,
+date, is stored as its text. Build-output paths (`target/`, `build/` and `out/`) are excluded at inventory,
 discovery, and scanner boundaries, so generated artifacts never enter the
 snapshot even when a scanner is invoked outside the normal index pipeline.
 A build directory is rooted at a module: a directory with one of these names

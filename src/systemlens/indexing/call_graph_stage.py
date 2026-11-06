@@ -432,6 +432,10 @@ def run_call_graph_stage(
             if method.path not in eligible_paths:
                 continue
             name = _engine_method_name(method.qualified_method)
+            if name.startswith("<anonymous"):
+                # An anonymous class method has no identity (ADR-62): the
+                # join attributes its calls to the creating method.
+                continue
             ranges = ranges_by_name.setdefault((name, method.path), [])
             if any(start <= method.start_line <= end for start, end in ranges):
                 continue
