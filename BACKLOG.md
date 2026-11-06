@@ -1,190 +1,154 @@
-# Backlog: graph viewport navigation
+# Backlog: review of the source indexing and the Joern engine (2026-11-06)
 
-Status: `proposed` on 2026-11-01. No task starts before the product owner
-validates this backlog, reorders its lots if needed, and settles the
-decision of V3. V7 and V8 were requested and validated directly by the
-product owner, and are delivered. Owner: SystemLens implementer. Reviewers: product owner
-and UX maintainer. Baseline: commit `556c0f7`, viewport 1440 by 900.
+Status: `proposed` on 2026-11-06. No task starts before the product
+owner validates this backlog and reorders its lots if needed. Owner:
+SystemLens implementer. Reviewer: product owner. Baseline: commit
+`e21f8d0` (ADR-85 delivered), Joern 4.0.674, CodeQL 2.27.3, train-ticket
+at `~/examples/train-ticket` (411 Java files, 406 flows with every engine).
 
-This backlog replaces the delivered Explorer UX stream U1 to U8. Its
-content and delivery record remain in Git history at commit `556c0f7`.
-The items it carried over from earlier backlogs are restated in section 7
-so they stay visible.
+This backlog replaces the viewport backlog, now in
+[`docs/plans/graph-viewport-navigation.md`](docs/plans/graph-viewport-navigation.md)
+(V1 to V6 still `proposed`). The items carried over from earlier backlogs
+are restated in section 6. The previous file is in Git at `e21f8d0`.
 
-## 1. Problem
+## 1. Scope and method
 
-The product owner reports that viewport navigation does not work.
-Commit `556c0f7` fixed four pan and zoom defects in the export assets.
-The pages people open were not regenerated after that commit, so they
-still show the defects. Trackpad gestures and the call tree also behave
-differently from the contract or from user expectations.
+The review covers the `source` indexing (tree-sitter extraction, the
+symbol pass, the call-graph join and the flow materialisation), the
+engine seam delivered by ADR-85, and the new `joern` engine. CodeQL was
+reviewed on 2026-11-04 and is out of scope, except where a typed-engine
+rule applies to Joern as well.
 
-## 2. Baseline
+Every finding below was confirmed on the code and by one of: a probe test
+(kept in the session scratchpad, to become the regression test of the
+fix), a Joern run on a fixture, or a measure on train-ticket. Findings of
+the earlier reviews are not repeated; S9, S10, Q6, Q8 and Q11 still wait
+for ADR-81's lot 3.
 
-Measured on 2026-11-01 with Playwright in headless Chrome, WebKit, and
-Firefox. Each probe dragged the empty stage by 120 by 70 pixels and sent
-one wheel notch of 100 pixels.
+Severity values: `false exact`, `false edge`, `lost edge`, `false fact`,
+`lost fact`, `wrong label`, `crash`, `staleness`, `drift`, `missing test`.
 
-| Surface | Drag result | Wheel notch | Verdict |
+## 2. Root causes
+
+| # | Root cause | Findings |
+|---|---|---|
+| R1 | Joern's front end rewrites Lombok sources before building the graph, so its lines no longer name the indexed files | J1 |
+| R2 | A typed engine's rows enter the graph without the module scope the symbol pass applies (ADR-71), and without the overload the engine could not prove | J2, J3 |
+| R3 | The Joern adapter maps names and candidates without Joern's own conventions: local-class names carry a signature, and dropped candidates still count for dispatch; enum constant bodies and initializers (ADR-75 pending) are not methods | A2, A3, J4, J5 |
+| R9 | The timeout path keeps a join checkpoint that the resume path trusts | A1 |
+| R10 | The witness hop is modelled as a second search state instead of a label on the exact edge; engine methods are persisted without the ADR-62 rule | A4, A5, A6 |
+| R4 | Extractors resolve a name by the only candidate in the repository, or by a hand-written rule, where the source keeps the ambiguity | P5, P9 |
+| R5 | Inventory, projection and materialisers disagree on which files are part of the index | P1, P2, P7, P8 |
+| R6 | Materialisers trust every YAML or JSON file under a module | P3, P4 |
+| R7 | Endpoint ownership only knows method declarations | P6 |
+| R8 | ADR-85 left documentation pages and CLI paths without a test | C1, C2, C3, C4, C5 |
+
+## 3. Findings
+
+### 3.1 Joern engine
+
+Fixtures: `scratchpad/jfx` (dispatch shapes, three modules),
+`scratchpad/jfx2` (external interfaces, overloads), `scratchpad/jlomb`
+(Lombok). The Joern export of the cached train-ticket graph is
+`scratchpad/ttcache/export.json`.
+
+| ID | Finding | Where | Severity |
 |---|---|---|---|
-| Fresh export of the lab, current assets, three engines | 120 by 70 | 1.197 around the pointer | Conforms |
-| Live model `docs/models/simple-supermarket.html`, built 2026-10-31 | 96 by 63.9 | 1.062, pivot drifts | Old defects |
-| Lab POC `architecture-ia.html`, built 2026-10-31 | not measured | not measured | Predates `556c0f7` |
+| J1 | `joern-parse` runs `delombok` when a file imports Lombok and builds the graph on the rewritten source. Method and call lines then point into a file that does not exist: on train-ticket 108 of 410 files (every Lombok file) have methods beyond their last line; `auth.entity.User.getPassword` is reported at line 35, the field, while the index has it at 46-49; 59 engine-only methods duplicate an indexed method and 182 `exact` edges reach such a phantom, 70 of them with no edge to the real method. `--delombok-mode types-only` keeps the original lines and leaves generated accessors without a line, which the adapter already drops. `measured` | `engines/joern/engine.py:196` (`joern-parse` command); `extraction.py:_is_source` | false edge, lost edge |
+| J2 | Joern resolves a dynamic dispatch over every type in the projection, with no module scope. In `jfx`, `c.UseC.go` calling `Shape.area` gets `b.Circle.area` as a `possible` target although module `c` does not depend on `b`. The join adds engine rows unconditionally: `prefer_caller_module` applies only to synthetic implementations. The source engine keeps the ADR-71 scope; CodeQL has the same gap (C6, open). 0 such edges on train-ticket, whose modules do not share interfaces. | `extraction.py:_calls_of`; `code_flows.py:918-942` | false edge |
+| J3 | A call whose argument types Joern cannot resolve (`<unresolvedSignature>`) is dropped even when the owner, the name and the arity are resolved and name one source method: 7 `ContactsController` → `ContactsService` sites on train-ticket, where `HttpHeaders` is external. The symbol fallback adds them as `possible`, so 11 flows fall to `low` where `codeql` and `source` give `medium`. `measured` | `extraction.py:_resolved`, `_calls_of` | lost edge |
+| J4 | An enum constant body that overrides a method is not a Joern method: `Square.Kind.BIG.w()` is `exact` to `Kind.w` while `BIG` declares its own `w`. The source engine (K6) knows constant bodies. | `extraction.py:_calls_of`; Joern export of `jfx` | false exact |
+| J5 | Calls made by field initializers and constructors are reported by Joern under `Owner.<init>`, a name the index does not have while ADR-75 stays proposed; the adapter also drops every `<init>` callee. When ADR-75 lands, the adapter must keep both. No edge is wrong today. | `extraction.py:_INITIALIZERS` | lost edge (deferred) |
+| J6 | The availability message says `brew install coreutils` when `greadlink` is missing; on this machine coreutils was installed but not linked, and `brew link coreutils` was the fix. | `engines/joern/declaration.py:19` | drift |
 
-Other facts found by the same probes and by reading the assets:
+Checked and found sound: `super` calls are `exact`; a call on an
+external interface (`Runnable`, `UserDetailsService`) reaches only the
+external stub, so the fallback keeps ADR-71's `possible`; `over(1)` with
+`over(long)` and `over(Integer)` picks `over(long)` as Java does; nested
+types spelled `Outer$Inner` join through the `$` normalisation; lambda
+and anonymous-class callers are attributed to the enclosing method by
+line (ADR-62); the cache fingerprint covers the projection and the Joern
+version; a timeout keeps the index partial.
 
-| Fact | Where | Consequence |
+### 3.2 Source extraction and inventory
+
+Probe tests: `scratchpad/reviewB/test_probes.py` (P1 to P7) and
+`test_probes2.py` (P8, P9); each asserts the current, defective
+behaviour and becomes the regression test once inverted.
+
+| ID | Finding | Where | Severity |
+|---|---|---|---|
+| P1 | Mongo `reads collection` and `writes collection` relations persist a module-relative evidence path (`src/main/java/...`) while the data operations of the same call are root-relative; `--root-path` then opens a file that does not exist for every nested module (invariant 1). | `indexing/relations.py:167-182`; `discovery/build/modules.py:470`, `:741-744` | false fact |
+| P2 | AsyncAPI documents under `src/test/**`, or under an excluded path, become persisted contracts: the materialiser walks every module tree without the inventory's exclusions. | `indexing/materializers.py:47-62` | false fact |
+| P3 | A non-UTF-8 YAML or JSON file anywhere under a module aborts the whole index: `UnicodeDecodeError` is not an `OSError`. | `indexing/materializers.py:29`, `:54` | crash |
+| P4 | A YAML date key in an AsyncAPI or OpenAPI document (`2024-01-01:`) raises `TypeError` in `json.dumps`, whose `default=str` does not apply to keys. | `indexing/materializers.py:37`, `:61` | crash |
+| P5 | The Kafka DTO closure binds a message type to the only same-named class in the repository even when the publisher imports a different, external qualified name: `com.external.OrderEvent` becomes `com.a.OrderEvent` with its fields. | `indexing/dto_inventory.py:222-234` | false fact |
+| P6 | A class-level `@KafkaListener` with `@KafkaHandler` methods yields a consume endpoint no `IntegrationMethod` owns: the consumer is in the topology but starts no flow. | `indexing/integration_methods.py:224-246`, `:280-296`; `scanner/kafka_ast.py:627-650` | lost fact |
+| P7 | A Java file under `module/out/` is hashed and extracted by the inventory but never copied to an engine projection, which treats `out` as a build directory. | `indexing/file_inventory.py:70-84`; `indexing/source_projection.py:41-57` | lost fact |
+| P8 | A change to a config-server property file in another module (`configurations/<app>.yml`) rescans only that module, so a `${...}` topic resolved through it stays stale until `--full`. | `indexing/file_inventory.py:228-245`; `scanner/_spring_properties.py:139-155` | staleness |
+| P9 | Spring Data REST default collection paths come from a three-rule pluraliser: `Child` → `/childs`, `Analysis` → `/analysises`, where Spring serves `/children` and `/analyses`. | `scanner/rest_mvc.py:624-634`, `:697-703` | false fact |
+
+### 3.3 Call-graph join and flow materialisation
+
+Probe tests: `scratchpad/reviewA/test_review_a.py` (A1),
+`test_review_b.py` (A3, A4) and the `joern_probe*.py` runs through
+`index_repo` with Joern 4.0.674 (A2, A3).
+
+| ID | Finding | Where | Severity |
+|---|---|---|---|
+| A1 | An engine timeout followed by `--resume-call-graph-join` persists the flows of the partial call set as `complete`, with the flow signature set: the timeout path writes the join offset at the total and keeps the join signature, so the resume joins nothing and the full edge set is persisted next to the partial flows. A timed-out run must leave no resumable checkpoint. | `indexing/call_graph_stage.py:752-759`, `:812`, `:847-857`; `indexing/service.py:312-332` | staleness |
+| A2 | Joern names a local class after the enclosing method's full name with its signature (`App.create:void().Local.go:void()`); the adapter cuts at the first `:`, so `Local.go` becomes `App.create`. The join's same-file range fallback then adds a self-edge `OrderController.create → OrderController.create` and a second flow with status `cycle`. | `engines/joern/extraction.py:50-56`; `indexing/code_flows.py:793-798` | false edge |
+| A3 | The Joern adapter decides `exact` after dropping the anonymous-class and external candidates Joern listed: `port.run()` with `Adapter implements Port` and an anonymous `new Port() {...}` gives `Adapter.run` `exact`, where ADR-70 and ADR-81 keep it `possible`. The symbol fallback cannot correct an `exact` site. | `engines/joern/extraction.py:197-223` | false exact |
+| A4 | The witness expansion adds a second `possible`, inferred edge to the target the engine already resolved `exact` at the same site, for typed engines and the source witness alike. The forward search keys its visited set by `(target, possible)`, so every method below an interface call is explored twice: 9 transitions instead of 5 on a four-hop chain. `tests/test_code_flows.py:2725` asserts the three-edge shape, so the fix changes a test. | `indexing/code_flows.py:964-978`, `:1001-1004`, `:1664-1669` | performance |
+| A5 | `persist_call_graph` stores an engine's anonymous-class methods (`<anonymous class>.run`) as placeholder rows, although ADR-62 gives them no identity; the join itself attributes their calls to the creating method. | `indexing/call_graph_stage.py:430-448` | wrong label |
+| A6 | The automatic CodeQL database puts no CodeQL version in the flow signature (`input_fingerprint` is empty), while ADR-84 keys the database cache on it: an upgraded CodeQL recomputes nothing until a source changes. Effect on results not measured. | `engines/codeql/engine.py:107-111`; `indexing/service.py:304-307` | staleness |
+
+Checked and found sound: flow labels follow the ADR rules on every edge
+path traced; `_deduplicate_code_flows` and the flow identifiers are
+order-independent; the join and the search are linear in calls and
+edges; CodeQL attaches anonymous and nested-lambda callers to the
+creating method (ADR-62).
+
+### 3.4 Engine seam (ADR-85)
+
+| ID | Finding | Where | Severity |
+|---|---|---|---|
+| C1 | The documentation site and the companion skill page still show `--codeql-database` and link to a heading that no longer exists. | `docs/index.html:184-185`; `../systemlens-skill/docs/index.html:38` | drift |
+| C2 | No test exercises the CLI side of `--engine-option` (split, unknown option, wrong value, option of another engine), `--engine-database` on an engine without a database option, or `init --profile joern`; all behave correctly by hand. | `tests/` | missing test |
+| C3 | `analyze call-edge --engine-database` swallows a `ConfigError` and runs with default settings, so a broken `config.yml` yields "`source` n'en accepte pas" instead of the configuration error. | `delivery/cli.py:162-181` | drift |
+| C4 | `analysis.engines: []` loads as an empty section; `compare-engines --engines` lists `none` among its values although it refuses it; two error messages end with a double period. | `infrastructure/config.py:127`; `delivery/cli.py:1299`; `callgraph/engine.py:112` | drift |
+| C5 | `analyze call-edge` recommends `systemlens doctor` for an unavailable engine, but `doctor` checks no engine availability. | `application/call_edge_diagnostic.py:375`; `application/doctor.py` | drift |
+
+Flagged, not a defect: `index --call-graph-engine joern` with Joern
+missing announces the fallback to `source` and exits 0 (ADR-61). The
+product owner may want the explicit choice to fail instead, as ADR-83
+does for a supplied database; that is a decision record, not a fix.
+
+## 4. Proposed lots
+
+| Lot | Findings | Why this order |
 |---|---|---|
-| A horizontal wheel delta does nothing, and a vertical two-finger trackpad scroll zooms instead of panning. | `handleGraphWheel` in `src/systemlens/render/assets/graph/10-rebuild.js` | On a Mac trackpad the graph cannot be panned without a click and drag. |
-| One wheel notch zooms the call tree by 1.06 while the Architecture graph zooms by 1.2. | wheel handler in `55-code-flows.js` | The two graph surfaces react differently to the same gesture. |
-| A drag that starts on a type chip of the toolbar toggles the chip's filter when released. | `.graph-type-chip` handler, `20-controls.js` | A missed pan hides a node type without warning. |
-| A window resize that changes the toolbar height refits the graph and drops the user's pan and zoom. | `refreshToolbarReservation` in `60-bootstrap.js` | Navigation state is lost on resize; the contract protects it only for the details panel. |
-| No test or check compares the checked-in live model with the current assets. | `tests/`, `.github/workflows/pages.yml` | An asset fix can ship while the public page keeps the defect. |
+| 1 | J1, A2, A3, A1, P3, P4 | Joern fails on Lombok projects and invents an edge and an `exact`; a resume persists stale flows as complete; two inputs crash the index. |
+| 2 | P1, P2, P5, P9, P6 | Facts that are wrong or missing in the persisted snapshot. |
+| 3 | J3, J2, J4, A4 | Typed-engine precision and the doubled search; J2 shares its fix with C6 of the dispatch-scope plan. |
+| 4 | P7, P8, A5, A6, C3, C4, C5, J6 | Consistency of inventory, freshness, persisted methods and messages. |
+| 5 | C1, C2 | Documentation and test debt of ADR-85. |
+| 6 | J5 | Waits for ADR-75. |
 
-Not verified: real trackpad and pinch hardware. Headless browsers send
-synthetic wheel events, so V3 needs a manual check on a Mac trackpad.
+Every fix leaves a regression test in the same commit, built from its
+probe or fixture. J1's acceptance: on train-ticket, no Joern method line
+beyond its file's last line, no engine-only method sharing a path and
+name with an indexed method, and the J3 count unchanged.
 
-## 3. Invariants
+## 5. Delivery record
 
-1. A visual rule changes in `docs/UX-UI.md` first, then in the assets,
-   then in `tests/test_browser_export.py`, in the same commit.
-2. No task changes persisted facts, identifiers, or the export JSON.
-3. Every fixed defect leaves a regression test in the same commit.
-4. The deferred concerns of `AGENTS.md` still apply: no CDN, ARIA, or
-   keyboard-navigation work.
-5. Regenerated exports come from a copy of the lab application with a
-   fresh index; the lab's own index is never reused.
-
-## 4. Tasks
-
-### V1. Regenerate the published exports
-
-Rebuild the lab POC export with the current assets, then copy it to the
-live model, as `AGENTS.md` requires.
-
-- Files: `../systemlens-observability-lab/apps/supermarket-demo/architecture-ia.html`,
-  `docs/models/simple-supermarket.html`.
-- Precondition: the lab checkout has uncommitted changes to
-  `architecture-ia.html` and `.systemlens/config.yml`. The product owner
-  decides whether to keep or discard them before the file is overwritten.
-- Acceptance: the drag and wheel probes of section 2 give 120 by 70 and
-  about 1.2 around the pointer on the live model in Chrome and WebKit.
-
-### V2. Detect a stale live model
-
-Fail the default suite when the live model was built from older assets.
-
-- Files: `tests/test_spec_conformance.py` or a new test next to it;
-  optionally `src/systemlens/render/html_export.py` to embed an asset
-  fingerprint in a `meta` tag.
-- The test recomputes the fingerprint of the current assets and compares
-  it with the one in `docs/models/simple-supermarket.html`.
-- Acceptance: the test fails on the 2026-10-31 live model and passes
-  after V1.
-
-### V3. Trackpad pan and pinch zoom
-
-Decision first: record in `docs/PDR.md` how a two-finger scroll behaves.
-The proposed rule is that a wheel event with `ctrlKey` (pinch) or with a
-whole-line delta zooms, and any other pixel-delta event pans by its
-`deltaX` and `deltaY`. The alternative keeps every vertical wheel as zoom
-and only adds horizontal pan.
-
-- Files: `docs/PDR.md`, `docs/UX-UI.md` ("Camera and graph interaction"),
-  `10-rebuild.js`, `55-code-flows.js`, `tests/test_browser_export.py`.
-- Risk: a mouse wheel and a trackpad scroll both send pixel deltas in
-  some browsers. The rule must name the fallback when the input device
-  cannot be told apart.
-- Acceptance: a browser test sends a horizontal wheel and a pinch wheel
-  and asserts a pan and a zoom; a manual check on a Mac trackpad is
-  recorded, else the task is `blocked: no trackpad check`.
-
-### V4. One zoom step for both graph surfaces
-
-Align the call-tree wheel step with the Architecture graph step.
-
-- Files: `55-code-flows.js`, `docs/UX-UI.md` ("Selected call tree"),
-  `tests/test_browser_export.py`.
-- Acceptance: one wheel notch scales the call tree by the same factor as
-  the Architecture graph, within 0.2 percent, around the pointer.
-
-### V5. A drag never toggles a toolbar control
-
-Treat a pointer gesture that moved more than three pixels as a drag on
-the type chips, as the cards already do.
-
-- Files: `20-controls.js`, `tests/test_browser_export.py`.
-- Acceptance: a drag that starts on a chip leaves every filter unchanged.
-
-### V6. Keep the camera on window resize
-
-Refit only when the graph was never moved by the user; otherwise keep
-the graph point at the workspace centre fixed.
-
-- Files: `60-bootstrap.js`, `docs/UX-UI.md` ("Camera and graph
-  interaction"), `tests/test_browser_export.py`.
-- Acceptance: after a pan, a resize from 1440 to 1300 pixels keeps the
-  card under the workspace centre within two pixels; an untouched graph
-  still refits.
-
-### V7. Keep the minimap on screen once the user navigates
-
-The minimap hid whenever every node centre was back inside the graph area,
-so it blinked during a pan and vanished on small graphs. PDR-6 records the
-new rule: it stays visible after any user pan or zoom until the next fit.
-
-- Files: `docs/PDR.md`, `docs/UX-UI.md`, `00-core.js`, `10-rebuild.js`,
-  `20-controls.js`, `55-code-flows.js`, `60-bootstrap.js`,
-  `tests/test_browser_export.py`.
-- Acceptance: a browser test pans a nine-node graph back and forth and
-  asserts the minimap never hides, then hides after `Tout le graphe`.
-- Status: see the delivery record below.
-
-### V8. Upgrade Sigma to version 4 and remove libavoid
-
-The export used Sigma 2.4.0, whose camera settings are ignored, and loaded
-an unversioned libavoid module that no code path called. ADR-69 records the
-upgrade and the removal.
-
-- Files: `docs/ADR.md`, `docs/spec-tech/graph-layout.md`, `graph.html`,
-  `00-core.js`, `10-rebuild.js`, `50-paths.js`,
-  `tests/test_browser_export.py`.
-- Acceptance: the browser suite passes on Sigma 4; pan, zoom, clicks,
-  right drag, and double click behave as before in Chrome, WebKit, and
-  Firefox; no request reaches esm.sh for libavoid.
-
-## 5. Delivery lots and validation
-
-| Lot | Tasks | Why this order |
-|---|---|---|
-| 1 | V1, V2 | Ships the existing fix to the pages people open, and keeps it shipped. |
-| 2 | V4, V5 | Local defects without a contract decision. |
-| 3 | V3, V6 | Change a contract rule; V3 needs its PDR entry first. |
-| Fix | V7, V8 | Requested directly by the product owner on 2026-11-01. |
-
-Each task runs:
-
-```bash
-uv run ruff check src tests
-uv run pytest tests/test_render.py tests/test_spec_conformance.py
-uv run pytest -m slow tests/test_browser_export.py
-```
-
-Each lot closes with `uv run mypy`, `uv run pytest`, and
-`uv run python scripts/check_companion_contracts.py`.
-
-## 6. Delivery record
-
-| ID | Outcome |
+| Item | Status |
 |---|---|
-| V7 | Delivered on 2026-11-01. A user pan, wheel zoom, zoom control, or minimap move sets a flag per surface that keeps the minimap visible; every fit clears it. PDR-6 and `docs/UX-UI.md` record the rule. Verified by `test_minimap_stays_visible_once_the_user_navigates`, which fails on the previous assets; the browser suite (49 tests) and the other slow tests passed with Chrome; default suite, ruff, and mypy clean. A slow pan on a fresh lab export kept the minimap on screen at every step. Deviation: none. The published live model still needs V1 to show the fix. |
-| V8 | Delivered on 2026-11-01. Sigma 4.0.4 from jsDelivr and graphology 0.26.0 from cdnjs replace Sigma 2.4.0 and graphology 0.25.4. One square node primitive and one straight arrow edge primitive replace the custom WebGL programs; reducers return `visibility`. Sigma's gestures are cancelled at its mouse captor because its camera flags now gate `setState`. libavoid, its WASM loader, and its dead obstacle code are removed. Verified by the browser suite (49 tests) and all 57 slow tests with Chrome, the default suite, ruff, mypy, and the companion contract check. Cards and symbols renders of the lab export are pixel-identical to Sigma 2.4. Deviation: a defect fix, because the pan controller captured the pointer and a click on the empty stage never cleared the selection; `test_plain_click_selects_a_node_and_the_hint_names_the_gestures` now covers it and fails on the previous assets. |
+| Lots 1 to 6 | `proposed` |
 
-## 7. Items carried over from earlier backlogs
+## 6. Items carried over from earlier backlogs
 
-Their context lives in Git history before `fdac92e`. The last two rows
-moved here from the "Planned" scope of `docs/PRD.md` on 2026-11-01; the PRD
-keeps them as later requirements. Statuses follow
+Their context lives in Git history before `fdac92e`. Statuses follow
 `docs/process/delivery-practices.md`.
 
 | Item | Status |
@@ -197,9 +161,10 @@ keeps them as later requirements. Statuses follow
 | Show observed API, topic, data, and S3 activity beside the static architecture, conservatively and without inventing a source mapping. | `proposed` |
 | Give runtime hotspots an explicit Kubernetes capacity context where a verified workload-to-microservice match exists. The matcher prefers an exact name, then accepts a unique token-bounded microservice-name inclusion in a Deployment or StatefulSet name; an ambiguous match stays unresolved. | `proposed` |
 
-## 8. Archived backlogs
+## 7. Archived backlogs
 
 | Document | Purpose |
 |---|---|
+| [Graph viewport navigation](docs/plans/graph-viewport-navigation.md) | V1 to V6 `proposed`, V7 and V8 delivered. |
 | [Archived consistency backlog](BACKLOG.consistency-diagnostics.md) | Historical diagnostic rendering tasks. |
 | [Earlier backlog](BACKLOG.previous.md) | Historical index of data-operation work. |

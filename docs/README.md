@@ -29,7 +29,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 |---|---|
 | [README.md](../README.md) | Installing SystemLens or finding the first CLI workflow. |
 | [AGENTS.md](../AGENTS.md) | Applying repository rules, documentation ownership, or validation gates. |
-| [BACKLOG.md](../BACKLOG.md) | Working on graph viewport navigation, picking up a carried-over runtime or review-aid item, or finding archived plans. |
+| [BACKLOG.md](../BACKLOG.md) | Fixing a defect of the 2026-11-06 indexing and Joern review, picking up a carried-over runtime or review-aid item, or finding archived plans. |
 | [BACKLOG.consistency-diagnostics.md](../BACKLOG.consistency-diagnostics.md) | Consulting the archived diagnostic rendering tasks and their linked plans. |
 | [BACKLOG.previous.md](../BACKLOG.previous.md) | Consulting the historical root backlog preserved from Git; use its linked plans for current status. |
 
@@ -91,6 +91,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/plans/indexing-case-analysis.md](plans/indexing-case-analysis.md) | Proposed list of indexing cases by fact and axis, with their measured status. |
 | [docs/plans/call-graph-coverage.md](plans/call-graph-coverage.md) | Proposed list of call-graph dependency shapes, their status, and the plan to cover them. |
 | [docs/plans/call-graph-external-dispatch-scope.md](plans/call-graph-external-dispatch-scope.md) | Proposed plan to scope external-interface dispatch in the source engine by module dependencies. |
+| [docs/plans/graph-viewport-navigation.md](plans/graph-viewport-navigation.md) | Proposed viewport navigation fixes V1 to V6; V7 and V8 delivered. |
 | [docs/plans/resource-inspector-uniformisation.md](plans/resource-inspector-uniformisation.md) | Delivered plan (PDR-10) for one `Inspecter` behaviour across catalogue resource kinds. |
 | [docs/prompts/full-index-codeql-flow-descriptions.md](prompts/full-index-codeql-flow-descriptions.md) | Asking an agent to index with CodeQL and describe every flow. |
 | [docs/archive/layered-view.md](archive/layered-view.md) | Investigating historical layer and module rendering rules. |

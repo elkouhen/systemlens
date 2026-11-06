@@ -1,0 +1,175 @@
+# Plan: graph viewport navigation (V1 to V8)
+
+Moved on 2026-11-06 from the root `BACKLOG.md`, which now holds the
+indexing and Joern review backlog. V1 to V6 are still `proposed`: no task
+starts before the product owner validates them. V7 and V8 are delivered.
+The original file, with its carried-over items, is in Git at `e21f8d0`.
+
+## 1. Problem
+
+The product owner reports that viewport navigation does not work.
+Commit `556c0f7` fixed four pan and zoom defects in the export assets.
+The pages people open were not regenerated after that commit, so they
+still show the defects. Trackpad gestures and the call tree also behave
+differently from the contract or from user expectations.
+
+## 2. Baseline
+
+Measured on 2026-11-01 with Playwright in headless Chrome, WebKit, and
+Firefox. Each probe dragged the empty stage by 120 by 70 pixels and sent
+one wheel notch of 100 pixels.
+
+| Surface | Drag result | Wheel notch | Verdict |
+|---|---|---|---|
+| Fresh export of the lab, current assets, three engines | 120 by 70 | 1.197 around the pointer | Conforms |
+| Live model `docs/models/simple-supermarket.html`, built 2026-10-31 | 96 by 63.9 | 1.062, pivot drifts | Old defects |
+| Lab POC `architecture-ia.html`, built 2026-10-31 | not measured | not measured | Predates `556c0f7` |
+
+Other facts found by the same probes and by reading the assets:
+
+| Fact | Where | Consequence |
+|---|---|---|
+| A horizontal wheel delta does nothing, and a vertical two-finger trackpad scroll zooms instead of panning. | `handleGraphWheel` in `src/systemlens/render/assets/graph/10-rebuild.js` | On a Mac trackpad the graph cannot be panned without a click and drag. |
+| One wheel notch zooms the call tree by 1.06 while the Architecture graph zooms by 1.2. | wheel handler in `55-code-flows.js` | The two graph surfaces react differently to the same gesture. |
+| A drag that starts on a type chip of the toolbar toggles the chip's filter when released. | `.graph-type-chip` handler, `20-controls.js` | A missed pan hides a node type without warning. |
+| A window resize that changes the toolbar height refits the graph and drops the user's pan and zoom. | `refreshToolbarReservation` in `60-bootstrap.js` | Navigation state is lost on resize; the contract protects it only for the details panel. |
+| No test or check compares the checked-in live model with the current assets. | `tests/`, `.github/workflows/pages.yml` | An asset fix can ship while the public page keeps the defect. |
+
+Not verified: real trackpad and pinch hardware. Headless browsers send
+synthetic wheel events, so V3 needs a manual check on a Mac trackpad.
+
+## 3. Invariants
+
+1. A visual rule changes in `docs/UX-UI.md` first, then in the assets,
+   then in `tests/test_browser_export.py`, in the same commit.
+2. No task changes persisted facts, identifiers, or the export JSON.
+3. Every fixed defect leaves a regression test in the same commit.
+4. The deferred concerns of `AGENTS.md` still apply: no CDN, ARIA, or
+   keyboard-navigation work.
+5. Regenerated exports come from a copy of the lab application with a
+   fresh index; the lab's own index is never reused.
+
+## 4. Tasks
+
+### V1. Regenerate the published exports
+
+Rebuild the lab POC export with the current assets, then copy it to the
+live model, as `AGENTS.md` requires.
+
+- Files: `../systemlens-observability-lab/apps/supermarket-demo/architecture-ia.html`,
+  `docs/models/simple-supermarket.html`.
+- Precondition: the lab checkout has uncommitted changes to
+  `architecture-ia.html` and `.systemlens/config.yml`. The product owner
+  decides whether to keep or discard them before the file is overwritten.
+- Acceptance: the drag and wheel probes of section 2 give 120 by 70 and
+  about 1.2 around the pointer on the live model in Chrome and WebKit.
+
+### V2. Detect a stale live model
+
+Fail the default suite when the live model was built from older assets.
+
+- Files: `tests/test_spec_conformance.py` or a new test next to it;
+  optionally `src/systemlens/render/html_export.py` to embed an asset
+  fingerprint in a `meta` tag.
+- The test recomputes the fingerprint of the current assets and compares
+  it with the one in `docs/models/simple-supermarket.html`.
+- Acceptance: the test fails on the 2026-10-31 live model and passes
+  after V1.
+
+### V3. Trackpad pan and pinch zoom
+
+Decision first: record in `docs/PDR.md` how a two-finger scroll behaves.
+The proposed rule is that a wheel event with `ctrlKey` (pinch) or with a
+whole-line delta zooms, and any other pixel-delta event pans by its
+`deltaX` and `deltaY`. The alternative keeps every vertical wheel as zoom
+and only adds horizontal pan.
+
+- Files: `docs/PDR.md`, `docs/UX-UI.md` ("Camera and graph interaction"),
+  `10-rebuild.js`, `55-code-flows.js`, `tests/test_browser_export.py`.
+- Risk: a mouse wheel and a trackpad scroll both send pixel deltas in
+  some browsers. The rule must name the fallback when the input device
+  cannot be told apart.
+- Acceptance: a browser test sends a horizontal wheel and a pinch wheel
+  and asserts a pan and a zoom; a manual check on a Mac trackpad is
+  recorded, else the task is `blocked: no trackpad check`.
+
+### V4. One zoom step for both graph surfaces
+
+Align the call-tree wheel step with the Architecture graph step.
+
+- Files: `55-code-flows.js`, `docs/UX-UI.md` ("Selected call tree"),
+  `tests/test_browser_export.py`.
+- Acceptance: one wheel notch scales the call tree by the same factor as
+  the Architecture graph, within 0.2 percent, around the pointer.
+
+### V5. A drag never toggles a toolbar control
+
+Treat a pointer gesture that moved more than three pixels as a drag on
+the type chips, as the cards already do.
+
+- Files: `20-controls.js`, `tests/test_browser_export.py`.
+- Acceptance: a drag that starts on a chip leaves every filter unchanged.
+
+### V6. Keep the camera on window resize
+
+Refit only when the graph was never moved by the user; otherwise keep
+the graph point at the workspace centre fixed.
+
+- Files: `60-bootstrap.js`, `docs/UX-UI.md` ("Camera and graph
+  interaction"), `tests/test_browser_export.py`.
+- Acceptance: after a pan, a resize from 1440 to 1300 pixels keeps the
+  card under the workspace centre within two pixels; an untouched graph
+  still refits.
+
+### V7. Keep the minimap on screen once the user navigates
+
+The minimap hid whenever every node centre was back inside the graph area,
+so it blinked during a pan and vanished on small graphs. PDR-6 records the
+new rule: it stays visible after any user pan or zoom until the next fit.
+
+- Files: `docs/PDR.md`, `docs/UX-UI.md`, `00-core.js`, `10-rebuild.js`,
+  `20-controls.js`, `55-code-flows.js`, `60-bootstrap.js`,
+  `tests/test_browser_export.py`.
+- Acceptance: a browser test pans a nine-node graph back and forth and
+  asserts the minimap never hides, then hides after `Tout le graphe`.
+- Status: see the delivery record below.
+
+### V8. Upgrade Sigma to version 4 and remove libavoid
+
+The export used Sigma 2.4.0, whose camera settings are ignored, and loaded
+an unversioned libavoid module that no code path called. ADR-69 records the
+upgrade and the removal.
+
+- Files: `docs/ADR.md`, `docs/spec-tech/graph-layout.md`, `graph.html`,
+  `00-core.js`, `10-rebuild.js`, `50-paths.js`,
+  `tests/test_browser_export.py`.
+- Acceptance: the browser suite passes on Sigma 4; pan, zoom, clicks,
+  right drag, and double click behave as before in Chrome, WebKit, and
+  Firefox; no request reaches esm.sh for libavoid.
+
+## 5. Delivery lots and validation
+
+| Lot | Tasks | Why this order |
+|---|---|---|
+| 1 | V1, V2 | Ships the existing fix to the pages people open, and keeps it shipped. |
+| 2 | V4, V5 | Local defects without a contract decision. |
+| 3 | V3, V6 | Change a contract rule; V3 needs its PDR entry first. |
+| Fix | V7, V8 | Requested directly by the product owner on 2026-11-01. |
+
+Each task runs:
+
+```bash
+uv run ruff check src tests
+uv run pytest tests/test_render.py tests/test_spec_conformance.py
+uv run pytest -m slow tests/test_browser_export.py
+```
+
+Each lot closes with `uv run mypy`, `uv run pytest`, and
+`uv run python scripts/check_companion_contracts.py`.
+
+## 6. Delivery record
+
+| ID | Outcome |
+|---|---|
+| V7 | Delivered on 2026-11-01. A user pan, wheel zoom, zoom control, or minimap move sets a flag per surface that keeps the minimap visible; every fit clears it. PDR-6 and `docs/UX-UI.md` record the rule. Verified by `test_minimap_stays_visible_once_the_user_navigates`, which fails on the previous assets; the browser suite (49 tests) and the other slow tests passed with Chrome; default suite, ruff, and mypy clean. A slow pan on a fresh lab export kept the minimap on screen at every step. Deviation: none. The published live model still needs V1 to show the fix. |
+| V8 | Delivered on 2026-11-01. Sigma 4.0.4 from jsDelivr and graphology 0.26.0 from cdnjs replace Sigma 2.4.0 and graphology 0.25.4. One square node primitive and one straight arrow edge primitive replace the custom WebGL programs; reducers return `visibility`. Sigma's gestures are cancelled at its mouse captor because its camera flags now gate `setState`. libavoid, its WASM loader, and its dead obstacle code are removed. Verified by the browser suite (49 tests) and all 57 slow tests with Chrome, the default suite, ruff, mypy, and the companion contract check. Cards and symbols renders of the lab export are pixel-identical to Sigma 2.4. Deviation: a defect fix, because the pan controller captured the pointer and a click on the empty stage never cleared the selection; `test_plain_click_selects_a_node_and_the_hint_names_the_gestures` now covers it and fails on the previous assets. |
