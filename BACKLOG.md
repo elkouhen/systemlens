@@ -1,7 +1,7 @@
 # Backlog: review of the source indexing and the Joern engine (2026-11-06)
 
-Status: `proposed` on 2026-11-06. No task starts before the product
-owner validates this backlog and reorders its lots if needed. Owner:
+Status: lots 1 to 5 validated on 2026-11-06 by the product owner, in
+the proposed order; lot 6 waits for ADR-75. Owner:
 SystemLens implementer. Reviewer: product owner. Baseline: commit
 `e21f8d0` (ADR-85 delivered), Joern 4.0.674, CodeQL 2.27.3, train-ticket
 at `~/examples/train-ticket` (411 Java files, 406 flows with every engine).
