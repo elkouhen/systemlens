@@ -15,7 +15,15 @@ source-to-source calls and never guesses a target (ADR-61, ADR-85):
   ``exact`` and the abstract declaration the call names stays a
   ``possible`` witness; several concrete bodies are all ``possible``. An
   abstract method the call does not name, such as the interface method a
-  concrete target overrides, is no target.
+  concrete target overrides, is no target;
+- a concrete body Joern links but the adapter cannot report, in an
+  anonymous class, a lambda or a library, still counts as a candidate:
+  every source target of that call stays ``possible`` (ADR-70, ADR-81).
+
+Joern names a method of a local class after the enclosing method and its
+signature (``pkg.App.create:void().Local.go:void()``); the adapter drops
+every signature and the enclosing method name, which gives the index's
+spelling ``pkg.App.Local.go``.
 
 A call made inside a lambda or an anonymous class is reported with an
 ``<anonymous`` caller, which the join attributes to the enclosing indexed
@@ -31,6 +39,7 @@ from systemlens.callgraph.model import CallGraphError, MethodCall, SourceMethod
 SCHEMA = "systemlens-joern-v1"
 _UNRESOLVED = ("<unresolvedNamespace>", "<unresolvedSignature>", "<unknownFullName>")
 _ANONYMOUS_TYPE = re.compile(r"\$\d+$")
+_SIGNATURE = re.compile(r":[^:()]*\([^()]*\)")
 _INITIALIZERS = ("<init>", "<clinit>")
 
 
@@ -48,8 +57,8 @@ class _Method:
 
     @property
     def qualified(self) -> str:
-        """``pkg.Type.method`` without Joern's ``:signature`` suffix."""
-        return self.full_name.split(":", 1)[0]
+        """``pkg.Type.method`` without Joern's ``:signature`` suffixes."""
+        return _qualified(self.full_name)
 
     @property
     def simple_name(self) -> str:
@@ -72,9 +81,24 @@ class _Method:
         return _parameter_types(self.full_name)
 
 
+def _qualified(full_name: str) -> str:
+    """The index's name of a Joern method full name.
+
+    ``pkg.T.m:void()`` is ``pkg.T.m``. A local class declared in ``m`` is
+    spelled ``pkg.T.m:void().Local.go:void()`` by Joern and
+    ``pkg.T.Local.go`` by the index: each signature but the last closes an
+    enclosing method, whose name is dropped with it.
+    """
+    pieces = _SIGNATURE.split(full_name)
+    if len(pieces) == 1:
+        return full_name.split(":", 1)[0]
+    enclosing = [piece.rsplit(".", 1)[0] for piece in pieces[:-2]]
+    return "".join([*enclosing, pieces[-2], pieces[-1]])
+
+
 def _parameter_types(full_name: str) -> tuple[str, ...] | None:
     """Split ``pkg.T.m:ret(a,b)`` into ``("a", "b")``; ``None`` when unknown."""
-    _, separator, signature = full_name.partition(":")
+    _, separator, signature = full_name.rpartition(":")
     if not separator or any(marker in signature for marker in _UNRESOLVED):
         return None
     open_index = signature.find("(")
@@ -197,8 +221,9 @@ def _calls_of(row: Mapping[str, object], indexed: frozenset[str]) -> list[Method
     if not _is_source(caller, indexed):
         return []
     target = str(row["target"])
+    linked = [_method(item) for item in _callee_rows(row)]
     callees = [
-        method for method in (_method(item) for item in _callee_rows(row))
+        method for method in linked
         if _is_source(method, indexed) and not method.anonymous and not method.initializer
         # An abstract declaration is a witness only when the call names it:
         # Joern also links a call on a concrete receiver to the interface
@@ -208,10 +233,20 @@ def _calls_of(row: Mapping[str, object], indexed: frozenset[str]) -> list[Method
     if not callees:
         return []
     concrete = [method for method in callees if not method.abstract]
+    # A body the output cannot carry (anonymous class, lambda, library)
+    # still receives the call at run time: no source target is then the
+    # only body, so none is exact (ADR-70, ADR-81).
+    unreported = any(
+        not method.abstract and not method.initializer
+        and (method.external or method.anonymous)
+        for method in linked
+    )
     caller_name = "<anonymous>" if caller.anonymous else caller.qualified
     caller_types = None if caller.anonymous else caller.parameter_types
 
     def confidence(method: _Method) -> str:
+        if unreported:
+            return "possible"
         if len(callees) == 1:
             return "possible" if method.abstract else "exact"
         if len(concrete) == 1 and method is concrete[0]:

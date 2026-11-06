@@ -142,9 +142,20 @@ name with an indexed method, and the J3 count unchanged.
 
 ## 5. Delivery record
 
-| Item | Status |
-|---|---|
-| Lots 1 to 6 | `proposed` |
+Each lot is one commit on `main`, named in the Commit column by its
+subject until the next lot records its hash. Test files are under
+`tests/`.
+
+| Item | Status | Commit | Regression test | Deviation |
+|---|---|---|---|---|
+| J1 | `delivered` | Lot 1 | `test_joern_engine.py::test_joern_parse_keeps_lombok_sources_and_rebuilds_an_older_cache`, `::test_joern_lines_name_the_written_lombok_source` (slow) | Train-ticket: 0 method or call lines beyond their file, 0 phantom methods, 406 flows, J3 still 7 edges; engine calls 6314 to 1534 (Lombok accessors have no line). |
+| A2 | `delivered` | Lot 1 | `test_joern_engine.py::test_a_local_class_method_takes_the_index_spelling`, `::test_a_local_class_call_joins_its_method_without_a_self_edge` (slow) | None. |
+| A3 | `delivered` | Lot 1 | `test_joern_engine.py::test_a_dropped_anonymous_or_library_candidate_keeps_the_dispatch_possible` | No edge changed on train-ticket. |
+| A1 | `delivered` | Lot 1 | `test_call_graph_join_regressions.py::test_an_engine_timeout_leaves_no_resumable_join_checkpoint` | The timeout hint now names `systemlens index`; `--resume-call-graph-join` refuses a timed-out snapshot. |
+| P3 | `delivered` | Lot 1 | `test_source_indexing_regressions.py::test_a_non_utf8_yaml_file_is_no_contract_and_no_crash` | OpenAPI contracts get the same guard. |
+| P4 | `delivered` | Lot 1 | `test_source_indexing_regressions.py::test_a_yaml_date_key_is_persisted_as_its_iso_text` | OpenAPI contracts get the same guard. |
+| Lots 2 to 5 | `open` | | | |
+| Lot 6 (J5) | `proposed` | | | Waits for ADR-75. |
 
 ## 6. Items carried over from earlier backlogs
 

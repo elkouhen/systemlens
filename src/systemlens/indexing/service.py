@@ -319,7 +319,13 @@ def _index_repo(
             )
         if store.get_meta("code_flow_snapshot_status") != "partial":
             raise ValueError("No partial call-graph join snapshot is available to resume.")
-        if store.get_meta(META_JOIN_SIGNATURE) != join_signature:
+        checkpoint_signature = store.get_meta(META_JOIN_SIGNATURE)
+        if checkpoint_signature is None:
+            raise ValueError(
+                "The partial snapshot has no call-graph join checkpoint: the engine "
+                "timed out. Run a normal index to retry the engine."
+            )
+        if checkpoint_signature != join_signature:
             raise ValueError(
                 "The partial call-graph join checkpoint does not match the current "
                 "repository or analysis configuration."

@@ -847,9 +847,12 @@ def run_call_graph_stage(
     if call_graph_timed_out:
         # Do not mark an incomplete interprocedural pass as current. The
         # next incremental index must retry the engine even when source files
-        # are unchanged.
+        # are unchanged. The flows come from a partial call set, so no join
+        # checkpoint may survive: a resume would trust them as complete.
         store.delete_meta("code_flow_signature")
         store.set_meta("code_flow_snapshot_status", "partial")
+        store.delete_meta(META_JOIN_SIGNATURE)
+        store.delete_meta(META_JOIN_COMPLETED_ENTRIES)
     else:
         store.set_meta("code_flow_signature", flow_signature)
         store.set_meta("code_flow_snapshot_status", "complete")

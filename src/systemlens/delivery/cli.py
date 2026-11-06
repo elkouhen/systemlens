@@ -1906,10 +1906,7 @@ def index_cmd(
                 "Le moteur de graphe d'appel a atteint son délai : le graphe publié est "
                 "partiel et sera complété lors de la prochaine indexation."
             )
-            typer.echo(
-                "Pour reprendre la jointure interrompue : "
-                "systemlens index --resume-call-graph-join"
-            )
+            typer.echo("Pour relancer le moteur : systemlens index")
         typer.echo(
             "Prochaine étape : systemlens export microservices --html architecture.html "
             "pour explorer le graphe."

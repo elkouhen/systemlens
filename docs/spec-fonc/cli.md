@@ -243,8 +243,8 @@ local cache.
 
 ## Engine progress and recovery
 
-When the engine reaches its time limit, the CLI prints
-`systemlens index --resume-call-graph-join` as the recovery path.
+When the engine reaches its time limit, the CLI prints `systemlens index`
+as the recovery path: the next index runs the engine again.
 
 Automatic method-call analysis by an external engine creates one source-only
 database for the whole repository. The engine caches it under
@@ -320,7 +320,9 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   Joern and a JDK on `PATH`, and on macOS `greadlink` (coreutils) for the
   Joern launchers. One linked body is `exact`; a unique implementation is
   `exact` with its interface declaration as a `possible` witness; several
-  implementations are all `possible`. Calls Joern cannot resolve are
+  implementations are all `possible`, as are the targets of a call that
+  an anonymous class, a lambda or a library class can also receive. A
+  Lombok file keeps its written lines. Calls Joern cannot resolve are
   dropped. It accepts no database, refreshes no module, reports no Kafka
   payload type, and caches its graph in `.systemlens/joern/`.
 - `none` builds no interprocedural path: only same-method flows remain.
@@ -407,7 +409,9 @@ When the join itself is interrupted after one or more committed batches,
 `systemlens index --resume-call-graph-join` reuses the compatible repository
 checkpoint and skips the completed IN methods. The option rejects changed
 analysis inputs, incompatible settings, or a non-partial snapshot; generated
-presentation files such as HTML exports do not invalidate it. If the persisted
+presentation files such as HTML exports do not invalidate it. An engine
+timeout leaves no join checkpoint, because its flows come from a partial
+call set: the option then fails and asks for a normal index. If the persisted
 method list no longer
 matches the current indexed method list, the command discards the stale join
 cursor and restarts the join from the beginning.

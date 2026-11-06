@@ -243,11 +243,15 @@ descriptions stay readable.
 
 The `joern` engine projects the indexed Java files with
 `indexing/source_projection.py`, the projection CodeQL reads, then runs
-`joern-parse --language javasrc -o cpg.bin <projection>`. Paths in the
-graph are relative to the projection root, hence to the indexed root. The
-graph is cached as `.systemlens/joern/cpg.bin` with `cpg.fingerprint`, a
-hash of the projection and of the Joern version; the stamp is written
-after the graph, as ADR-84 does for CodeQL.
+`joern-parse --language javasrc -o cpg.bin <projection> --frontend-args
+--delombok-mode types-only`. In that mode the graph keeps the written
+source of a Lombok file: generated members only type the calls, have no
+line, and are dropped. Paths in the graph are relative to the projection
+root, hence to the indexed root.
+
+The graph is cached as `.systemlens/joern/cpg.bin` with `cpg.fingerprint`,
+a hash of the projection, the parse options and the Joern version; the
+stamp is written after the graph, as ADR-84 does for CodeQL.
 
 `joern --script engines/joern/export.sc` then loads a copy of the graph in
 a temporary workspace and writes one JSON document (`systemlens-joern-v1`)
@@ -262,9 +266,13 @@ method has a source file among the indexed files.
 | One abstract declaration | `possible` |
 | One body and the abstract declaration the call names | body `exact`, declaration `possible` |
 | Several bodies | every method `possible` |
+| Any of the above, and a linked body in an anonymous class, a lambda or a library | every source method `possible` |
 
 Constructors, initializers, lambdas and anonymous-class methods are never
-targets. A call inside a lambda or an anonymous class keeps an
+targets, but a body among them still keeps the call `possible` (ADR-70,
+ADR-81). A local class method, spelled
+`pkg.App.create:void().Local.go:void()` by Joern, is mapped to the index's
+name `pkg.App.Local.go`. A call inside a lambda or an anonymous class keeps an
 `<anonymous>` caller, which the join attributes to the enclosing indexed
 method by call line. Joern returns no reachability and no Kafka payload
 type, and refreshes no module. Both launchers receive `JAVA_OPTS` with
@@ -273,11 +281,13 @@ type, and refreshes no module. Both launchers receive `JAVA_OPTS` with
 `input_fingerprint()` is `joern-<version>`, read from the installation
 without starting a JVM.
 
-On train-ticket, Joern builds its graph in 43 s and answers in 4.4 s from
-the cache (CodeQL: 207 s, then 7.4 s; `source`: 0.7 s). It finds the same
+On train-ticket, Joern builds its graph in 42 s and answers in 4.0 s from
+the cache (CodeQL: 207 s, then 7.2 s; `source`: 0.7 s). It finds the same
 406 flows as the other engines and 1797 edges between indexed methods
 against 1811: 7 `ContactsService` calls keep an unresolved signature and
-are dropped, which lowers 11 flows to `low` (ADR-85).
+are dropped, which lowers 11 flows to `low` (ADR-85). It reports 1534
+engine calls against CodeQL's 6279: calls to Lombok-generated accessors
+have no source line.
 
 Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A

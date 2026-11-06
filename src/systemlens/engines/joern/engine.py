@@ -1,7 +1,8 @@
 """Joern as a ``CallGraphEngine``: a code property graph built without a build.
 
 ``open`` projects the indexed Java sources (the same projection as every
-external engine), builds a CPG with ``joern-parse --language javasrc``,
+external engine), builds a CPG with ``joern-parse --language javasrc`` (Lombok in
+``types-only`` mode),
 runs ``export.sc`` once, and answers ``calls`` and ``methods`` from the
 exported JSON. The CPG is cached in ``.systemlens/joern/`` with a
 fingerprint of the projection and of the Joern installation, as ADR-84
@@ -42,6 +43,13 @@ from systemlens.indexing.source_projection import (
 CACHE_DIRECTORY = Path(".systemlens") / "joern"
 EXPORT_SCRIPT = Path(__file__).with_name("export.sc")
 _RELEASE_IN_PATH = re.compile(r"/joern/(\d+\.\d+\.\d+)/")
+# ``javasrc2cpg`` runs ``delombok`` on a file that imports Lombok and builds
+# the graph on the rewritten text, whose lines no longer match the indexed
+# file. ``types-only`` keeps the written source and only lets Lombok's
+# generated members type the calls; those members get no line, and the
+# adapter drops them (ADR-85).
+PARSE_ARGUMENTS = ("--language", "javasrc")
+FRONTEND_ARGUMENTS = ("--delombok-mode", "types-only")
 
 
 @cache
@@ -162,8 +170,11 @@ class JoernEngine:
         cache = request.repo_root / CACHE_DIRECTORY
         cached = cache / "cpg.bin"
         stamp = cache / "cpg.fingerprint"
+        # The parse options enter the fingerprint: a graph built with other
+        # options is rebuilt.
+        options = " ".join([*PARSE_ARGUMENTS, "--frontend-args", *FRONTEND_ARGUMENTS])
         fingerprint = projection_fingerprint(
-            source_root, f"joern-parse javasrc\n{joern_version()}\n",
+            source_root, f"joern-parse {options}\n{joern_version()}\n",
         )
         try:
             if stamp.read_text(encoding="utf-8").strip() == fingerprint and cached.is_file():
@@ -174,7 +185,10 @@ class JoernEngine:
             pass
         built = workspace / "cpg.bin"
         completed = run_with_progress(
-            ["joern-parse", "--language", "javasrc", "-o", str(built), str(source_root)],
+            [
+                "joern-parse", *PARSE_ARGUMENTS, "-o", str(built), str(source_root),
+                "--frontend-args", *FRONTEND_ARGUMENTS,
+            ],
             timeout=remaining_timeout(request.timeout_seconds, request.deadline),
             progress=progress, cwd=workspace, env=environment,
         )

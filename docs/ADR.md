@@ -2031,3 +2031,20 @@ none, and misses 7, all in `ts-contacts-service`: Joern leaves those
 `ContactsService` calls with an unresolved signature, so the adapter drops
 them and 11 flows there fall to `low`. Joern is therefore not recommended
 over `codeql` or `source` on this evidence.
+
+Measured again on 2026-11-06 after lot 1 of the review backlog, which
+runs `javasrc2cpg` with `--delombok-mode types-only`. The default mode
+built the graph on delomboked text, so 108 Lombok files had methods
+beyond their last line and 59 engine methods duplicated an indexed one:
+
+| Engine | Engine calls | Flows | Edges (indexed methods) | Run time |
+|---|---|---|---|---|
+| `joern` | 1534 | 406 (395 medium, 11 low) | 1797 | 42 s, 4.0 s cached |
+| `codeql` | 6279 | 406 (all medium) | 1811 | 7.2 s cached |
+| `source` | 0 | 406 (all medium) | 1811 | 0.7 s |
+
+No Joern method or call line now lies beyond its file, and no engine
+method shares a path and name with an indexed method it does not match.
+The engine calls fall because a call to a Lombok-generated accessor has
+no source line and is dropped. Joern shares the same 1517 keyed edges,
+adds none, and still misses the 7 `ContactsService` calls.
