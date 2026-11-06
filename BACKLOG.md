@@ -163,15 +163,16 @@ subject until the next lot records its hash. Test files are under
 | J2 | `delivered` | `6bca925` | `test_call_graph_join_regressions.py::test_a_typed_engine_row_stays_inside_the_callers_visible_modules` | ADR-71 amended: a module that depends on the caller's stays reachable (the lab needs it); C6 waits for the product owner's confirmation of that refinement. Train-ticket: 0 edges between unrelated modules with `codeql` and `joern`. |
 | J4 | `delivered` | `6bca925` | `test_call_graph_join_regressions.py::test_an_enum_constant_body_keeps_a_typed_engine_call_possible` | Fixed in the join, for every typed engine: Joern exports no method for a constant body. |
 | A4 | `delivered` | `6bca925` | `test_call_graph_join_regressions.py::test_a_witness_adds_no_second_edge_to_the_exact_target`; `test_code_flows.py::test_source_interface_witness_adds_the_contract_hop_without_a_new_route` updated | ADR-70 amended. Train-ticket: 1811 to 1524 edges between indexed methods for `codeql` and `source`, flows unchanged; lab: 92 to 78 edges, 23 flows. |
-| P7 | `delivered` | Lot 4 | `test_source_indexing_regressions.py::test_the_inventory_and_the_engine_projection_skip_the_same_out_directory` | The inventory now treats a module-rooted `out/` as build output, as the projection and `test_codeql.py` already did. |
-| P8 | `delivered` | Lot 4 | `test_source_indexing_regressions.py::test_a_config_server_file_change_rescans_the_application_it_configures` | A Spring Cloud Config file change rescans every file. |
-| A5 | `delivered` | Lot 4 | `test_call_graph_join_regressions.py::test_an_anonymous_class_method_of_an_engine_is_not_persisted` | None. |
-| A6 | `delivered` | Lot 4 | `test_codeql.py::test_the_codeql_cli_enters_the_flow_signature_of_the_automatic_database` | A hash of the executable's identity, as ADR-84 keys the database cache. |
-| C3 | `delivered` | Lot 4 | `test_engine_seam_cli.py::test_call_edge_with_a_database_reports_a_broken_configuration` | None. |
-| C4 | `delivered` | Lot 4 | `test_engine_seam_cli.py::test_an_engines_section_must_be_a_mapping`, `::test_engine_option_errors_end_with_one_period`, `::test_compare_engines_offers_only_engines_it_can_compare` | Both double periods came from `config.py`'s wrapping of the option error. |
-| C5 | `delivered` | Lot 4 | `test_engine_seam_cli.py::test_doctor_checks_the_configured_engine`, `::test_doctor_reports_an_available_engine` | `doctor` now checks the configured engine instead of the message changing. |
-| J6 | `delivered` | Lot 4 | `test_engine_seam_cli.py::test_a_missing_greadlink_names_the_link_step` | None. |
-| Lot 5 | `open` | | | |
+| P7 | `delivered` | `e424c6c` | `test_source_indexing_regressions.py::test_the_inventory_and_the_engine_projection_skip_the_same_out_directory` | The inventory now treats a module-rooted `out/` as build output, as the projection and `test_codeql.py` already did. |
+| P8 | `delivered` | `e424c6c` | `test_source_indexing_regressions.py::test_a_config_server_file_change_rescans_the_application_it_configures` | A Spring Cloud Config file change rescans every file. |
+| A5 | `delivered` | `e424c6c` | `test_call_graph_join_regressions.py::test_an_anonymous_class_method_of_an_engine_is_not_persisted` | None. |
+| A6 | `delivered` | `e424c6c` | `test_codeql.py::test_the_codeql_cli_enters_the_flow_signature_of_the_automatic_database` | A hash of the executable's identity, as ADR-84 keys the database cache. |
+| C3 | `delivered` | `e424c6c` | `test_engine_seam_cli.py::test_call_edge_with_a_database_reports_a_broken_configuration` | None. |
+| C4 | `delivered` | `e424c6c` | `test_engine_seam_cli.py::test_an_engines_section_must_be_a_mapping`, `::test_engine_option_errors_end_with_one_period`, `::test_compare_engines_offers_only_engines_it_can_compare` | Both double periods came from `config.py`'s wrapping of the option error. |
+| C5 | `delivered` | `e424c6c` | `test_engine_seam_cli.py::test_doctor_checks_the_configured_engine`, `::test_doctor_reports_an_available_engine` | `doctor` now checks the configured engine instead of the message changing. |
+| J6 | `delivered` | `e424c6c` | `test_engine_seam_cli.py::test_a_missing_greadlink_names_the_link_step` | None. |
+| C1 | `delivered` | Lot 5; `systemlens-skill` `329ef31` | `test_spec_conformance.py::test_documentation_site_commands_use_existing_flags`, `::test_documentation_site_links_name_existing_specification_headings` | The skill page is checked when the sibling checkout is present. |
+| C2 | `delivered` | Lot 5 | `test_engine_seam_cli.py::test_index_refuses_an_engine_option_the_selected_engine_does_not_declare` (six cases), `::test_index_accepts_a_declared_engine_option`, `::test_init_with_the_joern_profile_selects_joern_and_warns_without_it` | None. |
 | Lot 6 (J5) | `proposed` | | | Waits for ADR-75. |
 
 ## 6. Items carried over from earlier backlogs

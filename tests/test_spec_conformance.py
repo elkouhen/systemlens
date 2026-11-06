@@ -222,3 +222,57 @@ def test_every_inspector_title_starts_with_a_glossary_kind_label() -> None:
         "inspector titles must be built with resourceInspectorTitle() and a glossary kind: "
         f"{offenders}"
     )
+
+
+SITE_PAGES = [
+    ROOT / "docs" / "index.html",
+    ROOT.parent / "systemlens-skill" / "docs" / "index.html",
+]
+CODE_BLOCK = re.compile(r"<code>(.*?)</code>", re.S)
+SPEC_LINK = re.compile(r"docs/spec-fonc/([\w-]+\.md)#([\w-]+)")
+
+
+def _github_anchor(heading: str) -> str:
+    text = re.sub(r"[^\w\- ]", "", heading.strip().lower())
+    return text.replace(" ", "-")
+
+
+def _site_commands(page: Path) -> list[str]:
+    """The ``systemlens`` command lines quoted in the page's code blocks."""
+    commands: list[str] = []
+    for block in CODE_BLOCK.findall(page.read_text(encoding="utf-8")):
+        for command in block.replace("\\\n", " ").splitlines():
+            if command.strip().startswith("systemlens "):
+                commands.append(command.strip())
+    return commands
+
+
+def test_documentation_site_commands_use_existing_flags() -> None:
+    """Review C1: the site and the skill page showed the removed ``--codeql-database``."""
+    visible, hidden = _implemented_flags()
+    pages = [page for page in SITE_PAGES if page.is_file()]
+    assert pages and pages[0] == SITE_PAGES[0]
+    unknown = sorted({
+        (page.relative_to(ROOT.parent).as_posix(), flag)
+        for page in pages
+        for command in _site_commands(page)
+        for flag in FLAG.findall(command)
+        if flag not in visible | hidden
+    })
+    assert not unknown, f"documentation pages name flags the CLI does not expose: {unknown}"
+
+
+def test_documentation_site_links_name_existing_specification_headings() -> None:
+    """Review C1: a link pointed at a heading ADR-85 renamed."""
+    broken = []
+    for page in (page for page in SITE_PAGES if page.is_file()):
+        for target, anchor in SPEC_LINK.findall(page.read_text(encoding="utf-8")):
+            spec = SPEC_FONC / target
+            headings = {
+                _github_anchor(line.lstrip("#"))
+                for line in spec.read_text(encoding="utf-8").splitlines()
+                if line.startswith("#")
+            } if spec.is_file() else set()
+            if anchor not in headings:
+                broken.append((page.name, target, anchor))
+    assert not broken, f"links to missing specification headings: {broken}"

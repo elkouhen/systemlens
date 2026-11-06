@@ -129,3 +129,71 @@ def test_a_missing_greadlink_names_the_link_step(monkeypatch: pytest.MonkeyPatch
 
     assert reason is not None
     assert "brew install coreutils" in reason and "brew link coreutils" in reason
+
+
+@pytest.mark.parametrize(
+    ("arguments", "message"),
+    [
+        (["--engine-option", "nosep"], "`--engine-option` attend NOM=VALEUR, reçu 'nosep'."),
+        (
+            ["--call-graph-engine", "codeql", "--engine-option", "threads=2"],
+            "--engine-option codeql.threads invalide : Option inconnue pour le moteur codeql",
+        ),
+        (
+            ["--call-graph-engine", "codeql", "--engine-option", "verbosity=loud"],
+            "--engine-option codeql.verbosity invalide : valeurs autorisées : errors,",
+        ),
+        (
+            ["--call-graph-engine", "joern", "--engine-option", "database=db"],
+            "--engine-option joern.database invalide : Option inconnue pour le moteur joern",
+        ),
+        (
+            ["--call-graph-engine", "joern", "--engine-database", "db"],
+            "`--engine-database` requiert un moteur qui accepte une base ; `joern` n'en accepte pas.",
+        ),
+        (
+            ["--call-graph-engine", "source", "--engine-database", "db"],
+            "`source` n'en accepte pas.",
+        ),
+    ],
+)
+def test_index_refuses_an_engine_option_the_selected_engine_does_not_declare(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, arguments: list[str], message: str,
+) -> None:
+    """Review C2: the CLI side of ``--engine-option`` and ``--engine-database``."""
+    _config(tmp_path, "analysis:\n  call_graph_engine: source\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.app, ["index", *arguments])
+
+    assert result.exit_code == 2, result.output
+    assert message in " ".join(result.output.split())
+    assert not (tmp_path / ".systemlens" / "findings.db").exists()
+
+
+def test_index_accepts_a_declared_engine_option(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _config(tmp_path, "analysis:\n  call_graph_engine: source\n")
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.app, [
+        "index", "--call-graph-engine", "codeql", "--engine-option", "verbosity=errors",
+    ])
+
+    assert result.exit_code == 0, result.output
+
+
+def test_init_with_the_joern_profile_selects_joern_and_warns_without_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Review C2: ``init --profile joern``."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
+
+    result = CliRunner().invoke(cli.app, ["init", "--profile", "joern"])
+
+    assert result.exit_code == 0, result.output
+    assert "(profil joern)" in result.output
+    assert "Joern introuvable" in result.output
+    assert load_config(tmp_path).call_graph_engine == "joern"

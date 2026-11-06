@@ -50,8 +50,11 @@ the rule it protects.
 `tests/test_spec_conformance.py` checks that every flag named in
 `docs/spec-fonc` exists in the CLI, that every visible CLI flag is
 documented, and that every control the UX contract names is rendered by the
-export. A gap owned by a backlog task is listed in the test with the task
-identifier; the entry is removed in the commit that delivers the task.
+export. It also checks that the `systemlens` commands of `docs/index.html`
+and of the companion skill's page use existing flags, and that their links
+into `docs/spec-fonc` name existing headings. A gap owned by a backlog task
+is listed in the test with the task identifier; the entry is removed in the
+commit that delivers the task.
 
 ## Session hygiene
 
