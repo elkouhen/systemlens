@@ -831,6 +831,9 @@ def _build_call_graph(
     exact_resolved_sites: set[tuple[str, int, str]] = set()
     seen_edges: set[tuple[str, str, int, str, bool]] = set()
     synthetic_calls: set[MethodCall] = set()
+    # Witness expansions, dropped at the end when a declared edge already
+    # reaches the same callee at the same site (review A4).
+    witness_edges: set[tuple[str, str, int]] = set()
 
     def add_edge(
         caller: IntegrationMethod, callee: IntegrationMethod, call: MethodCall,
@@ -909,12 +912,51 @@ def _build_call_graph(
             symbols=symbols,
         )
 
+    dependencies_by_module: dict[str, set[str]] = defaultdict(set)
+    for dependency in module_dependencies:
+        dependencies_by_module[dependency.source].add(dependency.target)
+    visible_by_module: dict[str, frozenset[str]] = {}
+
+    def module_path(module: str) -> frozenset[str]:
+        """``module`` and its transitive build dependencies."""
+        modules = visible_by_module.get(module)
+        if modules is None:
+            seen = {module}
+            pending = [module]
+            while pending:
+                for target in dependencies_by_module.get(pending.pop(), ()):
+                    if target not in seen:
+                        seen.add(target)
+                        pending.append(target)
+            modules = visible_by_module[module] = frozenset(seen)
+        return modules
+
+    def visible(caller: IntegrationMethod, callee: IntegrationMethod) -> bool:
+        """Whether a typed engine's edge may join two modules (ADR-71).
+
+        A typed engine resolves over every projected type, without the
+        module dependencies. The callee's module must be on the caller's
+        module path, or depend on the caller's module: a module built on a
+        library can implement the library's interfaces, as an adapter
+        implements a port. Two modules unrelated by the build graph are
+        never joined. A method without a module is not judged, and neither
+        is any edge when the index knows no module dependency at all:
+        without a build graph, the engine's typed evidence stands.
+        """
+        if (
+            not dependencies_by_module or not caller.module or not callee.module
+            or caller.module == callee.module
+        ):
+            return True
+        return callee.module in module_path(caller.module) or caller.module in module_path(callee.module)
+
     started_at = time.monotonic()
     last_report_at = started_at
     located_calls: list[tuple[MethodCall, IntegrationMethod, IntegrationMethod, bool]] = []
     # Exact targets per call site. When the engine resolved the site's exact
     # implementation, its interface witness dispatches only there (ADR-70).
     exact_site_targets: dict[tuple[str, str, int], set[str]] = {}
+    constant_body_calls: list[tuple[IntegrationMethod, IntegrationMethod, MethodCall]] = []
     for call in calls:
         caller = locate_caller(call)
         resolved_callee = locate(
@@ -924,6 +966,24 @@ def _build_call_graph(
         )
         if caller is None or resolved_callee is None:
             continue
+        if not visible(caller, resolved_callee[0]):
+            continue
+        if call.dispatch_confidence == "exact" and symbols is not None:
+            overrides = [
+                override for override in symbols.constant_body_overrides(resolved_callee[0])
+                if visible(caller, override)
+            ]
+            if overrides:
+                # An enum constant body the engine does not model can
+                # receive the call: no body is the only one (H9, ADR-81).
+                call = replace(call, dispatch_confidence="possible")
+                constant_body_calls.extend(
+                    (caller, override, replace(
+                        call, callee=override.qualified_method, callee_path=override.path,
+                        callee_line=override.start_line,
+                    ))
+                    for override in overrides
+                )
         located_calls.append((call, caller, *resolved_callee))
         if call.dispatch_confidence == "exact" and not resolved_callee[1]:
             exact_site_targets.setdefault(
@@ -960,7 +1020,10 @@ def _build_call_graph(
                 implementation_targets[target_key] = prefer_caller_module(
                     implementation_targets[target_key], caller,
                 )
-            candidates = implementation_targets[target_key]
+            candidates = tuple(
+                candidate for candidate in implementation_targets[target_key]
+                if visible(caller, candidate)
+            )
             exact_targets = exact_site_targets.get(
                 (caller.id, call.caller_path, call.call_line), set()
             )
@@ -976,6 +1039,11 @@ def _build_call_graph(
                 )
                 synthetic_calls.add(synthetic)
                 add_edge(caller, candidate, synthetic, True)
+                witness_edges.add((caller.id, candidate.id, call.call_line))
+
+    for caller, override, synthetic in constant_body_calls:
+        synthetic_calls.add(synthetic)
+        add_edge(caller, override, synthetic, True)
 
     if symbols is not None:
         for call in symbols.fallback_calls(
@@ -986,6 +1054,11 @@ def _build_call_graph(
             if caller is None or resolved_target is None:
                 continue
             target = resolved_target[0]
+            if not closed_world and not visible(caller, target):
+                # Beside a typed engine, the gap filler keeps the engine's
+                # module scope (ADR-71); as the whole call graph, the source
+                # pass applies ADR-71 itself.
+                continue
             synthetic_calls.add(call)
             exact_call = symbols.interface_witnesses.get(call)
             implementation = (
@@ -1002,6 +1075,7 @@ def _build_call_graph(
                 synthetic = replace(exact_call, dispatch_confidence="possible")
                 synthetic_calls.add(synthetic)
                 add_edge(caller, implementation[0], synthetic, True)
+                witness_edges.add((caller.id, implementation[0].id, call.call_line))
                 continue
             # An exact source call names its target from the declared
             # receiver type, and so does a call to a declaration without a
@@ -1015,6 +1089,24 @@ def _build_call_graph(
                 call.dispatch_confidence != "exact" and not declared_contract,
             )
 
+    # The witness hop is the declared edge to the interface method. Its
+    # expansion to an implementation the site already reaches through a
+    # declared edge adds no route, only a second search state (review A4).
+    declared_edges = {
+        (caller_id, callee.id, call.call_line)
+        for caller_id, entries in adjacency.items()
+        for callee, call, inferred in entries
+        if not inferred
+    }
+    for caller_id, entries in adjacency.items():
+        adjacency[caller_id] = [
+            (callee, call, inferred) for callee, call, inferred in entries
+            if not (
+                inferred
+                and (caller_id, callee.id, call.call_line) in witness_edges
+                and (caller_id, callee.id, call.call_line) in declared_edges
+            )
+        ]
     return CallGraph(
         adjacency=adjacency,
         synthetic_calls=synthetic_calls,

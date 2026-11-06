@@ -1501,7 +1501,9 @@ and the layout libraries keep their versions.
 
 ## ADR-70: Give the source engine CodeQL's interface witness and dispatch gaps
 
-**Status:** Accepted on 2026-11-03. Amends ADR-61.
+**Status:** Accepted on 2026-11-03. Amends ADR-61. Amended on 2026-11-06
+by lot 3 of the review backlog (finding A4): the witness expansion adds no
+edge where a declared edge already reaches the implementation.
 
 **Context:** On the train-ticket model the `source` engine finds the same
 flows as `codeql` (406 against 408) but persists 2052 call edges against
@@ -1546,9 +1548,19 @@ subclass of the servlet API's `ServletOutputStream`, a library hierarchy
 the sources do not contain. Dispatch on an external interface stays
 `possible` when an anonymous class or a lambda can implement it.
 
+Amendment of 2026-11-06 (A4): the witness hop is the declared `possible`
+edge to the interface method. Its expansion to the site's exact
+implementation repeated the exact edge as a `possible`, inferred one, and
+the flow search explored every method below it twice. The join now drops
+an expanded edge when a declared edge at the same site already reaches
+the same callee. The persisted graph keeps two edges at such a site, the
+exact one and the witness; flows and their confidence are unchanged.
+
 ## ADR-71: Scope external-interface dispatch to the caller's visible modules
 
-**Status:** Accepted on 2026-11-03. Amends ADR-70.
+**Status:** Accepted on 2026-11-03. Amends ADR-70. Amended on 2026-11-06
+by lot 3 of the review backlog (finding J2, task C6 of the dispatch-scope
+plan): the scope also bounds the edges of a typed engine.
 
 **Context:** ADR-70 lets a call on an interface outside the sources, such
 as `ExecutorService`, `Callable` or `UserDetails`, dispatch to the source
@@ -1588,6 +1600,22 @@ report the same 406 `potential` flows; CodeQL adds two `cycle` flows,
 `queryInfoInparallel` and `imageCode`, which C6 of the plan addresses. The
 [dispatch-scope plan](plans/call-graph-external-dispatch-scope.md) records
 the measurement.
+
+Amendment of 2026-11-06 (J2, C6): a typed engine (`codeql`, `joern`)
+resolves dispatch over every projected type, without the module
+dependencies. When the index knows module dependencies, the join drops an
+engine edge between two modules the build graph does not relate: the
+callee module is neither on the caller's module path (the caller's module
+and its transitive dependencies) nor a module that depends on the
+caller's. The dispatch the join adds for a typed engine, and the symbol
+pass that fills its gaps, keep the same scope. The `source` engine is
+unchanged.
+
+A module that depends on the caller's stays reachable because it can
+implement the caller's interfaces, as an adapter implements a port; the
+observability lab's library `kafka-processing` dispatches that way, and
+its 23 flows need it. An index without any known module dependency keeps
+every engine edge: there is no build graph to judge it.
 
 ## ADR-72: Keep dispatch possible when an implicit implementation exists
 
@@ -2048,3 +2076,18 @@ method shares a path and name with an indexed method it does not match.
 The engine calls fall because a call to a Lombok-generated accessor has
 no source line and is dropped. Joern shares the same 1517 keyed edges,
 adds none, and still misses the 7 `ContactsService` calls.
+
+Measured again after lot 3 (J2, J3, J4, A4), with the CPG cached:
+
+| Engine | Engine calls | Flows | Edges (indexed methods) | Run time |
+|---|---|---|---|---|
+| `joern` | 1541 | 406 (395 medium, 11 low) | 1524 | 3.7 s cached |
+| `codeql` | 6279 | 406 (all medium) | 1524 | 6.6 s cached |
+| `source` | 0 | 406 (all medium) | 1524 | 0.6 s |
+
+The edge count falls for every engine because a witness no longer
+repeats the exact edge (A4). The three engines share every keyed edge.
+Joern now reaches the 7 `ContactsService` declarations as `possible`
+(J3), and the join's dispatch reaches their implementation as
+`possible`, inferred, where the other engines are `exact`: the 11
+`ts-contacts-service` flows stay `low`.

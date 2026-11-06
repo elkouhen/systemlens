@@ -322,7 +322,9 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   `exact` with its interface declaration as a `possible` witness; several
   implementations are all `possible`, as are the targets of a call that
   an anonymous class, a lambda or a library class can also receive. A
-  Lombok file keeps its written lines. Calls Joern cannot resolve are
+  Lombok file keeps its written lines. A call whose argument types Joern
+  cannot resolve reaches the owner's one abstract method of that name and
+  arity as `possible`. Other calls Joern cannot resolve are
   dropped. It accepts no database, refreshes no module, reports no Kafka
   payload type, and caches its graph in `.systemlens/joern/`.
 - `none` builds no interprocedural path: only same-method flows remain.

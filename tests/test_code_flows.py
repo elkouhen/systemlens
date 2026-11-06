@@ -2759,11 +2759,10 @@ class OrderController {
         for edge in graphs[-1].edges()
     )
     # ADR-70: the CodeQL shape. The declared interface method is a possible
-    # edge, and its dispatch to the site's exact implementation the
-    # synthetic edge the engine-call join adds.
+    # edge. Its dispatch reaches only the site's exact implementation, which
+    # the exact edge already reaches: no second, inferred edge (review A4).
     assert edges == [
         ("com.example.StockAdapter.publish", "exact", False),
-        ("com.example.StockAdapter.publish", "possible", True),
         ("com.example.StockPort.publish", "possible", False),
     ]
     # The witness is a dead end: one flow, still exact, through the adapter.

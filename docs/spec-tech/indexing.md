@@ -174,10 +174,21 @@ and none as `exact`.
 
 The join reads the witness as it reads the source pass's witness. At a site
 (caller, call line) where an exact row reaches a concrete implementation of
-the interface method, the witness expands only to that implementation. The
-symbol fallback then skips the invocation whose candidates include that
-target, so it cannot reopen the other implementations. A witness without an
-exact row at its site still expands to every compatible implementation.
+the interface method, the witness expands only to that implementation, and
+that expansion is dropped because the exact edge already reaches it
+(ADR-70, A4). The symbol fallback then skips the invocation whose
+candidates include that target, so it cannot reopen the other
+implementations. A witness without an exact row at its site still expands
+to every compatible implementation.
+
+When the index knows module dependencies, a typed engine's edge, the
+dispatch the join adds for it and the symbol fallback beside it never join
+two modules the build graph does not relate: the callee's module is the
+caller's, one of its transitive dependencies, or a module that depends on
+it (ADR-71, J2). An
+`exact` engine edge to an enum method that a constant body overrides
+becomes `possible`, and each overriding body is a `possible` target: an
+engine without constant-body methods cannot prove the receiver (H9, J4).
 
 `--engine-database` reuses one global database supplied by the caller
 (ADR-83). Before any query, the engine reads `sourceLocationPrefix` from
@@ -267,6 +278,7 @@ method has a source file among the indexed files.
 | One body and the abstract declaration the call names | body `exact`, declaration `possible` |
 | Several bodies | every method `possible` |
 | Any of the above, and a linked body in an anonymous class, a lambda or a library | every source method `possible` |
+| No resolved signature (`Owner.name:<unresolvedSignature>(n)`), one source method `name` with `n` parameters on `Owner`, without a body | that method `possible`; a concrete body is left to the symbol pass |
 
 Constructors, initializers, lambdas and anonymous-class methods are never
 targets, but a body among them still keeps the call `possible` (ADR-70,
@@ -281,13 +293,14 @@ type, and refreshes no module. Both launchers receive `JAVA_OPTS` with
 `input_fingerprint()` is `joern-<version>`, read from the installation
 without starting a JVM.
 
-On train-ticket, Joern builds its graph in 42 s and answers in 4.0 s from
-the cache (CodeQL: 207 s, then 7.2 s; `source`: 0.7 s). It finds the same
-406 flows as the other engines and 1797 edges between indexed methods
-against 1811: 7 `ContactsService` calls keep an unresolved signature and
-are dropped, which lowers 11 flows to `low` (ADR-85). It reports 1534
-engine calls against CodeQL's 6279: calls to Lombok-generated accessors
-have no source line.
+On train-ticket, Joern builds its graph in 42 s and answers in 3.7 s from
+the cache (CodeQL: 207 s, then 6.6 s; `source`: 0.6 s). The three engines
+find the same 406 flows and the same 1524 edges between indexed methods.
+Seven `ContactsService` calls keep an unresolved signature: Joern reaches
+the interface declaration as `possible` and the join's dispatch reaches
+the implementation as `possible`, so 11 flows stay `low` (ADR-85). Joern
+reports 1541 engine calls against CodeQL's 6279: calls to
+Lombok-generated accessors have no source line.
 
 Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A
@@ -408,10 +421,10 @@ The closed world adds two shapes of the CodeQL query (ADR-70). When the
 receiver's declared type is a source interface and the call has one exact
 concrete target, the pass also emits a `possible` witness edge to the
 abstract interface method the call names. The join stores it as a declared,
-non-inferred edge and adds the inferred `possible` edge to the site's exact
-implementation, as it does for a CodeQL row; it adds no other
-implementation, so the witness is a dead end that opens no route and leaves
-flow confidence unchanged. A static or un-overridden default interface
+non-inferred edge. Its dispatch reaches only the site's exact
+implementation, which the exact edge already reaches, so the join adds no
+second edge; the witness is a dead end that opens no route and leaves flow
+confidence unchanged. A static or un-overridden default interface
 method that is itself the target, and an overridden default body, get no
 witness; neither does a call whose dispatch is already `possible`.
 

@@ -174,8 +174,9 @@ and CodeQL-parity figures in ADR-71.
 
 ### C6. Apply the same scope to the `codeql` engine
 
-Status: `proposed`; it extends ADR-71 to an engine the product owner did
-not include. CodeQL dispatches over the whole database without the JDK
+Status: `delivered` on 2026-11-06 with lot 3 of the review backlog
+(finding J2), for `codeql` and `joern`; see section 6. It extends ADR-71
+to an engine the product owner did not include at first. CodeQL dispatches over the whole database without the JDK
 hierarchy, so it reproduces the nine edges and adds seven more. The
 proposed rule drops, in the join of `code_flows.py`, any engine edge whose
 callee module is outside the caller's module and transitive dependencies.
@@ -193,7 +194,7 @@ callee module is outside the caller's module and transitive dependencies.
 | 1 | C0, C1 | C1 changes an accepted ADR and needs the CodeQL fact first. |
 | 2 | C2, C3, C5 | Implement the validated rule and record its measured effect. |
 | 3 | C4 | Independent of the defect; a check before any change. |
-| 4 | C6 | Waits for the product owner to extend ADR-71 to the `codeql` engine. |
+| 4 | C6 | Delivered with lot 3 of the review backlog, which the product owner validated on 2026-11-06. |
 
 Each task runs:
 
@@ -216,6 +217,7 @@ measurement of section 2.
 | C3 | Delivered on 2026-11-03. External-interface dispatch is always `possible`. Test: `test_a_single_source_body_of_an_external_interface_stays_possible`; the ADR-70 test now expects `possible` for `Disk.save`. |
 | C4 | Checked on 2026-11-03: no defect. See the C4 note below. |
 | C5 | Delivered on 2026-11-03 in ADR-71 and `docs/spec-tech/indexing.md`. |
+| C6 | `blocked: the product owner confirms the refined rule`. Code delivered on 2026-11-06 with lot 3 of the review backlog (finding J2), for `codeql` and `joern`, in the ADR-71 amendment. The strict rule (only the caller's module path) dropped the lab's port-adapter dispatch from `kafka-processing` into the services that depend on it: 23 flows fell to 12, and the companion check lost its asynchronous JPA write. The delivered rule also keeps a module that depends on the caller's. Train-ticket with `codeql`: 0 edges between unrelated modules, 137 `possible` edges from `ts-common` into dependent services, 406 `potential` `medium` flows, no `cycle`. With `joern`: 0 and 0 edges, 406 flows. Test: `test_call_graph_join_regressions.py::test_a_typed_engine_row_stays_inside_the_callers_visible_modules`. |
 
 Verification: the three new tests failed on `274251e`, each for the
 expected reason, and pass after the change. `ruff`, `mypy`, the default

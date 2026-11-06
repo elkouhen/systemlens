@@ -238,9 +238,11 @@ instead of choosing one runtime target.
 When CodeQL also resolves a concrete virtual target, a source-backed interface
 declaration is retained as an additional possible witness so the caller-to-
 contract edge remains visible in the persisted call-edge listing. At a call
-site where CodeQL resolved the exact implementation, the witness expands to
-that implementation only, and the source symbol fallback adds no other
-candidate there: the witness opens no route (ADR-70).
+site where CodeQL resolved the exact implementation, the witness adds no
+edge beside the exact one, and the source symbol fallback adds no other
+candidate there: the witness opens no route (ADR-70). When the index knows
+module dependencies, an edge of a typed engine (`codeql`, `joern`) never
+joins two modules unrelated by a build dependency (ADR-71).
 Calls are aggregated before the global flow join. `--engine-database DIR`
 reuses an existing global database of the selected engine instead.
 

@@ -4,8 +4,11 @@ The export lists every internal method and every non-operator call with
 the methods Joern's call graph links it to. This module keeps only
 source-to-source calls and never guesses a target (ADR-61, ADR-85):
 
-- a call Joern could not resolve (``<unresolvedNamespace>``,
-  ``<unresolvedSignature>``, ``ANY``) is dropped;
+- a call Joern could not resolve (``<unresolvedNamespace>``, ``ANY``) is
+  dropped. A call whose argument types are unresolved
+  (``Owner.name:<unresolvedSignature>(n)``) is kept only when ``Owner`` is
+  a source type that declares exactly one method ``name`` with ``n``
+  parameters, without a body; that method is a ``possible`` target;
 - a callee without a source file, a constructor or initializer, a lambda
   or a method of an anonymous class is dropped, as the CodeQL query
   reports only named source methods;
@@ -40,6 +43,8 @@ SCHEMA = "systemlens-joern-v1"
 _UNRESOLVED = ("<unresolvedNamespace>", "<unresolvedSignature>", "<unknownFullName>")
 _ANONYMOUS_TYPE = re.compile(r"\$\d+$")
 _SIGNATURE = re.compile(r":[^:()]*\([^()]*\)")
+_UNRESOLVED_ARITY = re.compile(r":<unresolvedSignature>\((\d+)\)$")
+_UNRESOLVED_SIGNATURE = re.compile(r"^(?P<method>[^:]+):<unresolvedSignature>\((?P<arity>\d+)\)$")
 _INITIALIZERS = ("<init>", "<clinit>")
 
 
@@ -191,8 +196,9 @@ def parse_calls(
     indexed = frozenset(indexed_paths)
     calls: set[MethodCall] = set()
     try:
+        declared = _declared_methods(document, indexed)
         for row in _rows(document, "calls"):
-            calls.update(_calls_of(row, indexed))
+            calls.update(_calls_of(row, indexed, declared))
     except (KeyError, TypeError, ValueError) as exc:
         raise JoernError("Joern returned an unexpected call schema.") from exc
     return sorted(calls, key=lambda call: (
@@ -207,9 +213,73 @@ def _rows(document: Mapping[str, object], key: str) -> list[Mapping[str, object]
     return rows
 
 
-def _calls_of(row: Mapping[str, object], indexed: frozenset[str]) -> list[MethodCall]:
+def _arity(method: _Method) -> int | None:
+    types = method.parameter_types
+    if types is not None:
+        return len(types)
+    match = _UNRESOLVED_ARITY.search(method.full_name)
+    return int(match.group(1)) if match else None
+
+
+def _declared_methods(
+    document: Mapping[str, object], indexed: frozenset[str],
+) -> dict[tuple[str, int], list[_Method]]:
+    """Named source methods by ``(pkg.Owner.name, arity)``."""
+    declared: dict[tuple[str, int], list[_Method]] = {}
+    rows = document.get("methods", [])
+    for row in rows if isinstance(rows, list) else _rows(document, "methods"):
+        method = _method(row)
+        if not _is_source(method, indexed) or method.anonymous or method.initializer:
+            continue
+        arity = _arity(method)
+        if arity is not None:
+            declared.setdefault((method.qualified, arity), []).append(method)
+    return declared
+
+
+def _unresolved_signature_call(
+    row: Mapping[str, object], caller: _Method, call_line: int,
+    declared: Mapping[tuple[str, int], list[_Method]],
+) -> list[MethodCall]:
+    """A call Joern typed by owner, name and arity only (review J3).
+
+    Joern leaves the signature unresolved when an argument type is
+    external, such as Spring's ``HttpHeaders``. When the owner is a source
+    type with one method of that name and arity, and that method is an
+    abstract declaration, it is the only declaration the call can name: a
+    ``possible`` target, as with a resolved signature. A concrete body is
+    left to the symbol pass; any other case stays dropped.
+    """
+    match = _UNRESOLVED_SIGNATURE.match(str(row["target"]))
+    if match is None or "<unresolved" in match.group("method"):
+        return []
+    candidates = declared.get((match.group("method"), int(match.group("arity"))), [])
+    if len(candidates) != 1 or not candidates[0].abstract:
+        # A concrete body would be ``exact`` with a resolved signature; the
+        # symbol pass, which types the arguments, decides it instead of a
+        # ``possible`` row that would hide its answer.
+        return []
+    method = candidates[0]
+    return [MethodCall(
+        caller="<anonymous>" if caller.anonymous else caller.qualified,
+        caller_path=caller.path,
+        caller_line=caller.line,
+        callee=method.qualified,
+        callee_path=method.path,
+        callee_line=method.line,
+        call_line=call_line,
+        dispatch_confidence="possible",
+        caller_parameter_types=None if caller.anonymous else caller.parameter_types,
+        callee_parameter_types=method.parameter_types,
+    )]
+
+
+def _calls_of(
+    row: Mapping[str, object], indexed: frozenset[str],
+    declared: Mapping[tuple[str, int], list[_Method]] | None = None,
+) -> list[MethodCall]:
     call_line = int(str(row["line"]))
-    if not _resolved(str(row["target"])) or call_line <= 0:
+    if call_line <= 0:
         return []
     caller = _Method(
         full_name=str(row["caller"]),
@@ -220,6 +290,8 @@ def _calls_of(row: Mapping[str, object], indexed: frozenset[str]) -> list[Method
     )
     if not _is_source(caller, indexed):
         return []
+    if not _resolved(str(row["target"])):
+        return _unresolved_signature_call(row, caller, call_line, declared or {})
     target = str(row["target"])
     linked = [_method(item) for item in _callee_rows(row)]
     callees = [

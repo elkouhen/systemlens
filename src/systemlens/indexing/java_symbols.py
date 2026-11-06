@@ -753,6 +753,25 @@ class JavaSymbols:
             candidates.setdefault(contract.method.id, contract)
         return list(candidates.values())
 
+    def constant_body_overrides(self, method: IntegrationMethod) -> list[IntegrationMethod]:
+        """Bodies of enum constants that override ``method`` (H9).
+
+        A typed engine that does not model a constant body reports a call
+        on the enum type as ``exact`` to the enum's own body; these bodies
+        are the other possible receivers.
+        """
+        contract = self.methods.get(method.id)
+        if contract is None or contract.binds_statically:
+            return []
+        return [
+            candidate.method for candidate in self.implementations(contract)
+            if candidate.method.id != method.id and candidate.concrete
+            and candidate.node.parent is not None
+            and candidate.node.parent.type == "class_body"
+            and candidate.node.parent.parent is not None
+            and candidate.node.parent.parent.type == "enum_constant"
+        ]
+
     def bridge(self, method: IntegrationMethod) -> IntegrationMethod | None:
         contract = self.methods.get(method.id)
         if contract is None or contract.concrete:

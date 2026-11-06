@@ -19,6 +19,9 @@ from systemlens.callgraph.model import (
     SourceMethod,
 )
 from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency
+from systemlens.indexing.code_flows import CallGraph, materialize_call_graph_flows
+from systemlens.indexing.integration_methods import materialize_integration_methods
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
 from systemlens.storage.persisted_names import META_JOIN_COMPLETED_ENTRIES, META_JOIN_SIGNATURE
@@ -134,3 +137,183 @@ def test_an_engine_timeout_leaves_no_resumable_join_checkpoint(tmp_path: Path) -
         assert second.call_graph_timed_out is False
         assert store.get_meta("code_flow_snapshot_status") == "complete"
         assert _kinds(store) == [["http_entry", "method_call", "message_publish"]]
+
+
+SVC = "src/main/java/example/Svc.java"
+SVC_IMPL = "src/main/java/example/SvcImpl.java"
+HELPER = "src/main/java/example/Helper.java"
+
+
+def _interface_chain(root: Path) -> Path:
+    return _write(root, {
+        "pom.xml": POM,
+        CONTROLLER: """package example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping("/orders")
+class OrderController {
+  private Svc svc;
+  @PostMapping("/generate") public void create() { svc.place(); }
+}
+""",
+        SVC: "package example;\ninterface Svc {\n  void place();\n}\n",
+        SVC_IMPL: """package example;
+import org.springframework.kafka.core.KafkaTemplate;
+class SvcImpl implements Svc {
+  private KafkaTemplate<Long, String> template;
+  private Helper helper;
+  public void place() { helper.a(); }
+}
+""",
+        HELPER: """package example;
+import org.springframework.kafka.core.KafkaTemplate;
+class Helper {
+  private KafkaTemplate<Long, String> template;
+  void a() { b(); }
+  void b() { c(); }
+  void c() { template.send("orders", "new"); }
+}
+""",
+    })
+
+
+def test_a_witness_adds_no_second_edge_to_the_exact_target(tmp_path: Path) -> None:
+    """Review A4: the witness doubled the exact edge as a possible, inferred one.
+
+    The search keyed its visited set by ``(target, possible)``, so every
+    method below the interface call was explored twice: 9 transitions
+    instead of 5 on this four-hop chain. ADR-70's witness hop stays.
+    """
+    repo = _interface_chain(tmp_path / "repo")
+    engine = _RecordedEngine([
+        MethodCall("example.OrderController.create", CONTROLLER, 7,
+                   "example.SvcImpl.place", SVC_IMPL, 6, 7, "exact"),
+        MethodCall("example.OrderController.create", CONTROLLER, 7,
+                   "example.Svc.place", SVC, 3, 7, "possible"),
+        MethodCall("example.SvcImpl.place", SVC_IMPL, 6, "example.Helper.a", HELPER, 5, 6, "exact"),
+        MethodCall("example.Helper.a", HELPER, 5, "example.Helper.b", HELPER, 6, 5, "exact"),
+        MethodCall("example.Helper.b", HELPER, 6, "example.Helper.c", HELPER, 7, 6, "exact"),
+    ])
+    progress: list[str] = []
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True, call_graph_engine=engine,
+                   progress=progress.append)
+        names = {method.id: method.qualified_method for method in store.all_call_graph_methods()}
+        for method in store.all_integration_methods():
+            names.setdefault(method.id, method.qualified_method)
+        create = sorted(
+            (names[edge.callee_id], edge.dispatch_confidence, edge.inferred)
+            for edge in store.all_call_edges()
+            if names.get(edge.caller_id) == "example.OrderController.create"
+        )
+        flows = store.all_code_flows()
+
+    assert create == [
+        ("example.Svc.place", "possible", False),
+        ("example.SvcImpl.place", "exact", False),
+    ]
+    summary = next(message for message in reversed(progress) if "transition(s)" in message)
+    assert " 5 transition(s)" in summary, summary
+    assert [(flow.confidence, flow.alternative_count) for flow in flows] == [("medium", 1)]
+
+
+def _graph_edges(
+    root: Path, files: dict[str, str], modules: list[str], calls: list[MethodCall],
+    dependencies: list[ModuleDependency],
+) -> set[tuple[str, str, int, str, bool]]:
+    _write(root, files)
+    discovered = [
+        DiscoveredModule(name, root / name, "maven", None, "library", False, "")
+        for name in modules
+    ]
+    methods = materialize_integration_methods(root, [], list(files), discovered)
+    names = {method.id: method.qualified_method for method in methods}
+    graphs: list[CallGraph] = []
+    materialize_call_graph_flows(
+        methods, [], calls, repo_root=root, modules=discovered,
+        module_dependencies=dependencies, call_graph_sink=graphs.append,
+    )
+    return {
+        (names.get(edge.caller_id, edge.caller_id), names.get(edge.callee_id, edge.callee_id),
+         edge.line, edge.dispatch_confidence, edge.inferred)
+        for edge in graphs[-1].edges()
+    }
+
+
+SHAPE = "a/src/main/java/a/Shape.java"
+SQUARE = "a/src/main/java/a/Square.java"
+CIRCLE = "b/src/main/java/b/Circle.java"
+USE_C = "c/src/main/java/c/UseC.java"
+
+
+def test_a_typed_engine_row_stays_inside_the_callers_visible_modules(tmp_path: Path) -> None:
+    """Review J2 (C6 of the dispatch-scope plan): ADR-71 for typed engines.
+
+    Joern dispatched ``Shape.area`` in module ``c`` to ``b.Circle.area``,
+    although ``c`` and ``b`` are unrelated by the build graph. Neither the
+    engine row, the join's dispatch expansion nor the symbol fallback may
+    reach ``b``.
+    """
+    files = {
+        SHAPE: "package a;\npublic interface Shape { double area(); }\n",
+        SQUARE: "package a;\npublic class Square implements Shape { public double area() { return 1.0; } }\n",
+        CIRCLE: "package b;\nimport a.Shape;\npublic class Circle implements Shape { public double area() { return 3.14; } }\n",
+        USE_C: "package c;\nimport a.Shape;\nimport a.Square;\n"
+               "public class UseC { public double go() { Shape s = new Square(); return s.area(); } }\n",
+    }
+    go = ("c.UseC.go", USE_C, 4)
+    calls = [
+        MethodCall(*go, "a.Shape.area", SHAPE, 2, 4, "possible"),
+        MethodCall(*go, "a.Square.area", SQUARE, 2, 4, "possible"),
+        MethodCall(*go, "b.Circle.area", CIRCLE, 3, 4, "possible"),
+    ]
+
+    edges = _graph_edges(
+        tmp_path, files, ["a", "b", "c"], calls,
+        [ModuleDependency("b", "a"), ModuleDependency("c", "a")],
+    )
+
+    assert {(caller, callee) for caller, callee, *_ in edges} == {
+        ("c.UseC.go", "a.Shape.area"), ("c.UseC.go", "a.Square.area"),
+    }
+    # With ``c`` depending on ``b``, the row stands; so it does when ``b``
+    # depends on ``c``: a module built on the caller's can implement its
+    # interfaces, as an adapter implements a port.
+    for dependency in (ModuleDependency("c", "b"), ModuleDependency("b", "c")):
+        visible = _graph_edges(
+            tmp_path, files, ["a", "b", "c"], calls,
+            [ModuleDependency("b", "a"), ModuleDependency("c", "a"), dependency],
+        )
+        assert ("c.UseC.go", "b.Circle.area", 4, "possible", False) in visible
+
+
+def test_an_enum_constant_body_keeps_a_typed_engine_call_possible(tmp_path: Path) -> None:
+    """Review J4: Joern has no method for ``BIG``'s body.
+
+    ``Square.Kind.BIG.w()`` was ``exact`` to ``Kind.w`` while ``BIG``
+    declares its own ``w``. Both bodies are ``possible`` targets (H9).
+    """
+    square = "a/src/main/java/a/Square.java"
+    use = "a/src/main/java/a/Use.java"
+    files = {
+        square: """package a;
+public class Square {
+    public enum Kind {
+        BIG { public int w() { return 9; } },
+        SMALL;
+        public int w() { return 1; }
+    }
+}
+""",
+        use: "package a;\nclass Use { int go() { return Square.Kind.BIG.w(); } }\n",
+    }
+    calls = [MethodCall("a.Use.go", use, 2, "a.Square.Kind.w", square, 6, 2, "exact")]
+
+    edges = _graph_edges(tmp_path, files, ["a"], calls, [])
+
+    assert {(callee, line, confidence) for _caller, callee, line, confidence, _ in edges} == {
+        ("a.Square.Kind.w", 2, "possible"),
+    }
+    assert len(edges) == 2
+    assert all(confidence == "possible" for *_, confidence, _inferred in edges)

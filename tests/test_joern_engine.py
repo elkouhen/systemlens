@@ -343,3 +343,47 @@ def test_a_local_class_call_joins_its_method_without_a_self_edge(tmp_path: Path)
         "POST /orders/generate", "example.OrderController.Local.go",
         "example.Generator.generate", "orders",
     ]]
+
+
+def test_an_unresolved_signature_on_a_source_owner_keeps_its_one_method_possible() -> None:
+    """Review J3: ``HttpHeaders`` left 7 ``ContactsService`` calls unresolved.
+
+    Joern names the owner, the method and the arity. When the source owner
+    declares exactly one such method without a body, it is a ``possible``
+    target, never ``exact``. An overloaded name, an external owner, or a
+    concrete body, which the symbol pass types itself, stays dropped.
+    """
+    service = "src/ContactsService.java"
+    controller = "src/ContactsController.java"
+    caller = "app.ContactsController.create:<unresolvedSignature>(2)"
+
+    def call(target: str, line: int) -> dict[str, object]:
+        return {
+            "caller": caller, "caller_file": controller, "caller_line": 40, "line": line,
+            "target": target, "dispatch": "DYNAMIC_DISPATCH",
+            "callees": [_row(target, -1, external=True, file="<empty>")],
+        }
+
+    document = _document(
+        call("app.ContactsService.create:<unresolvedSignature>(2)", 46),
+        call("app.ContactsService.find:<unresolvedSignature>(1)", 47),
+        call("app.ContactsService.create:<unresolvedSignature>(3)", 48),
+        call("org.springframework.Thing.create:<unresolvedSignature>(2)", 49),
+        call("app.ContactsServiceImpl.check:<unresolvedSignature>(1)", 50),
+    )
+    document["methods"] = [
+        _row(caller, 40, file=controller),
+        _row("app.ContactsService.create:app.Response(app.Contacts,org.springframework.http.HttpHeaders)",
+             30, abstract=True, file=service),
+        _row("app.ContactsService.find:app.Response(java.lang.String)", 31, abstract=True, file=service),
+        _row("app.ContactsService.find:app.Response(java.lang.Long)", 32, abstract=True, file=service),
+        _row("app.ContactsServiceImpl.check:boolean(org.springframework.http.HttpHeaders)", 40,
+             file="src/ContactsServiceImpl.java"),
+    ]
+
+    calls = parse_calls(document)
+
+    assert _edges(calls) == {
+        ("app.ContactsController.create", "app.ContactsService.create", 46, "possible"),
+    }
+    assert calls[0].callee_line == 30
