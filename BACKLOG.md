@@ -148,13 +148,18 @@ subject until the next lot records its hash. Test files are under
 
 | Item | Status | Commit | Regression test | Deviation |
 |---|---|---|---|---|
-| J1 | `delivered` | Lot 1 | `test_joern_engine.py::test_joern_parse_keeps_lombok_sources_and_rebuilds_an_older_cache`, `::test_joern_lines_name_the_written_lombok_source` (slow) | Train-ticket: 0 method or call lines beyond their file, 0 phantom methods, 406 flows, J3 still 7 edges; engine calls 6314 to 1534 (Lombok accessors have no line). |
-| A2 | `delivered` | Lot 1 | `test_joern_engine.py::test_a_local_class_method_takes_the_index_spelling`, `::test_a_local_class_call_joins_its_method_without_a_self_edge` (slow) | None. |
-| A3 | `delivered` | Lot 1 | `test_joern_engine.py::test_a_dropped_anonymous_or_library_candidate_keeps_the_dispatch_possible` | No edge changed on train-ticket. |
-| A1 | `delivered` | Lot 1 | `test_call_graph_join_regressions.py::test_an_engine_timeout_leaves_no_resumable_join_checkpoint` | The timeout hint now names `systemlens index`; `--resume-call-graph-join` refuses a timed-out snapshot. |
-| P3 | `delivered` | Lot 1 | `test_source_indexing_regressions.py::test_a_non_utf8_yaml_file_is_no_contract_and_no_crash` | OpenAPI contracts get the same guard. |
-| P4 | `delivered` | Lot 1 | `test_source_indexing_regressions.py::test_a_yaml_date_key_is_persisted_as_its_iso_text` | OpenAPI contracts get the same guard. |
-| Lots 2 to 5 | `open` | | | |
+| J1 | `delivered` | `e419154` | `test_joern_engine.py::test_joern_parse_keeps_lombok_sources_and_rebuilds_an_older_cache`, `::test_joern_lines_name_the_written_lombok_source` (slow) | Train-ticket: 0 method or call lines beyond their file, 0 phantom methods, 406 flows, J3 still 7 edges; engine calls 6314 to 1534 (Lombok accessors have no line). |
+| A2 | `delivered` | `e419154` | `test_joern_engine.py::test_a_local_class_method_takes_the_index_spelling`, `::test_a_local_class_call_joins_its_method_without_a_self_edge` (slow) | None. |
+| A3 | `delivered` | `e419154` | `test_joern_engine.py::test_a_dropped_anonymous_or_library_candidate_keeps_the_dispatch_possible` | No edge changed on train-ticket. |
+| A1 | `delivered` | `e419154` | `test_call_graph_join_regressions.py::test_an_engine_timeout_leaves_no_resumable_join_checkpoint` | The timeout hint now names `systemlens index`; `--resume-call-graph-join` refuses a timed-out snapshot. |
+| P3 | `delivered` | `e419154` | `test_source_indexing_regressions.py::test_a_non_utf8_yaml_file_is_no_contract_and_no_crash` | OpenAPI contracts get the same guard. |
+| P4 | `delivered` | `e419154` | `test_source_indexing_regressions.py::test_a_yaml_date_key_is_persisted_as_its_iso_text` | OpenAPI contracts get the same guard. |
+| P1 | `delivered` | Lot 2 | `test_source_indexing_regressions.py::test_a_mongo_relation_path_is_relative_to_the_indexed_root` | `build_architecture_relations` takes `repo_root`; the module inventory keeps module-relative Mongo paths. |
+| P2 | `delivered` | Lot 2 | `test_source_indexing_regressions.py::test_an_asyncapi_document_outside_the_inventory_is_no_contract`, `::test_an_index_persists_no_asyncapi_contract_from_an_excluded_path` | None. |
+| P5 | `delivered` | Lot 2 | `test_source_indexing_regressions.py::test_an_explicit_import_of_an_absent_class_keeps_the_message_type_unresolved` | The publisher's imports now come from its file, not only from DTO files. |
+| P9 | `delivered` | Lot 2 | `test_source_indexing_regressions.py::test_a_spring_data_rest_default_path_stays_dynamic` | PDR-12: the regular spelling stays, as a dynamic route. |
+| P6 | `delivered` | Lot 2 | `test_source_indexing_regressions.py::test_a_class_level_kafka_listener_is_owned_by_its_handler_methods`, `::test_a_class_level_kafka_listener_with_one_handler_takes_its_payload_type` | Also fixed: the single-handler payload type was never found (`is` on tree-sitter nodes, in `kafka_ast.py` and `kafka_conventions.py`). |
+| Lots 3 to 5 | `open` | | | |
 | Lot 6 (J5) | `proposed` | | | Waits for ADR-75. |
 
 ## 6. Items carried over from earlier backlogs

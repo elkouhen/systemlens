@@ -382,6 +382,11 @@ a partially parsed Java file while ignoring subtrees that contain an error or
 missing token. The file-level diagnostic remains visible so partial coverage is
 never presented as a complete parse.
 
+The module inventory keeps a Mongo call path relative to its module. The
+`reads` and `writes` collection relations built from it persist the path
+relative to the indexed root, as the data operations of the same call do,
+so `--root-path` opens the file for a nested module too.
+
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
 chain of Java methods resolved by the selected method-call engine. Its first
 `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
@@ -877,7 +882,10 @@ A DTO definition retains its qualified name, owning module, module-relative
 Java source path, declared fields, enum values, and conservative nested-type
 references. `indexing/dto_inventory.py` resolves a simple nested type only through an
 explicit import, the containing package, or a globally unique simple name; an
-ambiguous name remains unresolved. The HTML export uses those stored facts and
+ambiguous name remains unresolved. An explicit import that names a class
+absent from the sources wins: the type stays `unresolved:<name>` even when
+another package declares a class of that simple name. A message type takes
+the imports of its publisher's file. The HTML export uses those stored facts and
 only derives its VS Code URI at render time; it does not reopen a Java or
 OpenAPI source file.
 
@@ -902,7 +910,10 @@ a Strategy1 declaration only reattributes the published endpoint facts to its
 declaring module.
 
 AsyncAPI documents are materialized from module source trees after build-module
-discovery. Build-output paths (`target/` and `build/`) are excluded at inventory,
+discovery, but only from files the inventory kept: a document under a test
+source set or an excluded path is not a contract. A file that is not UTF-8,
+or not valid YAML, is skipped; a non-string mapping key, such as a YAML
+date, is stored as its text. Build-output paths (`target/` and `build/`) are excluded at inventory,
 discovery, and scanner boundaries, so generated artifacts never enter the
 snapshot even when a scanner is invoked outside the normal index pipeline.
 A build directory is rooted at a module: a directory with one of these names

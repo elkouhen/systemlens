@@ -21,6 +21,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-9](#pdr-9-one-inspector-skeleton-for-every-node-kind) | One inspector skeleton for every node kind | Yes, product owner; refines ADR-68 |
 | [PDR-10](#pdr-10-inspecter-opens-one-surface-per-kind-of-fact) | `Inspecter` opens one surface per kind of fact | Yes, product owner; refines ADR-68 and PDR-9 |
 | [PDR-11](#pdr-11-spring-conventions-add-possible-call-edges) | Proposed: Spring conventions add possible call edges | Yes, product owner; not validated |
+| [PDR-12](#pdr-12-a-spring-data-rest-default-path-is-an-unverified-route) | A Spring Data REST default path is an unverified route | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -316,3 +317,25 @@ the first and every implementation for the second.
 see, and keeping them `possible` respects the conservative rule. The
 narrowing of point 2 removes false candidates only when the annotation
 proves it.
+
+## PDR-12: A Spring Data REST default path is an unverified route
+
+**Status:** Accepted on 2026-11-06 with lot 2 of the
+[review backlog](../BACKLOG.md) (finding P9), whose fix the product
+owner validated.
+
+**Problem:** A Spring Data REST repository without an explicit `path`
+is served at the plural of its entity name. Spring computes that plural
+with an inflector that knows irregular words: `Child` is served at
+`/children`, `Analysis` at `/analyses`. SystemLens applied three regular
+rules and showed `/childs` and `/analysises` as certain routes.
+
+**Rule:** The default collection path keeps the regular spelling, and
+the route and its search resources are dynamic: the export marks them as
+unverified, as any other route SystemLens could not resolve. A path given
+by `@RepositoryRestResource(path = ...)` stays a resolved route.
+SystemLens adds no irregular-plural table.
+
+**Why:** a table would always miss a word, and the route would look
+certain again. A dynamic route still links to its callers, so the common
+regular case keeps its edges, with a visible warning.

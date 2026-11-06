@@ -423,7 +423,7 @@ def infer_kafka_topic_strategy1_endpoints(
                 handlers = [
                     member for member in java_parser.walk(declaration)
                     if member.type == "method_declaration"
-                    and java_parser.enclosing(member, "class_declaration") is declaration
+                    and java_parser.enclosing(member, "class_declaration") == declaration
                     and any(java_parser.annotation_name(ann, source_bytes) == "KafkaHandler"
                             for ann in java_parser.annotations_of(member))
                 ]

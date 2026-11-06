@@ -622,7 +622,7 @@ def _simple_type_name(qualified: str) -> str:
     cleaned = qualified.strip().split("<", 1)[0]
     return cleaned.rsplit(".", 1)[-1]
 def _pluralize(word: str) -> str:
-    """Pluralisation anglaise best-effort, alignée sur Spring Data REST."""
+    """Regular English plural; Spring Data REST also knows irregular words."""
     word = word.strip()
     if not word:
         return word
@@ -699,14 +699,19 @@ def _infer_spring_data_rest_endpoints(repo_root: Path, rel_path: str) -> list[Me
             base_path = normalize_path(rest_path)
             snippet = java_parser.node_text(source, annotation)
             decl_line = annotation.start_point.row + 1
+            dynamic = False
         else:
             if not _module_has_spring_data_rest(str(repo_root), rel_path):
                 continue
             # Spring Data REST uncapitalizes the entity name: ``OrderItem``
-            # is served at ``/orderItems``.
+            # is served at ``/orderItems``. Its plural comes from an
+            # inflector with irregular words (``Child`` at ``/children``)
+            # that the regular rules below do not know: the route keeps
+            # the regular spelling and stays dynamic (PDR-12).
             base_path = "/" + _pluralize(entity[:1].lower() + entity[1:])
             snippet = java_parser.node_text(source, declaration)
             decl_line = declaration.start_point.row + 1
+            dynamic = True
 
         for topic in (
             f"GET {base_path}",
@@ -727,14 +732,18 @@ def _infer_spring_data_rest_endpoints(repo_root: Path, rel_path: str) -> list[Me
                     topic,
                     "spring-data-rest",
                     snippet,
+                    topic_dynamic=dynamic,
                 )
             )
         endpoints.extend(
-            _infer_spring_data_rest_search_endpoints(repo_root, rel_path, source, declaration, base_path)
+            _infer_spring_data_rest_search_endpoints(
+                repo_root, rel_path, source, declaration, base_path, dynamic,
+            )
         )
     return endpoints
 def _infer_spring_data_rest_search_endpoints(
-    repo_root: Path, rel_path: str, source: bytes, declaration, base_path: str
+    repo_root: Path, rel_path: str, source: bytes, declaration, base_path: str,
+    dynamic: bool = False,
 ) -> list[MessageEndpoint]:
     """Ressources de recherche Spring Data REST (`GET <base>/search/<méthode>`).
 
@@ -787,6 +796,7 @@ def _infer_spring_data_rest_search_endpoints(
                 f"GET {base_path}/search/{search_name}",
                 "spring-data-rest",
                 java_parser.node_text(source, method),
+                topic_dynamic=dynamic,
             )
         )
     return endpoints

@@ -3,6 +3,7 @@
 import hashlib
 import re
 from dataclasses import replace
+from pathlib import Path
 from typing import TypedDict
 
 from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
@@ -67,8 +68,14 @@ def build_architecture_relations(
     dependencies: list[ModuleDependency],
     *,
     kafka_reply_strategy1: bool = False,
+    repo_root: Path | None = None,
 ) -> list[ArchitectureRelation]:
-    """Materialize relations only when an indexed fact provides evidence."""
+    """Materialize relations only when an indexed fact provides evidence.
+
+    Module inventories keep Mongo call paths relative to their module; with
+    ``repo_root`` the relations persist them relative to the indexed root,
+    as every other evidence path (invariant 1).
+    """
     module_kinds = {
         module_identity(module): "microservice" if module.starts_application else "module"
         for module in modules
@@ -154,6 +161,15 @@ def build_architecture_relations(
                 "topic", endpoint.topic, dto_relation, "dto", endpoint.message_type, **evidence
             ))
 
+    def root_relative(module: DiscoveredModule, path: str) -> str:
+        if repo_root is None:
+            return path
+        try:
+            prefix = module.path.resolve().relative_to(repo_root.resolve())
+        except ValueError:
+            return path
+        return (prefix / path).as_posix()
+
     for module in modules:
         identity = module_identity(module)
         source_kind = module_kinds[identity]
@@ -167,6 +183,7 @@ def build_architecture_relations(
         for method in module.mongo_methods:
             if not method.collection:
                 continue
+            method_path = root_relative(module, method.path)
             for facet in sorted(mongo_facets(method.operation)):
                 add(_relation(
                     source_kind,
@@ -177,7 +194,7 @@ def build_architecture_relations(
                     origin="code",
                     confidence="high",
                     module=identity,
-                    path=method.path,
+                    path=method_path,
                     start_line=method.line,
                     end_line=method.line,
                 ))
@@ -191,7 +208,7 @@ def build_architecture_relations(
                         origin="code",
                         confidence="high",
                         module=identity,
-                        path=method.path,
+                        path=method_path,
                         start_line=method.line,
                         end_line=method.line,
                     ))

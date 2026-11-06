@@ -192,7 +192,9 @@ Spring HTTP interfaces read `url`, `path` and `value`; method-level exchange
 annotations without a type-level `@HttpExchange` declare routes with an empty
 prefix. A Spring Data REST repository without `@RepositoryRestResource` is
 served at the pluralized, uncapitalized entity name (`OrderItem` at
-`/orderItems`). A Spring Cloud Gateway Java route is recognised with or
+`/orderItems`). That route and its search resources are dynamic: Spring's
+inflector knows irregular plurals (`Child` at `/children`) that SystemLens
+does not, so the regular spelling is shown as unverified (PDR-12). A Spring Cloud Gateway Java route is recognised with or
 without a route identifier; without a `method(...)` predicate it serves and
 proxies every verb as `ANY`, like a YAML route. Each route of a builder chain
 keeps its own `uri(...)` target and the line of its own `route` call; the
@@ -352,7 +354,8 @@ placeholder, or a SpEL expression that is not a plain property reference, is
 dynamic with its text as evidence. Comments inside an argument list or an
 array are not arguments. `@KafkaListener` is repeatable, and a class-level
 listener with `@KafkaHandler` methods is a consumer whose payload type is
-known only with one handler. A `@Payload` parameter is the listener payload
+known only with one handler. Each `@KafkaHandler` method receives that
+consumer and starts its flows. A `@Payload` parameter is the listener payload
 wherever it sits.
 
 An uppercase `Flux` enum constant is resolved only when its normalized name

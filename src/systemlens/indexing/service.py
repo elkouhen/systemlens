@@ -524,12 +524,15 @@ def _index_repo(
     # Also normalize a persisted module snapshot when module inventory refresh
     # is disabled for this run.
     store.replace_openapi_contracts(materialize_openapi_contracts(relation_modules))
-    store.replace_asyncapi_contracts(materialize_asyncapi_contracts(relation_modules))
+    store.replace_asyncapi_contracts(materialize_asyncapi_contracts(
+        relation_modules, repo_root=repo_root, indexed_paths=current_paths,
+    ))
     relations = build_architecture_relations(
         relation_modules,
         store.all_endpoints(),
         relation_dependencies,
         kafka_reply_strategy1=topic_strategy == "strategy1",
+        repo_root=repo_root,
     )
     store.replace_architecture_relations(relations)
     _report_progress(progress, f"→ Indexation : {len(relations)} relation(s) d'architecture matérialisée(s).")

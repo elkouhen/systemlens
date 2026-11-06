@@ -385,6 +385,7 @@ def run_call_graph_stage(
             all_endpoints,
             relation_dependencies,
             kafka_reply_strategy1=True,
+            repo_root=repo_root,
         )
         store.replace_architecture_relations(relations)
         _report_progress(

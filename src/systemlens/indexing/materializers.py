@@ -1,12 +1,14 @@
 """Materializers that turn discovered evidence into persisted snapshot facts."""
 
 import json
+from collections.abc import Collection
 from pathlib import Path
 
 import yaml
 
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.discovery.build.modules import deduplicate_openapi_contract_owners
+from systemlens.indexing.file_inventory import is_test_source
 
 
 def _json_value(value: object) -> object:
@@ -73,16 +75,37 @@ def materialize_openapi_contracts(
     return contracts
 
 
-def materialize_asyncapi_contracts(modules: list[DiscoveredModule]) -> list[dict[str, object]]:
-    """Persist valid AsyncAPI documents discovered in production module trees."""
+def materialize_asyncapi_contracts(
+    modules: list[DiscoveredModule],
+    *,
+    repo_root: Path | None = None,
+    indexed_paths: Collection[str] | None = None,
+) -> list[dict[str, object]]:
+    """Persist valid AsyncAPI documents discovered in production module trees.
+
+    A document under a test source set is never a contract. With
+    ``repo_root`` and ``indexed_paths``, a document the file inventory left
+    out (an excluded path, for example) is not one either.
+    """
     contracts: list[dict[str, object]] = []
     seen: set[object] = set()
+    indexed = None if indexed_paths is None or repo_root is None else set(indexed_paths)
+    root = repo_root.resolve() if repo_root is not None else None
     for module in sorted(modules, key=lambda item: len(item.path.resolve().parts), reverse=True):
         for contract_path in sorted(module.path.rglob("*")):
             if not contract_path.is_file() or {"target", "build", ".git"}.intersection(contract_path.parts):
                 continue
             if contract_path.suffix.lower() not in {".yaml", ".yml", ".json"}:
                 continue
+            if is_test_source(contract_path.relative_to(module.path).as_posix()):
+                continue
+            if indexed is not None and root is not None:
+                try:
+                    relative = contract_path.resolve().relative_to(root).as_posix()
+                except ValueError:
+                    continue
+                if relative not in indexed:
+                    continue
             spec = _load_yaml(contract_path)
             if not isinstance(spec, dict) or "asyncapi" not in spec or contract_path.resolve() in seen:
                 continue

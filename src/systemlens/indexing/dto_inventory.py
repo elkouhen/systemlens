@@ -169,6 +169,20 @@ def _java_package_and_imports(source: str) -> tuple[str, frozenset[str]]:
     return package, frozenset(imports)
 
 
+def _source_context(
+    contexts: dict[str, tuple[str, frozenset[str]]], qualified_name: str,
+) -> tuple[str, frozenset[str]] | None:
+    """The package and imports of a class, or of its enclosing top-level class."""
+    name = qualified_name
+    while name:
+        if name in contexts:
+            return contexts[name]
+        if "." not in name:
+            return None
+        name = name.rsplit(".", 1)[0]
+    return None
+
+
 def materialize_kafka_dto_definitions(
     endpoints_by_service: dict[str, list[MessageEndpoint]],
     modules: list[DiscoveredModule],
@@ -190,6 +204,10 @@ def materialize_kafka_dto_definitions(
                 except OSError:
                     continue
                 package, imports = _java_package_and_imports(source)
+                # The file's top-level class gives a publisher's imports
+                # even when it declares no DTO itself.
+                file_class = f"{package}.{java_path.stem}" if package else java_path.stem
+                source_contexts.setdefault(file_class, (package, imports))
                 for dto_name in _java_project_dto_names(source):
                     qualified_name = f"{package}.{dto_name}" if package else dto_name
                     candidates.setdefault(
@@ -224,8 +242,10 @@ def materialize_kafka_dto_definitions(
                 qualified_name = f"{imported[:-2]}.{simple_name}"
                 if qualified_name in candidates:
                     return qualified_name
-            elif imported.rsplit(".", 1)[-1] == simple_name and imported in candidates:
-                return imported
+            elif imported.rsplit(".", 1)[-1] == simple_name:
+                # An explicit import names the type; a class of that name
+                # elsewhere in the sources is another type.
+                return imported if imported in candidates else None
         if package:
             qualified_name = f"{package}.{simple_name}"
             if qualified_name in candidates:
@@ -241,7 +261,7 @@ def materialize_kafka_dto_definitions(
                 continue
             root_id = resolve_type(
                 endpoint.message_type,
-                source_contexts.get(endpoint.qualified_name or ""),
+                _source_context(source_contexts, endpoint.qualified_name or ""),
             ) or f"unresolved:{endpoint.message_type}"
             root_ids.add(root_id)
             endpoint_root_ids[endpoint.id] = root_id

@@ -246,6 +246,46 @@ def _innermost_declaring_spans(
     return owners
 
 
+def _class_listener_handler_spans(
+    root, source: bytes, endpoints: list[MessageEndpoint], owned: dict[str, tuple[int, int]],
+) -> dict[str, set[tuple[int, int]]]:
+    """Map a class-level ``@KafkaListener`` endpoint to its handler methods.
+
+    The listener annotation sits on the class, outside every method; Spring
+    dispatches each record to one of the class's ``@KafkaHandler`` methods,
+    so each of them receives the consume endpoint.
+    """
+    pending = [
+        endpoint for endpoint in endpoints
+        if endpoint.id not in owned and (endpoint.system, endpoint.role) == ("kafka", "consume")
+    ]
+    if not pending:
+        return {}
+    classes = [node for node in java_parser.walk(root) if node.type == "class_declaration"]
+    handlers: dict[str, set[tuple[int, int]]] = {}
+    for endpoint in pending:
+        containing = [
+            node for node in classes
+            if node.start_point.row + 1 <= endpoint.start_line <= node.end_point.row + 1
+        ]
+        if not containing:
+            continue
+        owner = min(containing, key=lambda node: node.end_byte - node.start_byte)
+        spans = {
+            (member.start_byte, member.end_byte)
+            for member in java_parser.walk(owner)
+            if member.type == "method_declaration"
+            and java_parser.enclosing(member, "class_declaration") == owner
+            and any(
+                java_parser.annotation_name(annotation, source) == "KafkaHandler"
+                for annotation in java_parser.annotations_of(member)
+            )
+        }
+        if spans:
+            handlers[endpoint.id] = spans
+    return handlers
+
+
 def materialize_integration_methods(
     repo_root: Path, endpoints: list[MessageEndpoint], java_paths: list[str], modules: list[DiscoveredModule]
 ) -> list[IntegrationMethod]:
@@ -283,6 +323,7 @@ def materialize_integration_methods(
             and not java_parser.is_anonymous_member(declaration)
         ]
         owner_span = _innermost_declaring_spans(declarations, path_endpoints)
+        handler_spans = _class_listener_handler_spans(root, source, path_endpoints, owner_span)
         for declaration in declarations:
             name = java_parser.declaration_name(declaration, source)
             if name is None:
@@ -293,6 +334,7 @@ def materialize_integration_methods(
             contained = [
                 endpoint for endpoint in path_endpoints
                 if owner_span.get(endpoint.id) == span
+                or span in handler_spans.get(endpoint.id, ())
             ]
             inputs = tuple(sorted(
                 endpoint.id for endpoint in contained
