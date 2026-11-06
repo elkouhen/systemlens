@@ -49,6 +49,7 @@ separate collected test case.
 | CLI and indexed catalogs | `test_cli_catalog.py`, `test_ast_only.py`, `test_modules.py` | Commands load and render the persisted repository snapshot. |
 | Call-edge diagnosis | `test_call_edge_diagnostic.py` | The CLI locates an expected call loss in method inventory, CodeQL joining, snapshot state, or flow reconstruction. |
 | Potential code flows | `test_code_flows.py`, `test_flow_diagnostic.py` | Indexed IN-to-OUT paths preserve ordered evidence, confidence, reconciliation, and module filtering. |
+| Joern export decoding and engine | `test_joern_engine.py` | Unresolved, library and constructor targets give no edge; dispatch confidences follow ADR-70. |
 | CodeQL and fallback dispatch | `test_codeql.py`, `test_codeql_inheritance.py` | Call extraction, timeout cleanup, confidence, inheritance, ambiguity, and AST fallback remain conservative. |
 | REST, Kafka, DTO, and data extraction | `test_rest_detection.py`, `test_rest_string_resolution.py`, `test_dto_inventory.py`, `test_relations.py` | Source-backed endpoints and relations retain paths, types, and unresolved values. |
 | Persistence and compatibility | `test_storage_uniqueness.py`, `test_models.py`, migration cases in feature files | SQLite round trips, uniqueness, and additive migrations preserve existing indexes. |
@@ -84,8 +85,16 @@ CodeQL engine patch the submodule that owns the behavior:
 `systemlens.engines.codeql.database` for the CLI and database lifecycle and
 `systemlens.engines.codeql.extraction` for the row parsers.
 `test_call_graph_engines.py` checks that the indexing core never imports
-that adapter, and `test_architecture_boundaries.py` that no package imports
-its own submodules through the package facade (which would be a cycle).
+an engine adapter and that each declaration matches the engine it builds.
+`test_architecture_boundaries.py` checks that no package imports its own
+submodules through the package facade (which would be a cycle), and that
+no engine name appears outside `engines/`, the registry and
+`storage/persisted_names.py` (ADR-85).
+
+`test_joern_engine.py` decodes a frozen Joern export of
+`tests/fixtures/joern/repo` without Joern. Its `slow` test runs the real
+engine on that repository, then checks the CPG cache; it is skipped when
+`joern` or a launcher prerequisite is missing.
 
 Three default tests wait for a one-second subprocess deadline. They verify that
 CodeQL progress handling times out while reading stdout and terminates a child
@@ -135,6 +144,7 @@ Run the external-runtime tests when their prerequisites are installed:
 
 ```bash
 uv run pytest -m slow tests/test_codeql_inheritance.py
+uv run pytest -m slow tests/test_joern_engine.py
 SYSTEMLENS_CHROME_BIN=/path/to/chrome uv run pytest -m slow tests/test_browser_export.py
 ```
 

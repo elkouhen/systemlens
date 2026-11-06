@@ -1,0 +1,471 @@
+{
+ "calls": [
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderController.java",
+     "full_name": "example.OrderController.create.Runnable$0.<init>:void()",
+     "line": 20,
+     "line_end": -1,
+     "name": "<init>"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 20,
+   "target": "example.OrderController.create.Runnable$0.<init>:void()"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/RepoImpl.java",
+     "full_name": "example.RepoImpl.<init>:void()",
+     "line": 2,
+     "line_end": -1,
+     "name": "<init>"
+    }
+   ],
+   "caller": "example.OrderController.<init>:void(example.OrderService)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 9,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 7,
+   "target": "example.RepoImpl.<init>:void()"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderController.java",
+     "full_name": "example.OrderController.init:void()",
+     "line": 14,
+     "line_end": 14,
+     "name": "init"
+    }
+   ],
+   "caller": "example.OrderController.<init>:void(example.OrderService)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 9,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 11,
+   "target": "example.OrderController.init:void()"
+  },
+  {
+   "callees": [
+    {
+     "abstract": true,
+     "external": false,
+     "file": "src/main/java/example/OrderService.java",
+     "full_name": "example.OrderService.place:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "place"
+    },
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderServiceImpl.java",
+     "full_name": "example.OrderServiceImpl.place:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "place"
+    },
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OtherServiceImpl.java",
+     "full_name": "example.OtherServiceImpl.place:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "place"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 17,
+   "target": "example.OrderService.place:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": true,
+     "external": false,
+     "file": "src/main/java/example/Repo.java",
+     "full_name": "example.Repo.save:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "save"
+    },
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/RepoImpl.java",
+     "full_name": "example.RepoImpl.save:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "save"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 18,
+   "target": "example.Repo.save:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": true,
+     "file": "<empty>",
+     "full_name": "java.util.List.forEach:void(java.util.function.Consumer)",
+     "line": -1,
+     "line_end": -1,
+     "name": "forEach"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 19,
+   "target": "java.util.List.forEach:void(java.util.function.Consumer)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": true,
+     "file": "<empty>",
+     "full_name": "java.util.List.of:java.util.List(java.lang.Object)",
+     "line": -1,
+     "line_end": -1,
+     "name": "of"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 19,
+   "target": "java.util.List.of:java.util.List(java.lang.Object)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": true,
+     "file": "<empty>",
+     "full_name": "<unresolvedNamespace>.call:<unresolvedSignature>(0)",
+     "line": -1,
+     "line_end": -1,
+     "name": "call"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 21,
+   "target": "<unresolvedNamespace>.call:<unresolvedSignature>(0)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderController.java",
+     "full_name": "example.OrderController$Nested.go:void()",
+     "line": 27,
+     "line_end": 27,
+     "name": "go"
+    }
+   ],
+   "caller": "example.OrderController.create:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 16,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 22,
+   "target": "example.OrderController$Nested.go:void()"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/Util.java",
+     "full_name": "example.Util.log:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "log"
+    }
+   ],
+   "caller": "example.OrderController.helper:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 25,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 25,
+   "target": "example.Util.log:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderController.java",
+     "full_name": "example.OrderController.helper:void(java.lang.String)",
+     "line": 25,
+     "line_end": 25,
+     "name": "helper"
+    }
+   ],
+   "caller": "example.OrderController.create.Runnable$0.run:void()",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 20,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 20,
+   "target": "example.OrderController.helper:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/OrderController.java",
+     "full_name": "example.OrderController.helper:void(java.lang.String)",
+     "line": 25,
+     "line_end": 25,
+     "name": "helper"
+    }
+   ],
+   "caller": "example.OrderController.<lambda>0:void(java.lang.Object)",
+   "caller_file": "src/main/java/example/OrderController.java",
+   "caller_line": 19,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 19,
+   "target": "example.OrderController.helper:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": false,
+     "file": "src/main/java/example/Util.java",
+     "full_name": "example.Util.log:void(java.lang.String)",
+     "line": 2,
+     "line_end": 2,
+     "name": "log"
+    }
+   ],
+   "caller": "example.OrderServiceImpl.place:void(java.lang.String)",
+   "caller_file": "src/main/java/example/OrderServiceImpl.java",
+   "caller_line": 2,
+   "dispatch": "STATIC_DISPATCH",
+   "line": 2,
+   "target": "example.Util.log:void(java.lang.String)"
+  },
+  {
+   "callees": [
+    {
+     "abstract": false,
+     "external": true,
+     "file": "<empty>",
+     "full_name": "java.io.PrintStream.println:void(java.lang.String)",
+     "line": -1,
+     "line_end": -1,
+     "name": "println"
+    }
+   ],
+   "caller": "example.Util.log:void(java.lang.String)",
+   "caller_file": "src/main/java/example/Util.java",
+   "caller_line": 2,
+   "dispatch": "DYNAMIC_DISPATCH",
+   "line": 2,
+   "target": "java.io.PrintStream.println:void(java.lang.String)"
+  }
+ ],
+ "methods": [
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.<init>:void(example.OrderService)",
+   "line": 9,
+   "line_end": 12,
+   "name": "<init>"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.init:void()",
+   "line": 14,
+   "line_end": 14,
+   "name": "init"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.create:void(java.lang.String)",
+   "line": 16,
+   "line_end": 23,
+   "name": "create"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.helper:void(java.lang.String)",
+   "line": 25,
+   "line_end": 25,
+   "name": "helper"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController$Nested.go:void()",
+   "line": 27,
+   "line_end": 27,
+   "name": "go"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController$Nested.<init>:void()",
+   "line": 27,
+   "line_end": -1,
+   "name": "<init>"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.create.Runnable$0.run:void()",
+   "line": 20,
+   "line_end": 20,
+   "name": "run"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.create.Runnable$0.<init>:void()",
+   "line": 20,
+   "line_end": -1,
+   "name": "<init>"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderController.java",
+   "full_name": "example.OrderController.<lambda>0:void(java.lang.Object)",
+   "line": 19,
+   "line_end": 19,
+   "name": "<lambda>0"
+  },
+  {
+   "abstract": true,
+   "external": false,
+   "file": "src/main/java/example/OrderService.java",
+   "full_name": "example.OrderService.place:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "place"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderServiceImpl.java",
+   "full_name": "example.OrderServiceImpl.place:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "place"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OrderServiceImpl.java",
+   "full_name": "example.OrderServiceImpl.<init>:void()",
+   "line": 2,
+   "line_end": -1,
+   "name": "<init>"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OtherServiceImpl.java",
+   "full_name": "example.OtherServiceImpl.place:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "place"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/OtherServiceImpl.java",
+   "full_name": "example.OtherServiceImpl.<init>:void()",
+   "line": 2,
+   "line_end": -1,
+   "name": "<init>"
+  },
+  {
+   "abstract": true,
+   "external": false,
+   "file": "src/main/java/example/Repo.java",
+   "full_name": "example.Repo.save:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "save"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/RepoImpl.java",
+   "full_name": "example.RepoImpl.save:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "save"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/RepoImpl.java",
+   "full_name": "example.RepoImpl.<init>:void()",
+   "line": 2,
+   "line_end": -1,
+   "name": "<init>"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/Util.java",
+   "full_name": "example.Util.log:void(java.lang.String)",
+   "line": 2,
+   "line_end": 2,
+   "name": "log"
+  },
+  {
+   "abstract": false,
+   "external": false,
+   "file": "src/main/java/example/Util.java",
+   "full_name": "example.Util.<init>:void()",
+   "line": 2,
+   "line_end": -1,
+   "name": "<init>"
+  }
+ ],
+ "schema": "systemlens-joern-v1"
+}

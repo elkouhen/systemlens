@@ -2015,6 +2015,19 @@ they are (SQLite tables, `codeql_*` meta keys, the export's
 `codeql_call_graph` key), so existing indexes still load.
 
 Joern needs a JDK and adds a JVM start-up and a graph build to each
-index. Its precision against CodeQL and `source` is measured with
-`analyze compare-engines` on train-ticket before the engine is
-documented as recommended for any use.
+index; on macOS its launchers also need `greadlink` (coreutils). On
+train-ticket (406 flows), `analyze compare-engines` measured on
+2026-11-06, with Joern 4.0.674 and CodeQL 2.27.3:
+
+| Engine | Engine calls | Flows | Edges (indexed methods) | Run time |
+|---|---|---|---|---|
+| `joern` | 6305 | 406 (395 medium, 11 low) | 1797 | 43 s, 4.4 s cached |
+| `codeql` | 6279 | 406 (all medium) | 1811 | 207 s, 7.4 s cached |
+| `source` | 0 | 406 (all medium) | 1811 | 0.7 s |
+
+All three find the same 406 flows. `codeql` and `source` agree on every
+edge between indexed methods. Joern shares 1517 keyed edges with each, adds
+none, and misses 7, all in `ts-contacts-service`: Joern leaves those
+`ContactsService` calls with an unresolved signature, so the adapter drops
+them and 11 flows there fall to `low`. Joern is therefore not recommended
+over `codeql` or `source` on this evidence.

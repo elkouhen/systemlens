@@ -10,7 +10,7 @@ import shutil
 import signal
 import subprocess
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from threading import Timer
 
@@ -34,12 +34,17 @@ def run_with_progress(
     timeout: float,
     progress: Callable[[str], None] | None,
     cwd: Path | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a process with one timeout and process-group cleanup policy."""
+    """Run a process with one timeout and process-group cleanup policy.
+
+    ``env`` adds variables to the inherited environment, such as JVM options.
+    """
     process = subprocess.Popen(
         command, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT if progress is not None else subprocess.PIPE,
         text=True, bufsize=1, cwd=cwd, start_new_session=os.name == "posix",
+        env={**os.environ, **env} if env else None,
     )
 
     def stop() -> None:

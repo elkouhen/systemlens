@@ -20,6 +20,7 @@ DEFAULT_ENGINE = "source"
 _DECLARATIONS = (
     "systemlens.callgraph.source",
     "systemlens.engines.codeql.declaration",
+    "systemlens.engines.joern.declaration",
 )
 
 

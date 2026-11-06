@@ -50,7 +50,9 @@ ADR-85.
 Inside `engines/codeql/`, `queries.py` holds the QL text, `database.py`
 the CLI, database lifecycle and query runner, `extraction.py` the row
 parsers, `engine.py` the protocol adapter and `errors.py` the error types
-(ADR-67). `indexing/source_projection.py` projects the indexed Java
+(ADR-67). `engines/joern/` holds `export.sc` (the Joern script),
+`extraction.py` (export JSON to call types) and `engine.py` (CPG build,
+cache and adapter). `indexing/source_projection.py` projects the indexed Java
 sources into the source-only tree every external engine reads.
 
 The package root contains only `__init__.py` and directories. Implementation
@@ -200,6 +202,7 @@ they are not cross-module entry points.
 | CodeQL CLI, database lifecycle, query runner | `engines/codeql/database.py` |
 | CodeQL row parsing into call types | `engines/codeql/extraction.py` |
 | CodeQL engine adapter | `engines/codeql/engine.py` |
+| Joern export script, row parsing, adapter | `engines/joern/export.sc`, `extraction.py`, `engine.py` |
 | Call-graph stage of an index (session, join, flows) | `indexing/call_graph_stage.py` |
 | Call-graph progress export or direct engine database query | `delivery/call_graph.py` |
 | Maven/Gradle source generation | `indexing/source_generation.py` |

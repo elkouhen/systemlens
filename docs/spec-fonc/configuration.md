@@ -67,7 +67,7 @@ but does not alter AST endpoint extraction.
 
 `analysis` is the versionable source of truth for the topic convention,
 method-call engine, and disabled extractors. `call_graph_engine` names a
-declared engine (`source` by default, `codeql`) or `none`.
+declared engine (`source` by default, `codeql`, `joern`) or `none`.
 
 | Key | Default | Meaning |
 |---|---|---|
@@ -80,7 +80,9 @@ declared engine (`source` by default, `codeql`) or `none`.
 
 Engine-owned options of `codeql` are `database` (a prebuilt database, a
 path relative to the indexed root or absolute) and `verbosity` (`errors`,
-`progress`, `progress+`, `progress++` or `progress+++`).
+`progress`, `progress+`, `progress++` or `progress+++`). `joern` declares no
+option: `engine_ram_mb` becomes the JVM's `-Xmx` and a positive
+`engine_threads` its `-XX:ActiveProcessorCount`, both through `JAVA_OPTS`.
 
 `analysis` accepts only the keys above, plus `strategy`, `topic_strategy`
 and `disabled_extractors`. Any other key, such as the removed `codeql`

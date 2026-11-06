@@ -239,6 +239,46 @@ the export's `codeql_call_graph` key. Code refers to them only through
 `storage/persisted_names.py`, so existing indexes, exports and flow
 descriptions stay readable.
 
+### Joern engine
+
+The `joern` engine projects the indexed Java files with
+`indexing/source_projection.py`, the projection CodeQL reads, then runs
+`joern-parse --language javasrc -o cpg.bin <projection>`. Paths in the
+graph are relative to the projection root, hence to the indexed root. The
+graph is cached as `.systemlens/joern/cpg.bin` with `cpg.fingerprint`, a
+hash of the projection and of the Joern version; the stamp is written
+after the graph, as ADR-84 does for CodeQL.
+
+`joern --script engines/joern/export.sc` then loads a copy of the graph in
+a temporary workspace and writes one JSON document (`systemlens-joern-v1`)
+with every internal method and every non-operator call, each call with the
+methods Joern's call graph links it to. `engines/joern/extraction.py`
+keeps a call only when its target is resolved and at least one linked
+method has a source file among the indexed files.
+
+| Linked source methods | Confidence |
+|---|---|
+| One method with a body | `exact` |
+| One abstract declaration | `possible` |
+| One body and the abstract declaration the call names | body `exact`, declaration `possible` |
+| Several bodies | every method `possible` |
+
+Constructors, initializers, lambdas and anonymous-class methods are never
+targets. A call inside a lambda or an anonymous class keeps an
+`<anonymous>` caller, which the join attributes to the enclosing indexed
+method by call line. Joern returns no reachability and no Kafka payload
+type, and refreshes no module. Both launchers receive `JAVA_OPTS` with
+`-Xmx<engine_ram_mb>m` and `-XX:ActiveProcessorCount=<engine_threads>`;
+`engine_timeout_seconds` bounds the two processes together.
+`input_fingerprint()` is `joern-<version>`, read from the installation
+without starting a JVM.
+
+On train-ticket, Joern builds its graph in 43 s and answers in 4.4 s from
+the cache (CodeQL: 207 s, then 7.4 s; `source`: 0.7 s). It finds the same
+406 flows as the other engines and 1797 edges between indexed methods
+against 1811: 7 `ContactsService` calls keep an unresolved signature and
+are dropped, which lowers 11 flows to `low` (ADR-85).
+
 Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A
 source symbol pass then follows receiver-typed calls between indexed Java
