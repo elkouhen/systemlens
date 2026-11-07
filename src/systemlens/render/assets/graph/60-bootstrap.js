@@ -522,9 +522,12 @@
       const next = reservedBands();
       if (next !== lastReservedBands) {
         lastReservedBands = next;
+        // A resize keeps the user's camera: Sigma keeps the graph point at
+        // the workspace centre. Only a camera the user never moved refits.
         if (codeFlowSelection.flowId && !graphCallTreeOverlay.hidden) {
-          requestAnimationFrame(() => fitCallTree());
-        } else if (!codeFlowSelection.flowId && graphCanvas.getBoundingClientRect().width > 0) {
+          if (!graphState.callTreeMovedByUser) requestAnimationFrame(() => fitCallTree());
+        } else if (!codeFlowSelection.flowId && graphCanvas.getBoundingClientRect().width > 0
+          && !graphState.cameraMovedByUser) {
           fitCameraToVisibleGraph(activeRenderer());
         }
       }
@@ -563,7 +566,7 @@
     search.addEventListener("keydown", event => {
       if (event.key === "Enter") { event.preventDefault(); runExploreSearch(); }
     });
-    window.addEventListener("resize", () => updateWorkspaceViewport(true));
+    window.addEventListener("resize", () => updateWorkspaceViewport(!graphState.cameraMovedByUser));
     setupRuntimeOverlay();
     if (graphData.call_graphs_only) {
       setToolbarTab("flows");

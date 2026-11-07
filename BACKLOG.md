@@ -317,7 +317,11 @@ lab.
 - **Depends on:** the rule in `docs/UX-UI.md` ("Camera and graph
   interaction"), validated first.
 - **Origin:** `docs/plans/graph-viewport-navigation.md`: V6.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the rule is in `docs/UX-UI.md`; the window resize and
+  `refreshToolbarReservation` refit only a camera the user never moved.
+  `test_window_resize_keeps_the_user_camera_and_refits_an_untouched_graph`
+  in `tests/test_browser_export.py`; commit: pending.
 - **Why P1:** a reported navigation defect.
 
 <a id="bl-18"></a>

@@ -1436,6 +1436,78 @@ def test_one_wheel_notch_zooms_both_graph_surfaces_by_the_same_step() -> None:
         browser.close()
 
 
+def _workspace_center(page) -> tuple[float, float]:
+    box = page.locator("#graph").bounding_box()
+    assert box
+    return box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+
+
+@pytest.mark.slow
+def test_window_resize_keeps_the_user_camera_and_refits_an_untouched_graph() -> None:
+    """BL-17: a resize keeps a moved camera; an untouched graph refits.
+
+    Regression: a resize refitted the graph and dropped the user's pan and
+    zoom, both on the window resize and when the toolbar band changed.
+    """
+    document = _current_simple_dataset_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"Aucun navigateur Playwright ne peut être lancé : {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 0"
+        )
+        _wait_for_settled_layout(page)
+        page.wait_for_function("() => document.getElementById('graph').dataset.fitMode")
+        page.wait_for_timeout(200)
+
+        def resize_and_settle(width: int) -> bool:
+            """Resize the window; return whether a fit ran."""
+            page.evaluate("() => { delete document.getElementById('graph').dataset.fitMode; }")
+            page.set_viewport_size({"width": width, "height": 900})
+            page.wait_for_timeout(400)
+            return bool(page.evaluate("() => Boolean(document.getElementById('graph').dataset.fitMode)"))
+
+        # An untouched graph still refits on resize.
+        assert resize_and_settle(1300)
+        assert resize_and_settle(1440)
+
+        # Pan one card under the workspace centre, then zoom around it.
+        centers = _card_centers(page)
+        center = _workspace_center(page)
+        node_id, card = min(
+            centers.items(),
+            key=lambda item: (item[1][0] - center[0]) ** 2 + (item[1][1] - center[1]) ** 2,
+        )
+        offset = (center[0] - card[0], center[1] - card[1])
+        stage = _graph_background_point(page, end_dx=round(offset[0]), end_dy=round(offset[1]))
+        page.mouse.move(stage["x"], stage["y"])
+        page.mouse.down()
+        page.mouse.move(stage["x"] + offset[0], stage["y"] + offset[1], steps=8)
+        page.mouse.up()
+        page.wait_for_timeout(150)
+        _wheel_notch(page, center)
+        moved = _card_centers(page)[node_id]
+        assert moved[0] == pytest.approx(center[0], abs=1)
+        assert moved[1] == pytest.approx(center[1], abs=1)
+
+        assert not resize_and_settle(1300)
+        after = _card_centers(page)[node_id]
+        center = _workspace_center(page)
+        assert after[0] == pytest.approx(center[0], abs=2)
+        assert after[1] == pytest.approx(center[1], abs=2)
+
+        # The next fit clears the user camera, so a resize refits again.
+        page.locator("#graph-fit-overview").click()
+        page.wait_for_timeout(200)
+        assert resize_and_settle(1440)
+        browser.close()
+
+
 @pytest.mark.slow
 def test_minimap_stays_visible_once_the_user_navigates() -> None:
     """PDR-6: after a pan or zoom the minimap stays until the next fit.

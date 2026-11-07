@@ -490,6 +490,9 @@ overview rather than making the graph appear empty.
 The desktop workspace begins at the window's left edge. The toolbar overlays
 the upper-left graph area, while the usable graph surface begins below it.
 Details-panel resizing MUST NOT reset the camera or create a clipping seam.
+A resize of the window or of the toolbar keeps the user's camera: the point
+at the centre of the workspace stays there. Only a graph the user has never
+panned or zoomed is refitted.
 
 ## Selected call tree
 

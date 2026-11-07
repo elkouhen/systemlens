@@ -117,8 +117,9 @@ graph area. On small graphs it blinked during a slow pan and vanished at
 the moment the user wanted it to find their way back.
 
 **Consequences:** a programmatic camera move, such as centring a selected
-flow, does not count as navigation. A window resize that refits the graph
-hides the minimap again until V6 of the backlog keeps the camera instead.
+flow, does not count as navigation. Since BL-17 a window resize keeps a
+camera the user moved, so the minimap stays; it refits, and may hide the
+minimap, only a graph the user never moved.
 
 ## PDR-7: One French word per concept in the export and the CLI
 
