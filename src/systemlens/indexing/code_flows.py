@@ -31,6 +31,7 @@ from systemlens.indexing.integration_methods import (
     SCHEDULER_TRIGGER,
     is_initializer,
     path_module_resolver,
+    scheduled_trigger_label,
 )
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
@@ -40,7 +41,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v48-constructor-nodes"
+CODE_FLOW_SIGNATURE = "code-flow-v49-one-flow-set"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -254,6 +255,58 @@ def _deduplicate_code_flows(
 _ensure_unique_code_flow_ids = ensure_unique_code_flow_ids
 
 
+def _effect_anchor(step: CodeFlowStep) -> tuple[object, ...]:
+    if step.endpoint_id is not None:
+        return ("endpoint", step.endpoint_id)
+    if step.operation_id is not None:
+        return ("operation", step.operation_id)
+    return (step.kind, step.path, step.start_line, step.operation)
+
+
+def without_same_method_duplicates(
+    source_flows: Sequence[CodeFlow], call_graph_flows: Sequence[CodeFlow],
+) -> list[CodeFlow]:
+    """Drop the join's same-method flows that a same-method flow already holds.
+
+    The same-method pass puts every effect of one method in one flow, while
+    the call-graph join emits one direct flow per effect. A direct join flow
+    whose trigger and effects all appear in a same-method flow of that
+    trigger is the same evidence: keeping it would give each engine and
+    ``flows calculate`` a different flow set (review F4). A direct flow the
+    same-method pass lacks, such as a contract-only HTTP input, is kept.
+    """
+    covered = {
+        (_step_anchor(flow.steps[0]), _effect_anchor(step))
+        for flow in source_flows if flow.steps
+        for step in flow.steps[1:]
+    }
+    return [
+        flow for flow in call_graph_flows
+        if not flow.steps
+        or any(step.kind == "method_call" for step in flow.steps)
+        or not all(
+            (_step_anchor(flow.steps[0]), _effect_anchor(step)) in covered
+            for step in flow.steps[1:]
+        )
+    ]
+
+
+def combine_code_flows(
+    source_flows: Sequence[CodeFlow],
+    call_graph_flows: Sequence[CodeFlow],
+    endpoints: Sequence[MessageEndpoint],
+) -> list[CodeFlow]:
+    """Merge same-method and call-graph flows into the one persisted flow set.
+
+    Indexing with any engine and ``flows calculate`` call this one merge, so
+    the same inputs give the same flows and identifiers.
+    """
+    return _ensure_unique_code_flow_ids(_deduplicate_code_flows(
+        [*source_flows, *without_same_method_duplicates(source_flows, call_graph_flows)],
+        endpoints,
+    ))
+
+
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
     if (endpoint.system, endpoint.role) == SCHEDULER_TRIGGER:
         # Scheduler triggers are transient, so the step names no endpoint.
@@ -341,13 +394,10 @@ def _scheduled_trigger_step(
     for annotation in java_parser.annotations_of(method_node):
         if java_parser.annotation_name(annotation, source) != "Scheduled":
             continue
-        cron = java_parser.string_value(
-            java_parser.annotation_argument(annotation, source, "cron"), source
-        )
         return CodeFlowStep(
             order=1,
             kind="cron_entry",
-            name=cron or "@Scheduled",
+            name=scheduled_trigger_label(annotation, source),
             path=path,
             start_line=method_node.start_point.row + 1,
             end_line=method_node.start_point.row + 1,

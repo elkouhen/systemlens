@@ -73,8 +73,9 @@ Its steps can include Java method calls, HTTP calls, Kafka publications, and
 MongoDB or JPA accesses. A flow retains relative source locations, confidence,
 status, and topology reconciliation state.
 
-Within one method, SystemLens can put several effects in the same flow. Across
-methods, it can emit separate paths to reachable outputs or data operations.
+Within one method, SystemLens puts every effect in the same flow, whatever
+the engine. Across methods, it emits separate paths to reachable outputs or
+data operations.
 A cycle can also end a recorded path without an output or database access.
 The Java traversal can use shared helper modules, but stops at another
 discovered application module. For example:
@@ -84,9 +85,10 @@ POST /orders -> OrderController -> OrderService -> OrderRepository.save
 ```
 
 This path suggests a database write; it does not prove branch execution or
-transaction commit. `systemlens flows calculate` rebuilds flows from the
-persisted endpoint, method, call edge, module, and topology facts without
-reparsing Java. See the [flow model](data-model.md) and
+transaction commit. `systemlens flows calculate` rebuilds the same flows
+from the persisted endpoint, method, call edge, module, and topology facts,
+with the configured hop bound and edge confidence; it reads Java sources only
+for the passes indexing runs on them. See the [flow model](data-model.md) and
 [flow reconstruction](indexing.md).
 
 ## 6. Microservice call graph and tree

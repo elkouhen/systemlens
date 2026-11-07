@@ -218,7 +218,17 @@ lab.
   configured edge confidence.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-review-2026-11-03.md`: F4, F5, F12.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_flow_set_parity.py` on
+  `tests/fixtures/flow_parity`: `index` with `source`, `codeql` and `joern`
+  (slow tests run) and `flows calculate`, full and `--module`, persist the
+  same four flow IDs; `flows calculate` applies the configured
+  `engine_edge_confidence`, key tracing and the `after_commit` phase. One
+  merge drops a direct join flow a same-method flow already holds, and both
+  passes name a scheduler `@Scheduled(cron=...)`. `CODE_FLOW_SIGNATURE`
+  moves to v49, so old indexes rebuild their flows. Train-ticket, source
+  engine: 406 flows before and after, identical IDs, and `flows calculate`
+  gives the same 406. Commit: pending.
 - **Why P1:** duplicate and divergent flows are visible in every export.
 
 <a id="bl-12"></a>

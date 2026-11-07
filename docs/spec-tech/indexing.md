@@ -40,14 +40,24 @@ passing `--engine-database` reuses the same global CodeQL database for each
 module refresh.
 
 The `systemlens flows calculate` command reconstructs the complete persisted
-flow snapshot from stored endpoints, integration methods, CodeQL call edges,
-modules, existing source-flow candidates and `graph_facts`. It does not invoke
-source extraction or CodeQL. The persisted method graph is rebuilt in memory
-and all endpoint-to-endpoint paths are traversed again. Persisted flows remain
-eligible only when every endpoint step still belongs to the current endpoint
-snapshot; stale flows are dropped before deduplication. AI facts are projected
-into a transient topology view for reconciliation; the facts remain independent
-rows and are never copied into source-derived tables.
+flow snapshot from stored endpoints, integration methods, call edges, modules,
+data operations and `graph_facts`. It does not extract endpoints or run an
+engine. It runs the passes indexing runs, with the configured
+`engine_max_hops` and `engine_edge_confidence`: the same-method pass, the
+join over the persisted call graph, key tracing and the `after_commit` phase.
+Those passes read Java sources under the repository root, as indexing does.
+
+One merge combines the same-method and join flows for indexing with every
+engine and for `flows calculate`, so the same snapshot gives the same flows
+and identifiers (BL-11). A same-method flow holds every effect of its
+method. A direct join flow, without a `method_call` step, is dropped when a
+same-method flow of its trigger already holds each of its effects; a direct
+flow the same-method pass lacks, such as a contract-only HTTP input, stays.
+
+AI facts are projected into a transient topology view for reconciliation;
+the facts remain independent rows and are never copied into source-derived
+tables. An index run with an `--engine-edge-confidence` override is rebuilt
+with the configured value, not the override.
 
 The flow reconstruction treats each discovered module with an application
 entry point as a service boundary. From an entry module, it rejects Java call
@@ -65,11 +75,12 @@ The code-flow signature triggers a rebuild of existing indexes after this
 rule changes.
 
 With `systemlens flows calculate --module NAME`, the same reconstruction starts
-only from input methods owned by `NAME`. The method and call-edge snapshots
-remain global, so helper methods outside the selected module can still resolve.
-Flows owned by other modules remain eligible when their endpoint steps are still
-current. Flows owned by the selected module are rebuilt from the current method
-and endpoint snapshots.
+only from input methods owned by `NAME`, and the same-method pass keeps only
+the flows `NAME` owns. The method and call-edge snapshots remain global, so
+helper methods outside the selected module can still resolve. Flows owned by
+other modules remain eligible when every endpoint step still belongs to the
+current endpoint snapshot; stale flows are dropped before deduplication.
+Without `--module`, every flow is rebuilt and no persisted flow is kept.
 
 Read-model flow listing builds inverted indexes from endpoint identity and
 `(system, topic, role)` to avoid rescanning every flow and endpoint for each

@@ -276,6 +276,21 @@ def path_module_resolver(
 SCHEDULER_TRIGGER_PREFIX = "scheduler:"
 
 
+def scheduled_trigger_label(annotation: Node, source: bytes) -> str:
+    """Name a ``@Scheduled`` trigger step, such as ``@Scheduled(cron=0 * * * * *)``.
+
+    The same-method pass and the transient trigger of the call-graph join
+    use this one label, so a scheduled flow keeps one identity whichever
+    pass builds it (review F5).
+    """
+    for key in ("cron", "fixedRate", "fixedDelay"):
+        argument = java_parser.annotation_argument(annotation, source, key)
+        if argument is not None:
+            value = java_parser.node_text(source, argument).strip().strip('"')
+            return f"@Scheduled({key}={value})"
+    return "@Scheduled"
+
+
 def scheduled_trigger_endpoints(
     repo_root: Path,
     java_paths: list[str],
@@ -313,13 +328,7 @@ def scheduled_trigger_endpoints(
             module = module_by_path.get(path) or _path_module(repo_root, path, modules)
             if module is None:
                 continue
-            schedule = "@Scheduled"
-            for key in ("cron", "fixedRate", "fixedDelay"):
-                argument = java_parser.annotation_argument(annotation, source, key)
-                if argument is not None:
-                    value = java_parser.node_text(source, argument).strip().strip('"')
-                    schedule = f"@Scheduled({key}={value})"
-                    break
+            schedule = scheduled_trigger_label(annotation, source)
             line = declaration.start_point.row + 1
             triggers.append(MessageEndpoint(
                 id=f"{SCHEDULER_TRIGGER_PREFIX}{module}:{path}:{line}",

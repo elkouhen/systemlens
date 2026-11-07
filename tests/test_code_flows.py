@@ -617,7 +617,7 @@ class ScheduledPublisher {
         ("orders", "publish"),
     }
     assert all(flow.steps[0].kind == "cron_entry" for flow in flows)
-    assert {flow.steps[0].name for flow in flows} == {"0 * * * * *"}
+    assert {flow.steps[0].name for flow in flows} == {"@Scheduled(cron=0 * * * * *)"}
 
 
 def test_scheduled_method_seeds_an_interprocedural_flow(tmp_path: Path) -> None:
@@ -1272,7 +1272,8 @@ def test_flows_calculate_drops_persisted_flows_with_removed_endpoints(tmp_path: 
         store.replace_endpoints_for_files([current_endpoint.path], [current_endpoint])
         store.replace_code_flows([current_flow, stale_flow, scheduled_data_flow])
 
-        assert calculate_persisted_flows(store) == 2
+        # A module rebuild keeps the current flows of the other modules.
+        assert calculate_persisted_flows(store, module="billing") == 2
         persisted = store.all_code_flows()
 
     assert sorted(flow.id for flow in persisted) == ["current-flow", "scheduled-data-flow"]
@@ -1520,7 +1521,10 @@ def test_index_uses_automatic_codeql_database_when_available(
         assert reader.get_meta("codeql_call_graph_status") == "complete"
         assert reader.get_meta("codeql_call_graph_edge_count") == "0"
         assert reader.get_meta("codeql_input_output_status") == "complete"
-        assert int(reader.get_meta("codeql_input_output_flow_count") or "0") >= 1
+        # Every flow of this fixture lies within one method: the same-method
+        # pass holds it, so the join adds none (review F4).
+        assert reader.get_meta("codeql_input_output_flow_count") == "0"
+        assert reader.all_code_flows()
     progress_html = tmp_path / "codeql-progress.html"
     cli._write_call_graph_progress_html(repo, progress_html, project_checkpoints[0])
     content = progress_html.read_text(encoding="utf-8")

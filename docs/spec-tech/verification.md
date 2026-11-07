@@ -49,6 +49,7 @@ separate collected test case.
 | CLI and indexed catalogs | `test_cli_catalog.py`, `test_ast_only.py`, `test_modules.py` | Commands load and render the persisted repository snapshot. |
 | Call-edge diagnosis | `test_call_edge_diagnostic.py` | The CLI locates an expected call loss in method inventory, CodeQL joining, snapshot state, or flow reconstruction. |
 | Potential code flows | `test_code_flows.py`, `test_flow_diagnostic.py` | Indexed IN-to-OUT paths preserve ordered evidence, confidence, reconciliation, and module filtering. |
+| One flow set per snapshot | `test_flow_set_parity.py` | `index` with every engine and `flows calculate` persist the same flows and identifiers, with the configured edge confidence, key tracing and `after_commit` phase (BL-11). |
 | Joern export decoding and engine | `test_joern_engine.py` | Unresolved, library and anonymous-class constructor targets give no edge; dispatch confidences follow ADR-70. |
 | Constructor and initializer nodes | `test_constructor_nodes.py`, `test_call_graph_shapes.py` (S7, S8) | Every engine routes a flow through `Owner.<init>` with the same edges (ADR-75). |
 | Strategy1 payload evidence per engine | `test_strategy1_engine_payloads.py` | Each engine completes a Strategy1 Kafka type only under `strategy1`; Joern follows the CodeQL rules (ADR-85). |

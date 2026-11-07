@@ -390,7 +390,8 @@ so `--root-path` opens the file for a nested module too.
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
 chain of Java methods resolved by the selected method-call engine. Its first
 `CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
-`@Scheduled` trigger; a literal cron expression names that step when present.
+`@Scheduled` trigger, named by its schedule, such as
+`@Scheduled(cron=0 * * * * *)` or `@Scheduled(fixedRate=5000)`.
 Later steps are HTTP calls, Kafka publications, or MongoDB/JPA reads and writes in
 the entry method or a reachable method. Steps retain relative evidence paths and
 line ranges.
@@ -400,9 +401,9 @@ semantics rather than line numbers, so ordinary line movement does not replace t
 logical flow. If overloaded or generated declarations still produce the same
 identity, indexing keeps the first historical ID and adds a stable route
 discriminator to later IDs before persistence. The materializer runs during
-indexing, while `systemlens flows calculate` rebuilds endpoint and data paths from
-the stored integration-method and CodeQL-edge snapshots with the independent
-enrichment topology; neither export nor query runs it.
+indexing, while `systemlens flows calculate` rebuilds the same endpoint and data
+paths from the stored integration-method and call-edge snapshots with the
+independent enrichment topology; neither export nor query runs it.
 
 The same-method pass scans the endpoint and data-operation inventory plus eligible
 Java AST nodes. The directed method-graph pass visits reachable methods and edges

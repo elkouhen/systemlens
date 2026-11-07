@@ -63,7 +63,7 @@ After the `input → output` calculation completes, the provisional merged flow
 snapshot is committed again before topology reconciliation and final status
 publication. `codeql_input_output_status` is `complete` for a complete CodeQL
 pass or `partial` after a timeout, and `codeql_input_output_flow_count` records
-the interprocedural flow count at that checkpoint.
+the count of join flows a same-method flow does not already hold.
 
 Long-running CodeQL indexing can publish an explicit partial checkpoint after
 each completed analysis project. The checkpoint persists the currently known

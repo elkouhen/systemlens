@@ -36,12 +36,13 @@ from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, ensu
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.indexing.code_flows import (
     CallGraph,
-    _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
     call_graph_join_methods_signature,
+    combine_code_flows,
     materialize_call_graph_flows,
     materialize_code_flows,
     reconcile_code_flows,
+    without_same_method_duplicates,
 )
 from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
 from systemlens.indexing.integration_methods import (
@@ -551,13 +552,7 @@ def run_call_graph_stage(
                     progress=progress,
                     call_graph_sink=persist_call_graph,
                 )
-            partial_flows = [
-                *flows,
-                *progress_flows,
-            ]
-            partial_flows = _ensure_unique_code_flow_ids(
-                _deduplicate_code_flows(partial_flows, all_endpoints)
-            )
+            partial_flows = combine_code_flows(flows, progress_flows, all_endpoints)
             store.replace_code_flows(partial_flows)
             store.delete_meta("code_flow_signature")
             store.set_meta("code_flow_snapshot_status", "partial")
@@ -615,10 +610,8 @@ def run_call_graph_stage(
             completed_methods: int,
             total_methods: int,
         ) -> None:
-            partial_flows = _ensure_unique_code_flow_ids(
-                _deduplicate_code_flows(
-                    [*flows, *partial_call_graph_flows], all_endpoints
-                )
+            partial_flows = combine_code_flows(
+                flows, partial_call_graph_flows, all_endpoints
             )
             report_built_chains(partial_flows)
             store.replace_code_flows(partial_flows)
@@ -740,13 +733,6 @@ def run_call_graph_stage(
                 persisted_edges=persisted_call_edges if refresh_call_graph_view else None,
                 persisted_methods=persisted_call_graph_methods,
             )
-            if not engine.resolves_types:
-                # Without typed calls, a same-method path is already an
-                # AST flow; only interprocedural paths add evidence.
-                prepared_call_graph_flows = [
-                    flow for flow in prepared_call_graph_flows
-                    if any(step.kind == "method_call" for step in flow.steps)
-                ]
             report_module_progress(scoped_project_calls, roots)
             timer.end(
                 stage,
@@ -801,11 +787,10 @@ def run_call_graph_stage(
             call_graph_sink=persist_call_graph,
         )
         # AST and the interprocedural engine can describe the same
-        # endpoint-to-endpoint flow. Keep one representative while the
-        # engine call graph remains the source of internal call edges.
-        flows = _ensure_unique_code_flow_ids(
-            _deduplicate_code_flows([*flows, *call_graph_flows], all_endpoints)
-        )
+        # endpoint-to-endpoint flow. One merge, shared with ``flows
+        # calculate``, keeps one representative whatever the engine.
+        call_graph_flows = without_same_method_duplicates(flows, call_graph_flows)
+        flows = combine_code_flows(flows, call_graph_flows, all_endpoints)
         report_built_chains(flows)
         store.replace_code_flows(flows)
         store.delete_meta("code_flow_signature")

@@ -12,7 +12,9 @@ from systemlens.domain.graph import (
 from systemlens.indexing.code_flows import (
     _deduplicate_code_flows,
     _ensure_unique_code_flow_ids,
+    combine_code_flows,
     materialize_call_graph_flows,
+    materialize_code_flows,
     reconcile_code_flows,
 )
 from systemlens.domain.code_flows import IntegrationMethod
@@ -24,6 +26,7 @@ from systemlens.indexing.integration_methods import (
     SCHEDULER_TRIGGER_PREFIX,
     scheduled_trigger_endpoints,
 )
+from systemlens.infrastructure.config import Config, config_path, load_config
 from systemlens.scanner import local_spring_application_names
 from systemlens.storage.sqlite import Store
 
@@ -72,23 +75,34 @@ def load_persisted_flow_inputs(store: Store) -> PersistedFlowInputs:
     )
 
 
-def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
-    """Reconstruct all persisted call-graph flows with source and AI topology.
+def calculate_persisted_flows(
+    store: Store, module: str | None = None, config: Config | None = None,
+) -> int:
+    """Rebuild the persisted flow set as indexing builds it.
 
-    This function deliberately does not index source files or run a
-    call-graph engine. It reads the endpoint, integration-method, call-edge,
-    module and enrichment snapshots already stored in SQLite, rebuilds the
-    derived flow
-    set in memory, and persists only that derived result. When ``module`` is
-    provided, only input methods owned by that module are reconstructed; the
+    This function does not extract endpoints or run a call-graph engine. It
+    reads the endpoint, integration-method, call-edge, module, data-operation
+    and enrichment snapshots stored in SQLite and rebuilds the flows with the
+    same passes and merge as indexing: the same-method pass, the join over the
+    persisted call graph with the configured hop bound and edge confidence,
+    key tracing and the ``after_commit`` phase. Those passes read the Java
+    sources under the repository root, as indexing does (review F12).
+
+    When ``module`` is provided, only flows owned by that module are rebuilt,
+    same-method flows included; current flows of other modules are kept. The
     global persisted method graph remains available for helper calls.
     """
+    if config is None:
+        # An index built before ``init`` wrote a configuration used the
+        # defaults; so does its rebuild.
+        config = (
+            load_config(store.repo_root)
+            if config_path(store.repo_root).is_file() else Config()
+        )
+    repo_root = store.repo_root
     inputs = load_persisted_flow_inputs(store)
     endpoints, modules, methods = inputs.endpoints, inputs.modules, inputs.methods
-    persisted_flows = store.all_code_flows()
     current_endpoint_ids = {endpoint.id for endpoint in endpoints}
-    persisted_call_edges = store.all_call_edges()
-    persisted_call_graph_methods = store.all_call_graph_methods()
     facts = store.all_graph_facts()
     endpoints_by_service = group_endpoints_by_module(endpoints)
     strategy = store.get_meta("topic_strategy") or "default"
@@ -106,26 +120,39 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
         service_aliases=service_aliases,
     )
     fact_edges = graph_edges_from_facts(facts, endpoints_by_service)
-    reconstructed_flows = (
+    same_method_flows = [
+        flow for flow in materialize_code_flows(
+            repo_root, endpoints, modules, inputs.operations,
+        )
+        if module is None or flow.module == module
+    ]
+    call_graph_flows = (
         materialize_call_graph_flows(
             methods,
             inputs.flow_endpoints,
             [],
+            repo_root=repo_root,
             module=module,
             modules=modules,
-            persisted_edges=persisted_call_edges,
-            persisted_methods=persisted_call_graph_methods,
+            persisted_edges=store.all_call_edges(),
+            persisted_methods=store.all_call_graph_methods(),
             operations=inputs.operations,
+            source_paths=sorted(store.get_file_hashes()),
+            max_hops=config.engine_max_hops,
+            edge_confidence=config.engine_edge_confidence,
+            module_dependencies=store.all_module_dependencies(),
         )
         if methods
         else []
     )
-    # A scheduled method whose only indexed effect is a data access has no
+    # A module rebuild keeps the current flows of the other modules. A
+    # scheduled method whose only indexed effect is a data access has no
     # endpoint step: its transient trigger anchors it, so it stays eligible.
     retained_persisted_flows = [
         flow
-        for flow in persisted_flows
-        if flow.module != module
+        for flow in store.all_code_flows()
+        if module is not None
+        and flow.module != module
         and all(
             step.endpoint_id in current_endpoint_ids
             for step in flow.steps
@@ -137,7 +164,11 @@ def calculate_persisted_flows(store: Store, module: str | None = None) -> int:
         )
     ]
     flows = _ensure_unique_code_flow_ids(_deduplicate_code_flows(
-        [*retained_persisted_flows, *reconstructed_flows], endpoints,
+        [
+            *retained_persisted_flows,
+            *combine_code_flows(same_method_flows, call_graph_flows, endpoints),
+        ],
+        endpoints,
     ))
     reconciled = reconcile_code_flows(
         flows,
