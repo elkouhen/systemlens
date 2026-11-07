@@ -167,6 +167,22 @@ _LOMBOK_GETTERS = {"Data", "Getter", "Value"}
 # Functional JDK interfaces: a lambda or method reference can implement them
 # anywhere, so dispatch on them is never exact.
 _FUNCTIONAL_JDK = {"java.lang.Runnable", "java.util.concurrent.Callable"}
+# JDK functional interfaces a source method may declare, by parameter count
+# of their single abstract method: the arity a method reference passed there
+# binds (BL-24).
+_JDK_FUNCTIONAL_ARITIES: dict[str, int] = {
+    "java.lang.Runnable": 0, "java.util.concurrent.Callable": 0,
+    "java.util.function.Supplier": 0, "java.util.function.Consumer": 1,
+    "java.util.function.Function": 1, "java.util.function.Predicate": 1,
+    "java.util.function.UnaryOperator": 1, "java.util.function.BiConsumer": 2,
+    "java.util.function.BiFunction": 2, "java.util.function.BiPredicate": 2,
+    "java.util.function.BinaryOperator": 2, "java.util.Comparator": 2,
+}
+# Receivers of a method reference that are expressions, never a type name.
+_EXPRESSION_RECEIVERS = {
+    "this", "super", "method_invocation", "object_creation_expression", "parenthesized_expression",
+    "array_access", "cast_expression",
+}
 # JDK generic types whose type arguments type an untyped lambda parameter
 # (BL-14): the element of a collection, stream or optional, or the key and
 # value of a map. Each maps to its kind and its number of type arguments.
@@ -1695,23 +1711,166 @@ class JavaSymbols:
         receiver's written type arguments, as ``Iterable<T>.forEach`` takes
         a ``Consumer<? super T>``. Any other target leaves it unknown.
         """
-        arguments = lambda_node.parent
+        site = self._argument_site(info, lambda_node)
+        if site is None:
+            return None
+        call, receiver, name, call_arguments, index = site
+        view = self._generic_view(info, receiver, call) if receiver is not None else None
+        if view is not None:
+            kind, type_arguments = view
+            slots = _LAMBDA_PARAMETERS.get((kind, name, len(call_arguments), index, count))
+            return type_arguments[slots[position]] if slots is not None else None
+        # A source method whose parameter is a source functional interface
+        # (BL-24): the parameter types of its single abstract method.
+        parameters = self._functional_parameters(info, call, receiver, name, call_arguments, index)
+        return parameters[position] if parameters is not None and len(parameters) == count else None
+
+    def _argument_site(
+        self, info: _Method, node: Node,
+    ) -> tuple[Node, Node | None, str, list[Node], int] | None:
+        """The method call ``node`` is a direct argument of: the call, its
+        receiver, name and arguments, and the position of ``node``."""
+        arguments = node.parent
         call = arguments.parent if arguments is not None and arguments.type == "argument_list" else None
         if call is None or call.type != "method_invocation":
             return None
         receiver, name, call_arguments = parser.invocation_parts(call, self.units[info.method.path].source)
         index = next((
             number for number, argument in enumerate(call_arguments)
-            if (argument.start_byte, argument.end_byte) == (lambda_node.start_byte, lambda_node.end_byte)
+            if (argument.start_byte, argument.end_byte) == (node.start_byte, node.end_byte)
         ), None)
-        if index is None or receiver is None:
+        return (call, receiver, name, call_arguments, index) if index is not None else None
+
+    def _reference_arity(self, info: _Method, reference: Node) -> int | None:
+        """The parameter count of the functional interface a method
+        reference implements, when it is a direct argument whose target the
+        sources prove: a JDK callback of a written container, or a source
+        method parameter typed by a source or JDK functional interface
+        (BL-24). ``None`` for any other target."""
+        site = self._argument_site(info, reference)
+        if site is None:
             return None
-        view = self._generic_view(info, receiver, call)
-        if view is None:
+        call, receiver, name, call_arguments, index = site
+        view = self._generic_view(info, receiver, call) if receiver is not None else None
+        if view is not None:
+            counts = {
+                key[4] for key in _LAMBDA_PARAMETERS
+                if key[:4] == (view[0], name, len(call_arguments), index)
+            }
+            return next(iter(counts)) if len(counts) == 1 else None
+        parameters = self._functional_parameters(info, call, receiver, name, call_arguments, index)
+        return len(parameters) if parameters is not None else None
+
+    def _functional_parameters(
+        self, info: _Method, call: Node, receiver: Node | None, name: str, arguments: list[Node], index: int,
+    ) -> tuple[str | None, ...] | None:
+        """The parameter types of the functional interface a source method
+        declares at argument ``index`` (BL-24).
+
+        Every declaration of the name and arity on the receiver's type and
+        its ancestors must agree; a varargs overload, or an external
+        supertype that may declare the name, leaves the target unknown.
+        """
+        path = info.method.path
+        if receiver is None:
+            owner = self._lexical_owner(info, name, call)
+            if owner is None:
+                return None
+            context: tuple[str, _Env] | None = (owner, self._owner_env(owner, self._module_of(owner, path)))
+        else:
+            context = self._receiver_env(info, receiver, call)
+        if context is None or context[0] not in self.types:
             return None
-        kind, type_arguments = view
-        slots = _LAMBDA_PARAMETERS.get((kind, name, len(call_arguments), index, count))
-        return type_arguments[slots[position]] if slots is not None else None
+        owner = context[0]
+        locations = self._type_candidates(owner, path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        if self._may_inherit_unknown(owner, module, name):
+            return None
+        ancestors = self.ancestors(owner, module)
+        if any(self.varargs_by_owner.get((base, name, base_module)) for base, base_module in ancestors):
+            return None
+        declarations = [
+            candidate for base, base_module in ancestors
+            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])
+        ]
+        found: set[tuple[str | None, ...] | None] = set()
+        for declaration in declarations:
+            formals = declaration.node.child_by_field_name("parameters")
+            typed = [
+                formal for formal in (formals.named_children if formals is not None else [])
+                if formal.type in {"formal_parameter", "spread_parameter"}
+            ]
+            type_node = typed[index].child_by_field_name("type") if len(typed) == len(arguments) else None
+            if type_node is None or typed[index].type != "formal_parameter":
+                return None
+            env = self._call_env(info, declaration, context, call, arguments, 1)
+            found.add(self._functional_signature(declaration.method.path, type_node, declaration.owner, env))
+        return next(iter(found)) if len(found) == 1 else None
+
+    def _functional_signature(
+        self, path: str, type_node: Node, owner: str, env: _Env,
+    ) -> tuple[str | None, ...] | None:
+        """The parameter types of the single abstract method of a written
+        functional interface type.
+
+        A source interface counts when it and its source ancestors are
+        interfaces with no external supertype and declare one abstract
+        method name and arity, ``Object`` methods aside. Its parameter types
+        take the written type arguments, through ``extends`` clauses. A JDK
+        functional interface gives its arity only, untyped.
+        """
+        source = self.units[path].source
+        name_node = type_node.named_children[0] if type_node.type == "generic_type" else type_node
+        written = self.resolve(path, parser.node_text(source, name_node), owner, allow_ambiguous=True, at=name_node)
+        if written in _JDK_FUNCTIONAL_ARITIES:
+            return (None,) * _JDK_FUNCTIONAL_ARITIES[written]
+        parameterized = self._parameterized(path, type_node, owner, env)
+        if parameterized is None:
+            return None
+        interface, interface_env = parameterized
+        module = self._module_of(interface, path)
+        abstract: list[tuple[tuple[str | None, int], str, str, Node]] = []
+        for ancestor, ancestor_module in self.ancestors(interface, module):
+            if self.external_bases.get((ancestor, ancestor_module)):
+                return None
+            for location, declaration in self._module_locations(ancestor, ancestor_module):
+                if declaration.type != "interface_declaration":
+                    return None
+                body = declaration.child_by_field_name("body")
+                ancestor_source = self.units[location].source
+                for member in body.named_children if body is not None else []:
+                    if member.type != "method_declaration" or member.child_by_field_name("body") is not None:
+                        continue
+                    modifiers = parser.modifiers_node(member)
+                    if modifiers is not None and {"static", "default", "private"} & set(
+                        parser.node_text(ancestor_source, modifiers).split()
+                    ):
+                        continue
+                    formals = member.child_by_field_name("parameters")
+                    count = len([
+                        formal for formal in (formals.named_children if formals is not None else [])
+                        if formal.type in {"formal_parameter", "spread_parameter"}
+                    ])
+                    key = (parser.declaration_name(member, ancestor_source), count)
+                    if key not in _OBJECT_DISPATCH:
+                        abstract.append((key, ancestor, location, member))
+        if len({key for key, _ancestor, _location, _member in abstract}) != 1:
+            return None
+        signatures: set[tuple[str | None, ...]] = set()
+        for _key, ancestor, location, member in abstract:
+            ancestor_env = self._supertype_env(interface, module, interface_env, ancestor) or {}
+            types: list[str | None] = []
+            formals = member.child_by_field_name("parameters")
+            for formal in formals.named_children if formals is not None else []:
+                if formal.type == "spread_parameter":
+                    return None
+                formal_type = formal.child_by_field_name("type") if formal.type == "formal_parameter" else None
+                if formal_type is not None:
+                    types.append(self._declared_type(location, formal_type, ancestor, ancestor_env))
+            signatures.add(tuple(types))
+        return next(iter(signatures)) if len(signatures) == 1 else None
 
     def _generic_view(
         self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
@@ -2850,6 +3009,21 @@ class JavaSymbols:
                     if receiver_type is None:
                         continue
                     arities = self._declared_arities(receiver_type, name, info.method.path, info.module)
+                    if len(arities) > 1:
+                        # Overloads: the target functional interface's
+                        # parameter count picks one arity (BL-24). A type
+                        # name may also name an unbound instance method,
+                        # which takes the first parameter as receiver.
+                        target = self._reference_arity(info, invocation)
+                        expression = receiver.type in _EXPRESSION_RECEIVERS or (
+                            receiver.type == "identifier" and self.variable_type(
+                                info, parser.node_text(source, receiver), invocation,
+                            ) is not None
+                        ) or parser.node_text(source, receiver).startswith("this.")
+                        accepted = (
+                            set() if target is None else {target} if expression else {target, target - 1}
+                        )
+                        arities &= accepted
                     if len(arities) != 1:
                         continue
                     arity, argument_types = next(iter(arities)), None

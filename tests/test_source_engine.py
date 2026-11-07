@@ -42,6 +42,7 @@ class Patterns extends Base {
     inherited();
     service.overload(unknown);
     items.forEach(service::multi);
+    Runnable later = service::multi;
   }
 }
 """
@@ -90,8 +91,10 @@ def test_source_engine_keeps_doubt_where_syntax_cannot_decide(tmp_path: Path) ->
 
     # Two source implementations of an interface stay possible.
     assert sorted(calls["send"]) == [(_line("class Adapter"), "possible"), (_line("class Other"), "possible")]
-    # A method reference to a name declared with two arities stays unresolved.
-    assert "multi" not in calls
+    # A method reference to a name declared with two arities binds to the
+    # one its target fixes (BL-24): forEach takes a one-parameter Consumer.
+    # Its target unread, the assignment to a Runnable stays unresolved.
+    assert calls["multi"] == [(_line("void multi(String s)"), "exact")]
 
 
 def test_an_override_typed_through_an_external_wildcard_import_is_dispatched(tmp_path: Path) -> None:

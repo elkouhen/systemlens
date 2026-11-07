@@ -1779,6 +1779,134 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.go", {"Task.run": "possible"}),
+    Shape("F5", """
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        interface Handler {
+          void on(Circle c);
+        }
+        class Use {
+          void register(Handler h) {} //@Use.register
+          void run() { //@Use.run
+            register(c -> c.area());
+          }
+        }
+        """, "Use.run", {"Use.register": "exact", "Circle.area": "exact"},
+        note="BL-24: the lambda takes the parameter types of Handler.on"),
+    Shape("F5-generic", """
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        interface Handler<T> {
+          void on(T value);
+        }
+        interface CircleHandler extends Handler<Circle> {
+          default void log() {}
+          boolean equals(Object other);
+        }
+        class Bus<E> {
+          void register(Handler<E> h) {} //@Bus.register
+          void each(CircleHandler h) {} //@Bus.each
+        }
+        class Use {
+          Bus<Circle> bus;
+          void run() { //@Use.run
+            bus.register(c -> c.area());
+            bus.each(c -> c.area());
+          }
+        }
+        """, "Use.run", {"Bus.register": "exact", "Bus.each": "exact", "Circle.area": "exact"},
+        note="BL-24: type arguments reach the abstract method through the receiver and extends"),
+    Shape("F5-unproven", """
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square {
+          double area() { return 2; } //@Square.area
+        }
+        interface OnCircle {
+          void on(Circle c);
+        }
+        interface OnSquare {
+          void on(Square s);
+        }
+        interface Two {
+          void on(Circle c);
+          void off(Circle c);
+        }
+        interface Open<T> {
+          void on(T value);
+        }
+        interface Lib extends com.example.Listener {
+          void on(Circle c);
+        }
+        class Use {
+          void register(OnCircle h) {} //@Use.registerCircle
+          void register(OnSquare h) {} //@Use.registerSquare
+          void two(Two h) {} //@Use.two
+          <T> void open(Open<T> h) {} //@Use.open
+          void lib(Lib h) {} //@Use.lib
+          void run() { //@Use.run
+            register(c -> c.area());
+            two(c -> c.area());
+            open(c -> c.area());
+            lib(c -> c.area());
+          }
+        }
+        """, "Use.run", {}, partial=True, absent=("Circle.area", "Square.area"),
+        note="BL-24: disagreeing overloads, two abstract methods, an unproven type "
+             "argument or an external superinterface leave the parameter untyped"),
+    Shape("F5-reference", """
+        import java.util.List;
+        import java.util.function.Consumer;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        interface Handler {
+          void on(Circle c);
+        }
+        class Sink {
+          void handle(Circle c) {} //@Sink.handle
+          void handle(Circle c, int n) {} //@Sink.handleTwo
+        }
+        class Use {
+          List<Circle> circles;
+          Sink sink;
+          void register(Handler h) {}
+          void accept(Consumer<Circle> c) {}
+          void run() { //@Use.run
+            circles.forEach(sink::handle);
+            register(sink::handle);
+            accept(this.sink::handle);
+          }
+        }
+        """, "Use.run", {"Sink.handle": "exact"}, partial=True, absent=("Sink.handleTwo",),
+        note="BL-24: the target's parameter count picks the overload, JDK or source"),
+    Shape("F5-reference-unknown", """
+        import com.example.Bus;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        interface Pair {
+          void on(Sink sink, Circle c);
+        }
+        class Sink {
+          void handle(Circle c) {} //@Sink.handle
+          void handle(Circle c, int n) {} //@Sink.handleTwo
+        }
+        class Use {
+          Bus bus;
+          Sink sink;
+          void pair(Pair p) {}
+          void run() { //@Use.run
+            bus.register(sink::handle);
+            Runnable r = sink::handle;
+            pair(Sink::handle);
+          }
+        }
+        """, "Use.run", {}, partial=True, absent=("Sink.handle", "Sink.handleTwo"),
+        note="BL-24: an unknown target, or a type name that fits two arities, stays unresolved"),
     # 2.6 Module boundaries
     Shape("M1", {
         "lib/src/main/java/l/Local.java": """

@@ -370,8 +370,10 @@ methods: with the `source` engine it is the whole call graph, with `codeql`
 it fills the gaps. A receiver is typed from a field, parameter, local or
 `var` initializer, a declared return type, a field access (`obj.field`,
 `Type.CONSTANT`, enum constants), an array element, `Outer.this` from a
-type it encloses, or a capitalized type name for a static call;
-`receiver::name` is a call when that name has one declared arity.
+type it encloses, or a capitalized type name for a static call.
+`receiver::name` is a call when that name has one declared arity, or when
+the target functional interface picks one (BL-24); see the lambda
+paragraphs below.
 A ternary takes the type its two branches share; branches of different
 types leave it untyped (BL-23). A zero-argument `getX()` (`isX()` for a
 `boolean`) that no source type declares takes the field type when Lombok
@@ -401,9 +403,34 @@ chain that keeps its arguments: `stream()`, `filter`, `sorted`,
 `findFirst`, `keySet()`, `values()`. The callbacks are `forEach`,
 `filter`, `map`, `anyMatch` and their kin, comparators of `sorted`, `min`
 and `max`, and `Map.forEach`, `compute*` and `merge`, which give the key
-or the value. `? extends X` gives `X`. Any other target (a source method,
-an assignment, a raw or wildcard type, a type changed by `map`) leaves the
-parameter untyped, but it still shadows a field.
+or the value. `? extends X` gives `X`.
+
+A lambda passed directly to a source method takes the parameter types of
+the single abstract method of the source functional interface declared at
+that position (BL-24). With `register(Handler h)` and `interface Handler {
+void on(Circle c); }`, `register(c -> c.area())` reaches `Circle.area`.
+Type arguments come from the parameter's written type, the receiver and
+the generic method as for a return type, then through `extends` clauses.
+
+The interface and its source ancestors must be interfaces with no external
+supertype and one abstract method name and arity, `Object` methods,
+`default`, `static` and `private` methods aside. Every declaration of the
+called name and arity must give the same types. Disagreeing overloads, a
+varargs overload, a receiver whose external supertype may declare the
+name, an unproven type argument, or any other target (an assignment, a
+JDK functional interface, a raw or wildcard container, a type changed by
+`map`) leave the parameter untyped, but it still shadows a field.
+
+A method reference whose name has several declared arities binds to the
+one its target functional interface fixes (BL-24). The target is a direct
+argument position: a JDK callback above, such as `forEach` taking one
+parameter, a source functional interface as for a lambda, or a JDK one
+(`Runnable`, `Callable`, `Supplier`, `Consumer`, `Function`, `Predicate`,
+`UnaryOperator`, `BiConsumer`, `BiFunction`, `BiPredicate`,
+`BinaryOperator`, `Comparator`) declared by a source method. A type name
+as receiver may name an unbound instance method, so it accepts the
+target's count or one less; when both arities exist, the reference stays
+unresolved. So does an overloaded reference whose target is unknown.
 
 The same view types a call chained on a JDK container accessor (BL-27).
 The accessor returns the type argument it names: `get(int)`, `getFirst()`
@@ -920,6 +947,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
 | F3 | Anonymous subclass overriding a source method | `defect` | not planned |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
+| F5 | Lambda parameter typed by a source functional interface; method reference overload picked by its target | `covered` (BL-24) | |
 | M1 | External-interface dispatch limited to visible modules | `covered` (ADR-71) | |
 | M2 | Source-type dispatch from a library into a module that depends on it | `defect` | not planned |
 | M3 | Same qualified type in two modules, one visible | `defect` | not planned |
@@ -967,8 +995,8 @@ aligned it.
 | A6 | `Outer.this.helper()` from an inner class | `covered` | BL-23 |
 | A7 | Receiver typed by a bounded type variable (G4): implementations `covered` by BL-26, declared row `missing` | `missing` | BL-28 |
 | A8 | Unqualified call inside an anonymous `Thread` | `covered` | BL-25 |
-| A9 | Lambda passed to a source functional interface parameter | `missing` | BL-24 |
-| A10 | Method reference: one arity `covered`; overloaded name `missing` | `missing` | BL-24 |
+| A9 | Lambda passed to a source functional interface parameter | `covered` | BL-24 |
+| A10 | Method reference, one arity or an overloaded name | `covered` | BL-24 |
 | B1 | Local or `final` field declared `Shape`, created as `Circle` | `defect` | BL-29 |
 | B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
 | B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
