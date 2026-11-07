@@ -1560,7 +1560,8 @@ exact one and the witness; flows and their confidence are unchanged.
 
 **Status:** Accepted on 2026-11-03. Amends ADR-70. Amended on 2026-11-06
 by lot 3 of the review backlog (finding J2, task C6 of the dispatch-scope
-plan): the scope also bounds the edges of a typed engine.
+plan): the scope also bounds the edges of a typed engine. The amendment's
+refinement was confirmed by the product owner on 2026-11-07.
 
 **Context:** ADR-70 lets a call on an interface outside the sources, such
 as `ExecutorService`, `Callable` or `UserDetails`, dispatch to the source
@@ -1616,6 +1617,9 @@ implement the caller's interfaces, as an adapter implements a port; the
 observability lab's library `kafka-processing` dispatches that way, and
 its 23 flows need it. An index without any known module dependency keeps
 every engine edge: there is no build graph to judge it.
+
+The product owner confirmed this refinement on 2026-11-07, which closes
+task C6 of the dispatch-scope plan.
 
 ## ADR-72: Keep dispatch possible when an implicit implementation exists
 
