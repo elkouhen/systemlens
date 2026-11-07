@@ -361,7 +361,7 @@ CASES: list[Case] = [
     _case("B2-lambda", "Lambdas.lambda", None,
           ("b2.lambda", "Fn.apply", "possible"), deviation=()),
     _case("B2-anonymous", "Lambdas.anonymous", None),
-    _case("B3", "Spawner.spawn", "BL-31",
+    _case("B3", "Spawner.spawn", None,
           ("b3", "MyThread.run", "exact")),
     _case("B4", "Dispatch.run", None,
           ("b4", "Circle.area", "possible"), ("b4", "Square.area", "possible"),

@@ -1774,10 +1774,21 @@ subclass or one of its source ancestors.
 
 **Consequences:** Framework subclasses, such as threads, filters or
 output streams, become reachable through their library supertype.
-Edges are added; only a created-once variable makes one exact.
-A subclass of a library subclass, such as `TSOStr` under
-`ServletOutputStream` for a call on `OutputStream`, stays unreachable:
-the sources do not contain the library hierarchy.
+Edges are added; only a created-once variable makes one exact. A
+subclass of a library subclass stays unreachable from a call on the
+library's base class: the sources do not contain the library hierarchy.
+
+Measured on 2026-11-07 with fresh indexes of copies, no call on the
+reference projects reaches a new source override. Train-ticket keeps
+406 flows and 1712 edges between indexed methods with both engines, and
+`compare-engines` at zero differences; the lab keeps 23 flows, 102
+`source` edges and its one CodeQL-only edge.
+
+The `TSOStr.write` flow ADR-70 names no longer exists in the current
+index: the methods of `TSOStr`, under `old-docs/`, are not indexed
+methods, for either engine. Its call `delegate.write(b)` on a
+`ServletOutputStream` field is the shape this record covers, and would
+reach `TSOStr.write`, `possible`, if they were.
 
 ## ADR-75: Make constructors and initializers part of the call graph
 

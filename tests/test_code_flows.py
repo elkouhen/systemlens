@@ -2929,6 +2929,66 @@ def test_a_field_holding_a_lambda_opens_no_route_in_fresh_and_rebuilt_flows(tmp_
         assert fresh == rebuilt == []
 
 
+def test_an_external_class_dispatches_to_its_source_subclass_in_fresh_and_rebuilt_flows(
+    tmp_path: Path,
+) -> None:
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = """package com.example;
+class Sender extends java.io.OutputStream { public void write(int b) { kafka.send(); } }
+class OrderController {
+  java.io.OutputStream out;
+  void receive() { out.write(1); }
+  void created() { java.io.OutputStream made = new Sender(); made.write(1); }
+}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 5),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("made", "serve", "rest", "POST /made", source, 6),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("stock", "produce", "kafka", "orders.stock", source, 2),
+                qualified_name="com.example.Sender"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+    names = {method.id: method.qualified_method for method in methods}
+    graphs = []
+    fresh = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, closed_world=True,
+        call_graph_sink=graphs.append,
+    )
+    rebuilt = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=[source],
+        persisted_edges=graphs[-1].edges(), persisted_methods=graphs[-1].methods,
+    )
+
+    # BL-31: a call on an external class reaches the source override,
+    # possible since the library has its own body and other subclasses
+    # (ADR-74); a variable created once as the subclass makes it exact
+    # (ADR-86).
+    assert sorted(
+        (names[edge.caller_id], names[edge.callee_id], edge.dispatch_confidence)
+        for edge in graphs[-1].edges()
+    ) == [
+        ("com.example.OrderController.created", "com.example.Sender.write", "exact"),
+        ("com.example.OrderController.receive", "com.example.Sender.write", "possible"),
+    ]
+
+    def shape(flows: list) -> list:
+        return sorted((flow.confidence, [step.name for step in flow.steps]) for flow in flows)
+
+    assert shape(fresh) == shape(rebuilt) == [
+        ("low", ["POST /orders", "com.example.Sender.write", "orders.stock"]),
+        ("medium", ["POST /made", "com.example.Sender.write", "orders.stock"]),
+    ]
+
+
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
     source_a = "orders/src/main/java/com/example/Shared.java"
     source_b = "billing/src/main/java/com/example/Shared.java"

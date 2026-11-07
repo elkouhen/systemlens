@@ -478,6 +478,9 @@ class JavaSymbols:
         self._implicit: tuple[dict[str, set[tuple[str, int]]], set[str]] | None = None
         self._context_methods: dict[tuple[str, int, int], _Method] | None = None
         self._by_name_arity: dict[tuple[str, int], list[_Method]] | None = None
+        # External classes and the source classes that extend them directly
+        # (BL-31, ADR-74).
+        self.external_subclasses: dict[str, set[tuple[str, str]]] = defaultdict(set)
         # Build dependencies between module identities (ADR-71), and the
         # modules each caller module sees, computed on demand.
         self.module_dependencies: dict[str, set[str]] = defaultdict(set)
@@ -599,6 +602,8 @@ class JavaSymbols:
                                 self.external_bases[type_key].add(base)
                                 if base is not None and child.type != "superclass":
                                     self.external_implementors[base].add(type_key)
+                                elif base is not None and base != "java.lang.Object":
+                                    self.external_subclasses[base].add(type_key)
                                 for known in _KNOWN_EXTERNAL_SUPERTYPES.get(base or "", ()):
                                     self.external_implementors[known].add(type_key)
         for path, path_methods in by_path.items():
@@ -1829,12 +1834,13 @@ class JavaSymbols:
     ) -> tuple[str, list[IntegrationMethod], bool] | None:
         """The dispatch on the type a variable always holds (BL-29), as
         ``(type, targets, pruned)``, when it is a source subtype of the
-        declared receiver type and its targets are among ``targets``."""
+        declared receiver type, a source type or an external one (BL-31),
+        and its targets are among ``targets``."""
         created = self.created_type(info, receiver, invocation)
         if created is None or created == receiver_type:
             return None
         module = self._receiver_module(created, info)
-        if not any(owner == receiver_type for owner, _module in self.ancestors(created, module)):
+        if not self._subtype_of(created, module, receiver_type):
             return None
         narrowed, pruned, _declaration = self._candidate_targets(
             created, name, arity, info.module, info.method.path, argument_types=argument_types,
@@ -1843,6 +1849,17 @@ class JavaSymbols:
         if not narrowed or any(target.id not in reached for target in narrowed):
             return None
         return created, narrowed, pruned
+
+    def _subtype_of(self, owner: str, module: str, supertype: str) -> bool:
+        """Whether ``owner`` extends or implements ``supertype``, through its
+        source ancestors and the external types they name directly."""
+        for ancestor in self.ancestors(owner, module):
+            if ancestor[0] == supertype:
+                return True
+            for base in self.external_bases.get(ancestor, ()):
+                if base == supertype or supertype in _KNOWN_EXTERNAL_SUPERTYPES.get(base or "", ()):
+                    return True
+        return False
 
     def _implicit_targets(
         self, info: _Method, value: Node, value_owner: str, receiver_type: str, name: str, arity: int,
@@ -3123,9 +3140,10 @@ class JavaSymbols:
         self, interface: str, name: str, arity: int, argument_types: tuple[str | None, ...] | None,
         visible: frozenset[str],
     ) -> list[IntegrationMethod]:
-        """Source bodies a call on an external interface can dispatch to.
+        """Source bodies a call on an external interface or class can
+        dispatch to (ADR-70, ADR-74).
 
-        Each source subtype of the interface contributes the most specific
+        Each source subtype of the external type contributes the most specific
         concrete, non-static, non-private body of ``name``/``arity`` it
         declares or inherits from a source ancestor. A subtype whose
         same-arity overloads the arguments cannot separate makes the whole
@@ -3136,7 +3154,7 @@ class JavaSymbols:
         key = (interface, name, arity, argument_types, visible)
         if key in self._external_targets:
             return self._external_targets[key]
-        direct = self.external_implementors.get(interface, set())
+        direct = self.external_implementors.get(interface, set()) | self.external_subclasses.get(interface, set())
         bodies: dict[str, IntegrationMethod] = {}
         subtypes = {
             (owner, self.path_modules.get(path, ""))
@@ -3487,6 +3505,9 @@ class JavaSymbols:
                                 info.method.path, argument_types=argument_types,
                             )
                     if not targets and closed_world and receiver_type not in self.types:
+                        # An external interface or class dispatches to its
+                        # source implementations and overrides (ADR-71,
+                        # BL-31, ADR-74).
                         targets = self._external_dispatch(
                             receiver_type, name, arguments_count, argument_types,
                             self.visible_modules(info.module),
@@ -3499,6 +3520,16 @@ class JavaSymbols:
                         pruned = bool(targets) and (
                             receiver_type in self.anonymous_supertypes or receiver_type in _FUNCTIONAL_JDK
                         )
+                        if targets and receiver is not None and invocation.type != "method_reference":
+                            # A variable created once as a source subclass
+                            # dispatches on it, under ADR-81 (ADR-86, BL-31).
+                            narrowed = self._narrowed_targets(
+                                info, receiver, invocation, receiver_type, name, arguments_count,
+                                argument_types, targets,
+                            )
+                            if narrowed is not None:
+                                dispatch_type, targets, pruned = narrowed
+                                external = False
                     if not targets:
                         targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
                 implicit = (

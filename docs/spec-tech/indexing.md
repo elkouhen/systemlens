@@ -613,7 +613,9 @@ dispatch on `T` when `T` is a source subtype of the declared type (ADR-86,
 BL-29). The declaration the call names, and so the witness, stay the
 declared type's. Any other assignment in the variable's block or class
 body, compound and `++` included, keeps the declared type. So do a
-parameter and a non-final, blank or inherited field.
+parameter and a non-final, blank or inherited field. The declared type
+may also be external (BL-31): `T` must then name it directly, or through
+one of its source ancestors.
 
 The narrowed call is `exact` only under ADR-81, checked on `T`: an
 override in a subclass of `T` keeps it `possible`. When `T` has no
@@ -648,9 +650,10 @@ most specific concrete, non-static, non-private body of that name and arity
 on each source subtype. The edge is always `possible`, even with one body,
 because a library can supply the implementation (ADR-71). A subtype whose
 same-arity overloads the arguments cannot separate leaves the call
-unresolved. A call on an external class, such as `Object` or
-`OutputStream`, reaches no source override: the class hierarchy of a
-library is not in the sources.
+unresolved. A receiver typed by an external class that a source class
+extends dispatches the same way (ADR-74, BL-31). `Object` is never such a
+class. A subclass of a library subclass stays out of reach: the class
+hierarchy of a library is not in the sources.
 
 ADR-71 scopes these candidates to the caller's visible modules: a body
 counts only when its method belongs to the caller's module or to one of
@@ -963,7 +966,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H8 | Records implementing an interface | `covered` | |
 | H9 | Enum constant bodies | `covered` | |
 | H10 | External interface implemented in the sources | `covered` (ADR-71) | |
-| H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | not planned |
+| H11 | External class extended in the sources (`Thread`, servlet filters); created once, unseparable overloads, visible modules | `covered` (BL-31) | |
 | H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | |
 | H13 | A superclass method wins over an interface `default` | `covered` | |
 | H14 | Abstract declaration as a declared row beside possible implementations; none when its dispatch is wider | `covered` (BL-28) | |
@@ -1043,7 +1046,7 @@ aligned it.
 | A10 | Method reference, one arity or an overloaded name | `covered` | BL-24 |
 | B1 | Local or `final` field declared `Shape`, created as `Circle` | `covered` | BL-29 |
 | B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `covered` | BL-30; B2-lambda omits the declared row (ADR-72) |
-| B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
+| B3 | Call on an external class reaching a source subclass (H11) | `covered` | BL-31 |
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 

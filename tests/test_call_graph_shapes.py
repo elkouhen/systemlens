@@ -834,14 +834,77 @@ SHAPES: list[Shape] = [
         class MyRunner extends Thread {
           public void run() {} //@MyRunner.run
         }
+        class Quiet extends Thread {
+        }
         class Use {
           Thread t;
           void go() { //@Use.go
             t.run();
+            t.start();
           }
         }
         """, "Use.go", {"MyRunner.run": "possible"},
-        pending="not planned: no dispatch from an external class to a source override"),
+        note="BL-31: the external class has its own body and other library subclasses; "
+             "a subclass that inherits the call, and a method no subclass overrides, add nothing"),
+    Shape("H11-created", """
+        class MyRunner extends Thread {
+          public void run() {} //@MyRunner.run
+        }
+        class Other extends Thread {
+          public void run() {} //@Other.run
+        }
+        class Use {
+          void go() { //@Use.go
+            Thread t = new MyRunner();
+            t.run();
+          }
+        }
+        """, "Use.go", {"MyRunner.run": "exact"},
+        note="BL-31 with ADR-86: a variable created once as a source subclass dispatches on it"),
+    Shape("H11-kept", """
+        class Out extends java.io.OutputStream {
+          public void write(int b) {} //@Out.write
+          public void write(long b) {}
+        }
+        class Mine extends Thread {
+          public void run() {} //@Mine.run
+        }
+        class Use {
+          java.io.OutputStream out;
+          com.example.ext.Source source;
+          void go() { //@Use.go
+            out.write(source.next());
+            Thread made = new Thread() { public void run() {} };
+            made.run();
+          }
+        }
+        """, "Use.go", {}, absent=("Out.write", "Mine.run"),
+        note="BL-31: same-arity overloads the arguments cannot separate stay unresolved; an "
+             "anonymous subclass created once implements run itself (BL-30)"),
+    Shape("H11-scope", {
+        f"{_APP}A.java": """
+            package p;
+            class Use {
+              Thread t;
+              void go() { //@Use.go
+                t.run();
+              }
+            }
+            """,
+        "lib/src/main/java/q/Late.java": """
+            package q;
+            class Late extends Thread {
+              public void run() {} //@Late.run
+            }
+            """,
+        f"{_APP}Mine.java": """
+            package p;
+            class Mine extends Thread {
+              public void run() {} //@Mine.run
+            }
+            """,
+    }, "Use.go", {"Mine.run": "possible"}, absent=("Late.run",),
+        note="BL-31: a subclass outside the caller's visible modules is not reached (ADR-71)"),
     # 2.3 Generics
     Shape("G1", """
         class Order {}
