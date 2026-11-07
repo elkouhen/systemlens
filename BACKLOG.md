@@ -145,7 +145,17 @@ lab.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-case-analysis.md`: C8, P7;
   `docs/plans/indexing-review-2026-11-03.md`: H13.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_rest_peer_regressions.py::test_bl06_*` (seven
+  tests, all failing at `43c91f4`). On the sample, the six gateway call
+  topics went from `ANY /employee/**`, `ANY /department/**` and
+  `ANY /organization/**` to `ANY /**` after `RewritePath`; the two
+  `http://localhost` api-docs routes are now kept (`ANY /**/v3/api-docs`,
+  lines 42 and 43). Gateway `calls_service` relations went from 2 (to
+  `organization-service`, by coincidence) to 6 (to each of the three
+  services, from both gateway files). A rewrite that depends on a pattern
+  segment makes the call `<dynamic>` with no relation. The gateway files
+  still belong to `config-service`, which serves them. commit: pending.
 - **Why P1:** wrong gateway-to-service relations on a reference project.
 
 <a id="bl-08"></a>

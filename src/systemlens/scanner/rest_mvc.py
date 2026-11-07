@@ -1877,6 +1877,7 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
         path_value: str | None = None
         http_method: str | None = None
         has_uri = False
+        filter_calls: list[tuple[int, str, list[str] | None]] = []
         for call in java_parser.walk(route_lambda):
             if call.type != "method_invocation":
                 continue
@@ -1891,12 +1892,26 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
                     http_method = candidate
             elif call_name == "uri":
                 has_uri = True
+            elif call_name in _GATEWAY_DSL_PATH_FILTERS:
+                call_name_node = call.child_by_field_name("name")
+                filter_calls.append((
+                    call_name_node.start_byte if call_name_node is not None else call.start_byte,
+                    _GATEWAY_DSL_PATH_FILTERS[call_name],
+                    _gateway_dsl_filter_args(call_args, source),
+                ))
         if path_value is None or not has_uri:
             continue
         # Like a YAML route without a method predicate, a Java route
         # without ``.method(...)`` proxies every verb.
         http_method = http_method or "ANY"
         route = normalize_path(path_value)
+        # A chained filter call encloses the calls before it: source order
+        # is the order of the filter names.
+        filters = [(name, args) for _start, name, args in sorted(filter_calls, key=lambda item: item[0])]
+        target = (
+            _apply_gateway_filters(route, filters)
+            if all(args is not None for _name, args in filters) else None
+        )
         # In ``builder.routes().route(a).route(b)`` the invocation of ``b``
         # spans the whole chain before it. The route's own evidence starts at
         # its ``route`` name, so each route keeps its own ``uri(...)`` target
@@ -1906,15 +1921,168 @@ def _infer_spring_cloud_gateway_routes(repo_root: Path, rel_path: str) -> list[M
         snippet = source[start_node.start_byte:invocation.end_byte].decode(
             "utf-8", errors="replace"
         )
-        for role in ("serve", "call"):
+        for role, topic_route, dynamic in (
+            ("serve", route, False),
+            ("call", target or "<dynamic>", target is None),
+        ):
             inferred.append(
                 _build_endpoint(
                     repo_root, rel_path, start_node.start_point.row + 1,
-                    invocation.end_point.row + 1, role, "rest", f"{http_method} {route}",
-                    "spring-cloud-gateway", snippet,
+                    invocation.end_point.row + 1, role, "rest", f"{http_method} {topic_route}",
+                    "spring-cloud-gateway", snippet, topic_dynamic=dynamic,
                 )
             )
     return inferred
+
+
+# BL-06: gateway filters that change the forwarded path, with the argument
+# names of their long YAML form, in shortcut order.
+_GATEWAY_PATH_FILTER_ARGS: dict[str, tuple[str, ...]] = {
+    "StripPrefix": ("parts",),
+    "RewritePath": ("regexp", "replacement"),
+    "PrefixPath": ("prefix",),
+    "SetPath": ("template",),
+}
+_GATEWAY_DSL_PATH_FILTERS = {
+    "stripPrefix": "StripPrefix", "rewritePath": "RewritePath",
+    "prefixPath": "PrefixPath", "setPath": "SetPath",
+}
+_JAVA_NAMED_GROUP_RE = re.compile(r"\(\?<([A-Za-z][A-Za-z0-9]*)>")
+_GATEWAY_REPLACEMENT_TOKEN_RE = re.compile(r"\$\\?\{([A-Za-z][A-Za-z0-9]*)\}|\$(\d)|\\(.)")
+
+
+def _gateway_dsl_filter_args(arguments, source: bytes) -> list[str] | None:
+    """Literal arguments of a Java DSL filter call, or ``None``."""
+    values: list[str] = []
+    for argument in arguments:
+        if argument.type == "string_literal":
+            value = java_parser.string_value(argument, source)
+        elif argument.type == "decimal_integer_literal":
+            value = java_parser.node_text(source, argument)
+        else:
+            value = None
+        if value is None:
+            return None
+        values.append(value)
+    return values
+
+
+def _gateway_filters(items: object) -> list[tuple[str, list[str] | None]]:
+    """Path filters of a YAML filter list, in order.
+
+    Each filter is ``(name, arguments)``; the arguments are ``None`` when a
+    long-form filter misses one or a shortcut has a wrong count.
+    """
+    filters: list[tuple[str, list[str] | None]] = []
+    if not isinstance(items, list):
+        return filters
+    for item in items:
+        if isinstance(item, str):
+            name, separator, value = item.partition("=")
+            name = name.strip()
+            if name not in _GATEWAY_PATH_FILTER_ARGS:
+                continue
+            # Spring splits a shortcut on every comma.
+            args: list[str] | None = [part.strip() for part in value.split(",")] if separator else []
+            if args is not None and len(args) != len(_GATEWAY_PATH_FILTER_ARGS[name]):
+                args = None
+            filters.append((name, args))
+        elif isinstance(item, dict) and item.get("name") in _GATEWAY_PATH_FILTER_ARGS:
+            name = str(item["name"])
+            raw = item.get("args")
+            keys = _GATEWAY_PATH_FILTER_ARGS[name]
+            values = [
+                raw.get(key, raw.get(f"_genkey_{index}")) if isinstance(raw, dict) else None
+                for index, key in enumerate(keys)
+            ]
+            filters.append((
+                name,
+                None if any(value is None for value in values) else [str(value) for value in values],
+            ))
+    return filters
+
+
+def _rewrite_gateway_path(path: str, regexp: str, replacement: str) -> str | None:
+    """Apply ``RewritePath`` to a concrete path, as Java's ``replaceAll``."""
+    try:
+        compiled = re.compile(_JAVA_NAMED_GROUP_RE.sub(r"(?P<\1>", regexp))
+    except re.error:
+        return None
+
+    def expand(match: re.Match[str]) -> str:
+        def token(found: re.Match[str]) -> str:
+            name, number, escaped = found.groups()
+            if escaped is not None:
+                return escaped
+            return match.group(name if name is not None else int(number)) or ""
+
+        return _GATEWAY_REPLACEMENT_TOKEN_RE.sub(token, replacement)
+
+    try:
+        return compiled.sub(expand, path)
+    except (IndexError, re.error):
+        return None
+
+
+def _apply_gateway_filters(
+    route: str, filters: list[tuple[str, list[str] | None]]
+) -> str | None:
+    """Forwarded path of a gateway route pattern, or ``None`` when unknown.
+
+    The pattern's ``**``, ``*`` and ``{var}`` segments become opaque tokens.
+    A filter applies statically only when its result does not depend on
+    what such a segment matches: ``StripPrefix`` may drop literal and
+    single-segment tokens but not ``**``; ``RewritePath`` must match the
+    tokenized pattern, or match nothing when it has no token, and keep every
+    token whole and in order. ``PrefixPath`` and ``SetPath`` always apply.
+    """
+    segments = [segment for segment in route.split("/") if segment]
+    tokens: dict[str, str] = {}
+    parts: list[str] = []
+    for segment in segments:
+        if segment == "**" or "*" in segment or "{" in segment:
+            token = f"\x00{len(tokens)}\x00"
+            tokens[token] = segment
+            parts.append(token)
+        else:
+            parts.append(segment)
+    path = "/" + "/".join(parts)
+    for name, args in filters:
+        if args is None:
+            return None
+        if name == "StripPrefix":
+            try:
+                count = int(args[0])
+            except ValueError:
+                return None
+            kept = [part for part in path.split("/") if part]
+            if any(tokens.get(part) == "**" for part in kept[:count]):
+                return None
+            path = "/" + "/".join(kept[count:])
+        elif name == "RewritePath":
+            had_tokens = [token for token in tokens if token in path]
+            if had_tokens and re.search(
+                _JAVA_NAMED_GROUP_RE.sub(r"(?P<\1>", args[0]), path
+            ) is None:
+                return None
+            rewritten = _rewrite_gateway_path(path, args[0], args[1])
+            if rewritten is None:
+                return None
+            if rewritten.count("\x00") != 2 * len(
+                [token for token in tokens if token in rewritten]
+            ):
+                return None
+            order = [token for token in had_tokens if token in rewritten]
+            if sorted(order, key=rewritten.index) != order:
+                return None
+            path = rewritten
+        elif name == "PrefixPath":
+            path = join_paths(normalize_path(args[0]), path)
+        elif name == "SetPath":
+            path = normalize_path(args[0])
+    for token, segment in tokens.items():
+        path = path.replace(token, segment)
+    return normalize_path(path)
 def _gateway_route_entries(data: object) -> list[dict[str, object]]:
     if not isinstance(data, dict):
         return []
@@ -1948,78 +2116,96 @@ def _gateway_paths(route: dict[str, object]) -> list[str]:
                 if isinstance(value, str):
                     paths.append(value)
     return paths
-def _gateway_strip_prefix(route: dict[str, object]) -> int:
-    filters = route.get("filters")
-    if not isinstance(filters, list):
-        return 0
-    for item in filters:
-        if isinstance(item, str) and item.startswith("StripPrefix="):
-            try:
-                return int(item.partition("=")[2])
-            except ValueError:
-                return 0
-    return 0
-def _strip_gateway_path(route: str, prefix_count: int) -> str:
-    if prefix_count <= 0:
-        return normalize_path(route)
-    parts = [part for part in route.split("/") if part]
-    remaining = parts[prefix_count:]
-    return "/" + "/".join(remaining) if remaining else "/"
+def _gateway_default_filters(document: object) -> object:
+    gateway = document.get("spring", {}) if isinstance(document, dict) else {}
+    for key in ("cloud", "gateway"):
+        gateway = gateway.get(key, {}) if isinstance(gateway, dict) else {}
+    return gateway.get("default-filters") if isinstance(gateway, dict) else None
+
+
+def _gateway_uri_lines(text: str) -> list[list[int | None]]:
+    """Line of each route's ``uri`` value, per YAML document.
+
+    The composed node tree keeps source positions, quoted values included.
+    A document whose routes cannot be read gives an empty list.
+    """
+    try:
+        nodes = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
+    except yaml.YAMLError:
+        return []
+
+    def child(node, key: str):
+        if not isinstance(node, yaml.MappingNode):
+            return None
+        return next(
+            (value for name, value in node.value
+             if isinstance(name, yaml.ScalarNode) and name.value == key),
+            None,
+        )
+
+    lines: list[list[int | None]] = []
+    for node in nodes:
+        gateway = child(child(child(node, "spring"), "cloud"), "gateway")
+        routes = child(gateway, "routes")
+        if not isinstance(routes, yaml.SequenceNode):
+            routes = child(child(child(gateway, "server"), "webflux"), "routes")
+        document_lines: list[int | None] = []
+        if isinstance(routes, yaml.SequenceNode):
+            for route in routes.value:
+                if not isinstance(route, yaml.MappingNode):
+                    continue
+                uri = child(route, "uri")
+                document_lines.append(uri.start_mark.line + 1 if uri is not None else None)
+        lines.append(document_lines)
+    return lines
+
+
 def _infer_spring_cloud_gateway_yaml_routes(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     path = repo_root / rel_path
     try:
-        documents = list(yaml.safe_load_all(path.read_text(encoding="utf-8", errors="replace")))
+        text = path.read_text(encoding="utf-8", errors="replace")
+        documents = list(yaml.safe_load_all(text))
     except (OSError, yaml.YAMLError):
         return []
+    uri_lines = _gateway_uri_lines(text)
 
     inferred: list[MessageEndpoint] = []
-    for document in documents:
-        for route in _gateway_route_entries(document):
+    for document_index, document in enumerate(documents):
+        routes = _gateway_route_entries(document)
+        lines = uri_lines[document_index] if document_index < len(uri_lines) else []
+        if len(lines) != len(routes):
+            lines = [None] * len(routes)
+        default_filters = _gateway_filters(_gateway_default_filters(document))
+        for route, line in zip(routes, lines):
             uri = route.get("uri")
-            if not isinstance(uri, str) or not uri.startswith("lb://"):
+            if not isinstance(uri, str) or not uri.startswith(("lb://", "http://", "https://")):
                 continue
-            strip_prefix = _gateway_strip_prefix(route)
-            line_no = 1
-            try:
-                text = path.read_text(encoding="utf-8", errors="replace")
-                line_no = next(
-                    index
-                    for index, line in enumerate(text.splitlines(), start=1)
-                    if f"uri: {uri}" in line or f"uri:{uri}" in line
-                )
-            except (OSError, StopIteration):
-                pass
+            line_no = line or 1
+            filters = [*default_filters, *_gateway_filters(route.get("filters"))]
+            filter_text = "; ".join(
+                f"{name}={','.join(args) if args is not None else '?'}"
+                for name, args in filters
+            )
             for public_path in _gateway_paths(route):
                 public_route = normalize_path(public_path)
-                target_path = _strip_gateway_path(public_route, strip_prefix)
-                snippet = f"Path={public_route}; StripPrefix={strip_prefix}; uri={uri}"
+                target_path = _apply_gateway_filters(public_route, filters)
+                snippet = f"Path={public_route}; {filter_text + '; ' if filter_text else ''}uri={uri}"
                 inferred.append(
                     _build_endpoint(
-                        repo_root,
-                        rel_path,
-                        line_no,
-                        line_no,
-                        "serve",
-                        "rest",
-                        f"ANY {public_route}",
-                        "spring-cloud-gateway",
-                        snippet,
+                        repo_root, rel_path, line_no, line_no, "serve", "rest",
+                        f"ANY {public_route}", "spring-cloud-gateway", snippet,
                     )
                 )
                 inferred.append(
                     _build_endpoint(
-                        repo_root,
-                        rel_path,
-                        line_no,
-                        line_no,
-                        "call",
-                        "rest",
-                        f"ANY {target_path}",
-                        "spring-cloud-gateway",
-                        snippet,
+                        repo_root, rel_path, line_no, line_no, "call", "rest",
+                        f"ANY {target_path or '<dynamic>'}", "spring-cloud-gateway", snippet,
+                        topic_dynamic=target_path is None,
                     )
                 )
     return inferred
+
+
 def _infer_spring_webflux_routes(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:

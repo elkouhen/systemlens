@@ -220,6 +220,15 @@ keeps its own `uri(...)` target and the line of its own `route` call; the
 first target URI of its evidence wins, so a later `http://` URL in a filter
 does not override `lb://`.
 
+A gateway route serves its public `Path` pattern and calls the path its
+filters forward. `StripPrefix`, `RewritePath`, `PrefixPath` and `SetPath`
+apply in order, after the `default-filters`, in the shortcut form, the
+long `name`/`args` form and the Java DSL methods. A rewrite applies only
+when its result does not depend on what a `**`, `*` or `{var}` segment of
+the pattern matches; otherwise the call is `<dynamic>`. YAML routes with an
+`lb://`, `http://` or `https://` `uri` are kept, each on the line of its
+own `uri`, quoted or not.
+
 Indexing materializes AST method facts that associate each Java method with its
 HTTP/message entry endpoints and HTTP/message output endpoints. It then
 materializes conservative same-method code flows and, with an external

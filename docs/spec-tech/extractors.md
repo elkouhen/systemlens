@@ -130,6 +130,16 @@ A Spring Cloud Gateway Java route takes its snippet and start line from its
 own `route` name to the end of its invocation, not from the whole builder
 chain, so the n-th route reads only its own `uri(...)`.
 
+`_apply_gateway_filters` turns each `**`, `*` and `{var}` segment of the
+route pattern into an opaque token, applies the path filters in order and
+restores the tokens. `StripPrefix` fails on a stripped `**`. `RewritePath`
+converts Java named groups and `${name}`, `$\{name}` and `$n` references,
+then applies the regex like Java's `replaceAll`. It fails when a pattern
+with tokens does not match, or when a token is cut, repeated or reordered.
+A failure, a non-literal DSL argument or an unreadable filter makes the
+call `<dynamic>`. Java DSL filter calls are ordered by the position of
+their names. YAML `uri` lines come from `yaml.compose_all` node marks.
+
 REST graph matching indexes served routes by resolved target service before
 checking route compatibility. If `C` is the number of calls and `S` the number
 of served routes, matching costs `O(C + S + M)`, where `M` is the number of

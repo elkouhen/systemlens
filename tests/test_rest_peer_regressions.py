@@ -376,3 +376,167 @@ def test_bl04_incremental_link_changes_refresh_the_declaring_type(tmp_path):
             ("EmployeeApi.java", "POST /employees"),
         ]
 
+
+# ----------------------------------------- BL-06: gateway path filters
+def _gateway_yaml(routes: str, default_filters: str = "") -> str:
+    return (
+        "spring:\n  cloud:\n    gateway:\n"
+        + default_filters
+        + "      routes:\n"
+        + routes
+    )
+
+
+def _gateway_calls(tmp_path, text: str):
+    rel = _write(tmp_path, "src/main/resources/application.yml", text)
+    return sorted(
+        (e.topic, e.topic_dynamic, e.start_line)
+        for e in _endpoints(tmp_path, [rel]) if e.role == "call"
+    )
+
+
+def test_bl06_rewrite_path_applies_to_the_route_pattern(tmp_path):
+    """BL-06: the sample's ``RewritePath`` drops the public prefix."""
+    calls = _gateway_calls(tmp_path, _gateway_yaml(
+        "      - id: employee\n"
+        "        uri: lb://employee-service\n"
+        "        predicates:\n"
+        "        - Path=/employee/**\n"
+        "        filters:\n"
+        "        - RewritePath=/employee/(?<path>.*), /$\\{path}\n"
+        "      - id: orders\n"
+        "        uri: lb://order-service\n"
+        "        predicates:\n"
+        "        - Path=/api/orders/{id}\n"
+        "        filters:\n"
+        "        - RewritePath=/api/(?<rest>.*), /v2/$\\{rest}\n"
+    ))
+
+    assert calls == [("ANY /**", False, 6), ("ANY /v2/orders/{id}", False, 12)]
+
+
+def test_bl06_rewrite_depending_on_a_pattern_segment_stays_dynamic(tmp_path):
+    calls = _gateway_calls(tmp_path, _gateway_yaml(
+        "      - uri: lb://item-service\n"
+        "        predicates:\n"
+        "        - Path=/items/{id}\n"
+        "        filters:\n"
+        "        - RewritePath=/items/(?<id>\\d+), /x/$\\{id}\n"
+    ))
+
+    assert calls == [("ANY <dynamic>", True, 5)]
+
+
+def test_bl06_prefix_set_and_long_form_filters(tmp_path):
+    calls = _gateway_calls(tmp_path, _gateway_yaml(
+        "      - uri: lb://a\n"
+        "        predicates:\n"
+        "        - Path=/orders/**\n"
+        "        filters:\n"
+        "        - PrefixPath=/api\n"
+        "      - uri: lb://b\n"
+        "        predicates:\n"
+        "        - Path=/red/{segment}\n"
+        "        filters:\n"
+        "        - SetPath=/{segment}\n"
+        "      - uri: lb://c\n"
+        "        predicates:\n"
+        "        - Path=/c/v1/**\n"
+        "        filters:\n"
+        "        - name: StripPrefix\n"
+        "          args:\n"
+        "            parts: 2\n"
+        "      - uri: lb://d\n"
+        "        predicates:\n"
+        "        - Path=/d/**\n"
+        "        filters:\n"
+        "        - name: RewritePath\n"
+        "          args:\n"
+        "            regexp: /d/(?<rest>.*)\n"
+        "            replacement: /internal/${rest}\n"
+    ))
+
+    assert calls == [
+        ("ANY /**", False, 15),
+        ("ANY /api/orders/**", False, 5),
+        ("ANY /internal/**", False, 22),
+        ("ANY /{segment}", False, 10),
+    ]
+
+
+def test_bl06_default_filters_apply_before_route_filters(tmp_path):
+    calls = _gateway_calls(tmp_path, _gateway_yaml(
+        "      - uri: lb://a\n"
+        "        predicates:\n"
+        "        - Path=/gw/orders/**\n"
+        "        filters:\n"
+        "        - PrefixPath=/api\n",
+        default_filters="      default-filters:\n      - StripPrefix=1\n",
+    ))
+
+    assert calls == [("ANY /api/orders/**", False, 7)]
+
+
+def test_bl06_http_uri_route_is_kept_and_quoted_uri_has_its_line(tmp_path):
+    calls = _gateway_calls(tmp_path, _gateway_yaml(
+        "      - uri: \"http://legacy:8080\"\n"
+        "        predicates:\n"
+        "        - Path=/legacy/**\n"
+        "      - uri: 'lb://orders'\n"
+        "        predicates:\n"
+        "        - Path=/orders/**\n"
+    ))
+
+    assert calls == [("ANY /legacy/**", False, 5), ("ANY /orders/**", False, 8)]
+
+
+def test_bl06_java_dsl_filters_rewrite_the_call(tmp_path):
+    rel = _write(tmp_path, "src/main/java/g/Routes.java", """
+package g;
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+class Routes {
+  RouteLocator routes(RouteLocatorBuilder builder) {
+    return builder.routes()
+      .route("a", r -> r.path("/a/v1/**").filters(f -> f.stripPrefix(2)).uri("lb://a"))
+      .route("b", r -> r.path("/b/**")
+          .filters(f -> f.rewritePath("/b/(?<rest>.*)", "/${rest}").prefixPath("/api"))
+          .uri("lb://b"))
+      .route("c", r -> r.path("/c/{id}").filters(f -> f.setPath("/items/{id}")).uri("lb://c"))
+      .route("d", r -> r.path("/d/**").filters(f -> f.stripPrefix(count)).uri("lb://d"))
+      .build();
+  }
+}
+""")
+
+    calls = sorted(
+        (e.topic, e.topic_dynamic)
+        for e in _endpoints(tmp_path, [rel]) if e.role == "call"
+    )
+
+    assert calls == [
+        ("ANY /**", False), ("ANY /api/**", False),
+        ("ANY /items/{id}", False), ("ANY <dynamic>", True),
+    ]
+
+
+def test_bl06_rewritten_gateway_call_no_longer_matches_by_coincidence(tmp_path):
+    """The public ``/organization/**`` no longer reaches a route it does not forward to."""
+    _module(tmp_path, "organization-service", {"src/main/java/o/C.java": """
+package o;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class C {
+  @GetMapping("/organization/stats") public String s() { return ""; }
+}
+"""})
+    _module(tmp_path, "gateway", {"src/main/resources/application.yml": _gateway_yaml(
+        "      - uri: lb://organization-service\n"
+        "        predicates:\n"
+        "        - Path=/organization/**\n"
+        "        filters:\n"
+        "        - RewritePath=/organization/(?<path>.*), /api/$\\{path}\n"
+    )})
+
+    assert _rest_edges(tmp_path) == []
+
