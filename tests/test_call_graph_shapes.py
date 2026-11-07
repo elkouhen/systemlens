@@ -766,7 +766,43 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Generic.handle": "exact", "Handler.handle": "possible"},
-        pending="BL-26: a body whose parameter is a type variable is reached possible, not exact"),
+        note="BL-26: a body whose parameter is a type variable is indexed by its erasure"),
+    Shape("G3-bounded", """
+        abstract class Shape {}
+        class Circle extends Shape {}
+        interface Sink {
+          void accept(Circle c); //@Sink.accept
+        }
+        class Generic<T extends Circle> implements Sink {
+          public void accept(T t) {} //@Generic.accept
+        }
+        class Use {
+          Sink sink;
+          void run() { //@Use.run
+            sink.accept(new Circle());
+          }
+        }
+        """, "Use.run", {"Generic.accept": "exact", "Sink.accept": "possible"},
+        note="BL-26: the erasure of T is its bound, so accept(T) overrides accept(Circle)"),
+    Shape("G3-two", """
+        interface Handler<T> {
+          void handle(T t); //@Handler.handle
+        }
+        class Generic<T> implements Handler<T> {
+          public void handle(T t) {} //@Generic.handle
+        }
+        class Strings implements Handler<String> {
+          public void handle(String s) {} //@Strings.handle
+        }
+        class Use {
+          Handler<String> h;
+          void run() { //@Use.run
+            h.handle("x");
+          }
+        }
+        """, "Use.run", {"Generic.handle": "possible", "Strings.handle": "possible"},
+        partial=True,
+        note="BL-26: an erased body beside a concrete one keeps both possible"),
     Shape("G4", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -783,7 +819,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Circle.area": "possible", "Square.area": "possible"},
-        pending="not planned: a receiver typed by a type variable is not typed by its bound"),
+        note="BL-26: a receiver typed by a type variable is typed by its bound"),
     Shape("G4-field", """
         class Repo {
           void save() {} //@Repo.save
@@ -795,7 +831,216 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Svc.run", {"Repo.save": "exact"},
-        pending="not planned: a field typed by a type variable is not typed by its bound"),
+        note="BL-26: a field typed by a type variable is typed by its bound"),
+    Shape("G4-object", """
+        class Circle {
+          public String toString() { return "c"; } //@Circle.toString
+          double area() { return 1; } //@Circle.area
+        }
+        class Use {
+          <T extends Circle> void run(T t) { //@Use.run
+            t.toString();
+            t.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact"},
+        note="ADR-81 rule 4: an Object method on a type-variable receiver has no edge"),
+    Shape("G4-unbounded", """
+        class Circle {
+          public String toString() { return "c"; } //@Circle.toString
+        }
+        class Holder<T> {
+          T value;
+          void run() { //@Holder.run
+            value.toString();
+          }
+        }
+        """, "Holder.run", {},
+        note="BL-26: a type variable without a bound stays untyped"),
+    Shape("G5", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Box<T> {
+          T value;
+          T get() { return value; } //@Box.get
+          Box<T> self() { return this; } //@Box.self
+        }
+        interface Repo<T> {
+          T find(); //@Repo.find
+        }
+        interface CircleRepo extends Repo<Circle> {}
+        class CircleBox extends Box<Circle> {}
+        class Use {
+          Box<Circle> box;
+          CircleRepo repo;
+          CircleBox circles;
+          void run(Box<? extends Circle> some) { //@Use.run
+            box.get().area();
+            repo.find().area();
+            circles.get().area();
+            box.value.area();
+            box.self().get().area();
+            new Box<Circle>().get().area();
+            some.get().area();
+          }
+        }
+        """, "Use.run", {
+            "Box.get": "exact", "Box.self": "exact", "Repo.find": "possible", "Circle.area": "exact",
+        }, note="BL-26: the written argument of a field, parameter, creation, extends clause or return type"),
+    Shape("G5-inherited", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Base<T> {
+          T value;
+          T get() { return value; } //@Base.get
+        }
+        class Middle<U> extends Base<U> {}
+        class CircleBox extends Middle<Circle> {
+          void run() { //@CircleBox.run
+            value.area();
+            get().area();
+            this.value.area();
+          }
+        }
+        """, "CircleBox.run", {"Base.get": "exact", "Circle.area": "exact"},
+        note="BL-26: arguments substituted through two extends clauses"),
+    Shape("G5-unwritten", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Box<T> {
+          T get() { return null; } //@Box.get
+        }
+        class Use {
+          Box raw;
+          Box<?> any;
+          Box<? super Circle> lower;
+          Box<List<Circle>> nested;
+          Box<Box<Circle>> boxes;
+          void run() { //@Use.run
+            raw.get().area();
+            any.get().area();
+            lower.get().area();
+            nested.get().get(0).area();
+            boxes.get().get().area();
+          }
+        }
+        """, "Use.run", {"Box.get": "exact"},
+        note="BL-26: a raw unbounded, wildcard or nested argument gives nothing"),
+    Shape("G5-raw-bounded", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Box<T extends Shape> {
+          T get() { return null; } //@Box.get
+        }
+        class Use {
+          Box raw;
+          void run() { //@Use.run
+            raw.get().area();
+          }
+        }
+        """, "Use.run", {"Box.get": "exact", "Circle.area": "possible", "Square.area": "possible"},
+        note="BL-26: a raw type erases T to its bound"),
+    Shape("G6", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Box<T> {
+          T get() { return null; } //@Box.get
+        }
+        class Use {
+          List<Circle> circles;
+          Box<Circle> box;
+          static <T> T first(List<T> items) { return items.get(0); } //@Use.first
+          static <T> T same(T item) { return item; } //@Use.same
+          static <T> T open(Box<? extends T> box) { return box.get(); } //@Use.open
+          void run() { //@Use.run
+            first(circles).area();
+            same(new Circle()).area();
+            open(box).area();
+            Use.<Circle>same(null).area();
+          }
+        }
+        """, "Use.run", {
+            "Use.first": "exact", "Use.same": "exact", "Use.open": "exact", "Circle.area": "exact",
+        }, note="BL-26: a generic method's type argument from its arguments or written"),
+    Shape("G6-bound", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          static <T extends Shape> T make() { return null; } //@Use.make
+          void run() { //@Use.run
+            make().area();
+          }
+        }
+        """, "Use.run", {"Use.make": "exact", "Circle.area": "possible", "Square.area": "possible"},
+        note="BL-26: a type variable no parameter names takes its bound"),
+    Shape("G6-unproven", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List raw;
+          static <T> T first(List<T> items) { return items.get(0); } //@Use.first
+          static <T> T pick(T a, T b) { return a; } //@Use.pick
+          @SafeVarargs static <T> T any(T... items) { return items[0]; } //@Use.any
+          void run(Object o) { //@Use.run
+            first(raw).area();
+            pick(new Circle(), new Square()).area();
+            any(new Circle()).area();
+          }
+        }
+        """, "Use.run", {"Use.first": "exact", "Use.pick": "exact", "Use.any": "exact"},
+        note="BL-26: no inference from a raw argument, two types (no least upper bound) or varargs"),
     # 2.4 Receiver typing
     Shape("T1", """
         abstract class Shape {

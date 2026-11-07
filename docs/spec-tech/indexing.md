@@ -413,6 +413,38 @@ of an `Optional`, so `stream().findFirst().get()` too, `get(key)` of a
 `Map`, and `getKey()` and `getValue()` of a written `Map.Entry<K, V>`.
 A raw or wildcard container, or a chain through `map`, gives no type.
 
+A type variable in a return or field type takes the argument the sources
+write for it (BL-26). The receiver's declared type gives it: a field,
+local, parameter, creation, cast or declared return type written
+`Box<Circle>`, so `box.get()` is a `Circle`. The `extends` and
+`implements` clauses carry it to the ancestor that declares the member:
+with `CircleRepo extends Repo<Circle>`, `repo.find()` is a `Circle`, and
+so is an inherited field `T value` read in `CircleBox extends Box<Circle>`.
+
+A generic method takes its written type arguments
+(`Use.<Circle>same(x)`), or the one type its arguments prove: an argument
+passed as `T`, or the type argument of a JDK container or source generic
+type passed as `List<T>` or `Box<? extends T>`. Two different types, an
+untyped argument, a varargs parameter or any other position leave the
+variable untyped; the pass computes no least upper bound.
+
+A type variable with no written argument takes its first bound: in the
+generic code itself, a parameter, local or field typed `T` with
+`<T extends Shape>` is a `Shape`; a raw `Box` erases `T` to its bound; a
+method variable that no parameter names takes its bound. A variable
+without a bound stays untyped. `? extends X` gives `X`; `?`,
+`? super X` and a nested argument such as `Box<List<Circle>>` give
+nothing. An `Object` method on such a receiver ignores the bound and has
+no edge (ADR-81 rule 4), even when the bound types an inner part of the
+receiver chain.
+
+A concrete body whose parameter is a type variable is indexed for
+dispatch under its erased signature (JLS 4.6), the bound or
+`java.lang.Object`: `Generic<T> implements Handler<T>` then implements
+`Handler.handle`, `exact` when it is the one body under the ADR-81 rules.
+A contract keeps its type variable unresolved, so an implementation such
+as `handle(String)` still matches it.
+
 A `var` initializer is typed where it is written, not at the call site: a
 local declared after it never shadows the field it names, and initializers
 that name each other in a cycle get no type.
@@ -645,7 +677,7 @@ return types through the receiver hierarchy. It requires one parameter signature
 and one resolved return type, and bounds nested receiver analysis to 16 calls.
 A zero-argument call with no declared method reads a record component of the
 same name as its implicit accessor; a declared accessor takes precedence.
-Generic return substitution and ambiguous overload selection are unsupported.
+Ambiguous overload selection is unsupported.
 These inferred calls retain `possible` dispatch and low flow confidence.
 Known positions in a partially resolved generic signature still constrain
 candidate implementations. Unknown positions may widen the candidate set, but
@@ -859,8 +891,10 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H13 | A superclass method wins over an interface `default` | `covered` | |
 | G1 | Generic interface implemented with a concrete type | `covered` | |
 | G2 | Generic superclass extended with a concrete type | `covered` | |
-| G3 | Generic implementation `class Generic<T> implements Handler<T>` | `defect`: reached `possible`, not `exact` | BL-26 |
-| G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `missing` | not planned |
+| G3 | Generic implementation `class Generic<T> implements Handler<T>` | `covered` (BL-26) | |
+| G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `covered` (BL-26) | |
+| G5 | Type-variable return or field substituted from a written type argument; raw, wildcard and nested arguments | `covered` (BL-26) | |
+| G6 | Generic method type argument, written or inferred from the arguments | `covered` (BL-26) | |
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
 | T2 | Pattern variable of `instanceof Circle c` | `covered` (BL-23) | |
 | T3 | Pattern variable of a `switch` pattern | `covered` (BL-23) | |
@@ -916,13 +950,13 @@ aligned it.
 
 | # | Shape | Status | Item |
 |---|---|---|---|
-| A1 | Type-variable return or field: `box.get()`, `repo.find()` through `extends Repo<Circle>`, inherited `T value`, `<T> T first(List<T>)` | `missing` | BL-26 |
+| A1 | Type-variable return or field: `box.get()`, `repo.find()` through `extends Repo<Circle>`, inherited `T value`, `<T> T first(List<T>)` | `covered` | BL-26 |
 | A2 | Element of a JDK container accessor: `List.get`, `Optional.get`, `Map.get`, `stream().findFirst().get()` | `covered` | BL-27 |
 | A3 | `var` loop variable | `covered` | BL-23 |
 | A4 | Ternary receiver whose branches share a type | `covered` | BL-23 |
 | A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `covered` | BL-23 |
 | A6 | `Outer.this.helper()` from an inner class | `covered` | BL-23 |
-| A7 | Receiver typed by a bounded type variable (G4) | `missing` | BL-26 |
+| A7 | Receiver typed by a bounded type variable (G4): implementations `covered` by BL-26, declared row `missing` | `missing` | BL-28 |
 | A8 | Unqualified call inside an anonymous `Thread` | `missing` | BL-25 |
 | A9 | Lambda passed to a source functional interface parameter | `missing` | BL-24 |
 | A10 | Method reference: one arity `covered`; overloaded name `missing` | `missing` | BL-24 |
@@ -930,7 +964,7 @@ aligned it.
 | B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
 | B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
 | B4 | Declared interface row beside two possible implementations | `missing` | BL-28 |
-| B5 | Generic implementation of a generic interface (G3) | `defect` | BL-26 |
+| B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 
 ## Build layout
 

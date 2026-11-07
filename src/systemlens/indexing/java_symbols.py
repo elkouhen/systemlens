@@ -1,7 +1,8 @@
 """Transient, conservative Java symbols for missing call-graph edges.
 
-This is not a Java compiler: unresolved types, generic substitutions and
-ambiguous overloads remain unresolved. Names alone never establish dispatch.
+This is not a Java compiler: unresolved types, generic substitutions the
+sources do not write (BL-26) and ambiguous overloads remain unresolved.
+Names alone never establish dispatch.
 """
 
 from collections import defaultdict
@@ -226,6 +227,13 @@ _ELEMENT_ACCESSORS: dict[tuple[str, str, int], int] = {
     ("entry", "getValue", 0): 1,
 }
 _ACCESSOR_CALLS = {(name, count) for _kind, name, count in _ELEMENT_ACCESSORS}
+# The type arguments of a source generic type, by type parameter name (BL-26).
+# ``None`` for a parameter whose argument the sources do not prove.
+_Env = dict[str, str | None]
+# Methods of ``java.lang.Object``: on a receiver typed by a type variable
+# they produce no edge (ADR-81 rule 4), so the bound never types it.
+_OBJECT_DISPATCH = {("equals", 1), ("hashCode", 0), ("toString", 0)}
+_TYPE_CLAUSES = {"superclass", "super_interfaces", "extends_interfaces"}
 
 
 def _written_type(source: bytes, parameter: Node) -> str:
@@ -321,6 +329,10 @@ class _Method:
     binds_statically: bool = False
     # The last parameter is ``T...``: any arity from the fixed count up.
     varargs: bool = False
+    # ``parameters`` with each type variable replaced by its erasure: the
+    # signature a body overrides with (JLS 4.6, 8.4.2). A contract keeps the
+    # unresolved ``parameters``, which match any argument of a subtype.
+    erased: tuple[str | None, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -364,6 +376,9 @@ class JavaSymbols:
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
         # ``var`` initializers being typed, to break reference cycles.
         self._typing: set[tuple[str, int]] = set()
+        # Whether a type variable without an argument takes its bound; off
+        # while typing the receiver of an ``Object`` method (ADR-81 rule 4).
+        self._bounds = True
         # Local classes: qualified name -> (path, declaration, enclosing block).
         self.local_types: dict[str, list[tuple[str, Node, Node]]] = defaultdict(list)
         self._levels: dict[tuple[str, str], list[list[tuple[str, str]]]] = {}
@@ -517,6 +532,7 @@ class JavaSymbols:
                 initializer_node = name in INITIALIZER_NAMES
                 parameters = None if node.type in _TYPES else node.child_by_field_name("parameters")
                 parameter_types = []
+                erased: list[str | None] = []
                 written: list[str] = []
                 for parameter in parameters.named_children if parameters is not None else []:
                     if parameter.type not in {"formal_parameter", "spread_parameter"}:
@@ -528,10 +544,16 @@ class JavaSymbols:
                         self.resolve(path, parser.node_text(source, parameter_type), owner, at=parameter_type)
                         if parameter_type is not None and parameter.type == "formal_parameter" else None
                     )
+                    erased_type = resolved_type if resolved_type is not None or parameter_type is None or (
+                        parameter.type != "formal_parameter"
+                    ) else self._erasure(path, parameter_type, owner)
                     dimensions = parameter.child_by_field_name("dimensions")
-                    if resolved_type is not None and dimensions is not None:
-                        resolved_type += "[]" * parser.node_text(source, dimensions).count("[")
+                    if dimensions is not None:
+                        suffix = "[]" * parser.node_text(source, dimensions).count("[")
+                        resolved_type = resolved_type + suffix if resolved_type is not None else None
+                        erased_type = erased_type + suffix if erased_type is not None else None
                     parameter_types.append(resolved_type)
+                    erased.append(erased_type)
                     written.append(_written_type(source, parameter))
                 modifiers = parser.modifiers_node(node)
                 info = _Method(
@@ -544,14 +566,17 @@ class JavaSymbols:
                     varargs=bool(parameters is not None and parameters.named_children and (
                         parameters.named_children[-1].type == "spread_parameter"
                     )),
+                    erased=tuple(erased),
                 )
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
                 if info.varargs:
                     self.varargs_by_owner[(owner, name, method.module)].append(info)
-                if info.concrete and all(value is not None for value in info.parameters):
+                # A body whose parameter is a type variable overrides by its
+                # erased signature (BL-26).
+                if info.concrete and all(value is not None for value in info.erased):
                     for base_owner, base_module in self._dispatch_owners(info):
-                        self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
+                        self.dispatch[(base_owner, base_module, name, info.erased)].append(info)
 
         # Secondary indexes of ``by_owner``, so a call site reads only the
         # declarations of its receiver's types instead of scanning them all
@@ -581,7 +606,7 @@ class JavaSymbols:
         # index them, yet they may override a contract (S9, ADR-81).
         self._unresolved_bodies: dict[tuple[str, int], list[_Method]] = defaultdict(list)
         for info in self.methods.values():
-            if info.concrete and not info.binds_statically and None in info.parameters:
+            if info.concrete and not info.binds_statically and None in info.erased:
                 name = info.method.qualified_method.rsplit(".", 1)[-1]
                 self._unresolved_bodies[(name, len(info.parameters))].append(info)
         # ``@FeignClient`` interfaces: Spring implements them with a runtime
@@ -693,12 +718,13 @@ class JavaSymbols:
             return True
         receiver_ancestors = self.ancestors(receiver_type, receiver_module)
         # A subtype body with an unresolved signature may not override the
-        # contract: it proves nothing (S9).
+        # contract: it proves nothing (S9). A type variable's erasure is a
+        # resolved signature (BL-26).
         bodies = {
             (info.owner, info.module)
             for target in targets
             for info in [self.methods.get(target.id)]
-            if info is not None and (None not in info.parameters or (info.owner, info.module) in receiver_ancestors)
+            if info is not None and (None not in info.erased or (info.owner, info.module) in receiver_ancestors)
         }
         visible = self.visible_modules(caller.module) | {receiver_module}
         for owner, module, path, node in self._concrete_subtypes(receiver_type, receiver_module):
@@ -748,7 +774,7 @@ class JavaSymbols:
             }
             if len(signatures) != 1:
                 continue
-            info.parameters = next(iter(signatures))
+            info.parameters = info.erased = next(iter(signatures))
             for base_owner, base_module in self.ancestors(info.owner, info.module):
                 self.dispatch[(base_owner, base_module, name, info.parameters)].append(info)
 
@@ -991,6 +1017,190 @@ class JavaSymbols:
                         names.add(ident.text.decode("utf-8") if ident.text is not None else "")
             current = current.parent
         return names
+
+    @staticmethod
+    def _declared_type_parameters(declaration: Node) -> list[tuple[str, Node]]:
+        """The type parameters a type or method declaration writes, in order."""
+        parameters = declaration.child_by_field_name("type_parameters")
+        found: list[tuple[str, Node]] = []
+        for parameter in parameters.named_children if parameters is not None else []:
+            ident = next((
+                child for child in parameter.named_children
+                if child.type in {"type_identifier", "identifier"}
+            ), None)
+            if parameter.type == "type_parameter" and ident is not None and ident.text is not None:
+                found.append((ident.text.decode("utf-8"), parameter))
+        return found
+
+    def _type_variable(self, name: str, at: Node) -> Node | None:
+        """The innermost type parameter ``name`` visible at ``at``, if any."""
+        current: Node | None = at
+        while current is not None:
+            if current.type in _GENERIC_DECLARATIONS:
+                for declared, parameter in self._declared_type_parameters(current):
+                    if declared == name:
+                        return parameter
+            current = current.parent
+        return None
+
+    def _bound(self, path: str, parameter: Node, owner: str, *, erase: bool = False, depth: int = 0) -> str | None:
+        """The first bound of a type parameter, as the sources resolve it.
+
+        A parameter without a bound has none: it stays untyped, unless
+        ``erase`` asks for its erasure, ``java.lang.Object`` (JLS 4.6). A
+        bound that is itself a type variable takes that variable's bound.
+        Typing by a bound is off while an ``Object`` method's receiver is
+        typed (ADR-81 rule 4); an erasure is not.
+        """
+        if not erase and not self._bounds:
+            return None
+        bounds = parser.child_by_type(parameter, "type_bound")
+        bound = bounds.named_children[0] if bounds is not None and bounds.named_children else None
+        if bound is None:
+            return "java.lang.Object" if erase else None
+        text = parser.node_text(self.units[path].source, bound).strip()
+        variable = self._type_variable(text, bound) if bound.type == "type_identifier" else None
+        if variable is not None:
+            return self._bound(path, variable, owner, erase=erase, depth=depth + 1) if depth < 8 else None
+        return self.resolve(path, text, owner, allow_ambiguous=True, at=bound)
+
+    def _erasure(self, path: str, type_node: Node, owner: str) -> str | None:
+        """The erasure of a parameter type written as a type variable or an
+        array of one; ``None`` for any other type ``resolve`` leaves open."""
+        dimensions = 0
+        element = type_node
+        while element.type == "array_type":
+            inner = element.child_by_field_name("element")
+            written = element.child_by_field_name("dimensions")
+            if inner is None or written is None:
+                return None
+            dimensions += parser.node_text(self.units[path].source, written).count("[")
+            element = inner
+        if element.type != "type_identifier":
+            return None
+        variable = self._type_variable(parser.node_text(self.units[path].source, element).strip(), element)
+        if variable is None:
+            return None
+        erased = self._bound(path, variable, owner, erase=True)
+        return erased + "[]" * dimensions if erased is not None else None
+
+    def _declared_type(self, path: str, type_node: Node, owner: str, env: _Env | None = None) -> str | None:
+        """A written type, with its type variable substituted (BL-26).
+
+        ``env`` holds the type arguments of the declaring types, read at a
+        use through a receiver: a type variable takes its argument there,
+        and nothing when the receiver does not prove it. Without ``env``
+        the use is inside the generic code itself, so a type variable takes
+        its bound, and no bound leaves it untyped.
+        """
+        text = parser.node_text(self.units[path].source, type_node).strip()
+        if type_node.type == "type_identifier":
+            variable = self._type_variable(text, type_node)
+            if variable is not None:
+                if env is not None:
+                    return env.get(text)
+                return self._bound(path, variable, owner)
+        return self.resolve(path, text, owner, allow_ambiguous=True, at=type_node)
+
+    def _type_bounds(self, path: str, declaration: Node, owner: str) -> _Env:
+        """A generic declaration's type parameters, each bound to its bound:
+        the arguments of a raw type, or of the declaration seen from its own
+        code."""
+        return {
+            name: self._bound(path, parameter, owner)
+            for name, parameter in self._declared_type_parameters(declaration)
+        }
+
+    def _owner_env(self, owner: str, module: str) -> _Env:
+        """The arguments of ``owner`` seen from its own code: its bounds."""
+        locations = self._module_locations(owner, module)
+        if len(locations) != 1:
+            return {}
+        location, declaration = locations[0]
+        return self._type_bounds(location, declaration, owner)
+
+    def _type_argument_value(self, path: str, argument: Node, owner: str, env: _Env | None) -> str | None:
+        """A written type argument: ``? extends X`` gives ``X``, any other
+        wildcard and a nested parameterized type nothing."""
+        if argument.type == "wildcard":
+            bound = argument.named_children[-1] if argument.named_children else None
+            text = parser.node_text(self.units[path].source, argument)
+            if bound is None or not re.match(r"\?\s*extends\b", text):
+                return None
+            argument = bound
+        if argument.type == "generic_type":
+            return None
+        return self._declared_type(path, argument, owner, env)
+
+    def _parameterized(
+        self, path: str, type_node: Node, owner: str, env: _Env | None,
+    ) -> tuple[str, _Env] | None:
+        """A written source type and its type arguments by parameter name.
+
+        A raw type gives each parameter its bound (its erasure); a diamond
+        or a count mismatch gives nothing. ``None`` when ``type_node`` names
+        no unique source type.
+        """
+        source = self.units[path].source
+        name_node, arguments = type_node, None
+        if type_node.type == "generic_type":
+            name_node = type_node.named_children[0]
+            arguments = parser.child_by_type(type_node, "type_arguments")
+        elif type_node.type not in {"type_identifier", "scoped_type_identifier"}:
+            return None
+        resolved = self.resolve(path, parser.node_text(source, name_node), owner, allow_ambiguous=True, at=name_node)
+        locations = self._type_candidates(resolved, path) if resolved is not None else []
+        if resolved is None or len(locations) != 1:
+            return None
+        location, declaration = locations[0]
+        parameters = self._declared_type_parameters(declaration)
+        if arguments is None:
+            return resolved, self._type_bounds(location, declaration, resolved)
+        written = arguments.named_children
+        if len(written) != len(parameters):
+            return resolved, {}
+        return resolved, {
+            name: self._type_argument_value(path, argument, owner, env)
+            for (name, _parameter), argument in zip(parameters, written, strict=True)
+        }
+
+    def _supertype_env(
+        self, owner: str, module: str, env: _Env, target: str, depth: int = 0,
+    ) -> _Env | None:
+        """The type arguments ``owner`` gives its ancestor ``target``.
+
+        Read through the written ``extends`` and ``implements`` clauses, each
+        argument substituted by the arguments of the type that writes it.
+        ``None`` when no path or two disagreeing paths reach ``target``.
+        """
+        if owner == target:
+            return env
+        if depth > 16:
+            return None
+        found: list[_Env] = []
+        for path, declaration in self._module_locations(owner, module):
+            for clause in declaration.named_children:
+                if clause.type not in _TYPE_CLAUSES:
+                    continue
+                for type_node in clause.named_children:
+                    for candidate in type_node.named_children if type_node.type == "type_list" else [type_node]:
+                        parameterized = self._parameterized(path, candidate, owner, env)
+                        if parameterized is None:
+                            continue
+                        base, base_env = parameterized
+                        base_module = self._module_of(base, path)
+                        if base != target and all(
+                            ancestor != target for ancestor, _ in self.ancestors(base, base_module)
+                        ):
+                            continue
+                        result = self._supertype_env(base, base_module, base_env, target, depth + 1)
+                        if result is not None:
+                            found.append(result)
+        return found[0] if found and all(result == found[0] for result in found) else None
+
+    def _module_of(self, owner: str, path: str) -> str:
+        locations = self._type_candidates(owner, path)
+        return self.path_modules.get(locations[0][0], "") if len(locations) == 1 else self.path_modules.get(path, "")
 
     def _hidden_local(self, qualified_name: str, path: str, owner: str, at: Node | None) -> bool:
         """Whether a local class in ``qualified_name`` is out of scope here.
@@ -1445,7 +1655,8 @@ class JavaSymbols:
         if text == "var":
             # ``var`` takes the type of its initializer.
             return self._initializer_type(info, declarator.value)
-        return self.resolve(path, text, info.owner, allow_ambiguous=True, at=type_node)
+        # A local or parameter typed ``T`` takes the bound of ``T`` (BL-26).
+        return self._declared_type(path, type_node, info.owner)
 
     def _lambda_parameter_type(self, info: _Method, lambda_node: Node, position: int, count: int) -> str | None:
         """The type of an untyped lambda parameter, when its target proves it.
@@ -1508,7 +1719,7 @@ class JavaSymbols:
         written = self._written_variable(info, name, invocation, field_only=field_only)
         if written is None:
             return None
-        path, type_node, owner = written
+        path, type_node, owner, env = written
         container = self.resolve(
             path, parser.node_text(self.units[path].source, type_node), owner, allow_ambiguous=True, at=type_node,
         )
@@ -1522,27 +1733,18 @@ class JavaSymbols:
         written_arguments = type_arguments.named_children if type_arguments is not None else []
         if len(written_arguments) != arity:
             return None
-        return kind, tuple(self._type_argument(path, argument, owner) for argument in written_arguments)
-
-    def _type_argument(self, path: str, argument: Node, owner: str) -> str | None:
-        """A written type argument; ``? extends X`` gives ``X``, any other
-        wildcard nothing."""
-        if argument.type == "wildcard":
-            bound = argument.named_children[-1] if argument.named_children else None
-            text = parser.node_text(self.units[path].source, argument)
-            if bound is None or not re.match(r"\?\s*extends\b", text):
-                return None
-            argument = bound
-        return self.resolve(
-            path, parser.node_text(self.units[path].source, argument), owner, allow_ambiguous=True, at=argument,
+        return kind, tuple(
+            self._type_argument_value(path, argument, owner, env) for argument in written_arguments
         )
 
     def _written_variable(
         self, info: _Method, name: str, invocation: Node, *, field_only: bool = False,
-    ) -> tuple[str, Node, str] | None:
+    ) -> tuple[str, Node, str, _Env | None] | None:
         """The written type of the variable ``name`` at ``invocation``:
-        ``(path, type node, owner)``, following :meth:`variable_type`'s
-        lexical lookup, or ``None`` when it is not written."""
+        ``(path, type node, owner, arguments)``, following
+        :meth:`variable_type`'s lexical lookup, or ``None`` when it is not
+        written. ``arguments`` are those the scope gives the type declaring
+        an inherited field, ``None`` when the declaration is in scope."""
         path = info.method.path
         scope = invocation.parent
         while scope is not None:
@@ -1551,14 +1753,15 @@ class JavaSymbols:
                 if declarator is not None:
                     if declarator.type_node is None or declarator.lambda_slot is not None:
                         return None
-                    return path, declarator.type_node, info.owner
+                    return path, declarator.type_node, info.owner, None
             if _is_anonymous_body(scope):
                 declared, _type = self._class_scope_field(info, scope, name)
                 if declared or field_only:
                     return None
             elif scope.type in _TYPES:
                 owner = self.owner(path, scope)
-                for level in self._ancestor_levels(owner, self.path_modules.get(path, info.module)):
+                module = self.path_modules.get(path, info.module)
+                for level in self._ancestor_levels(owner, module):
                     found = [
                         (location, type_node, candidate)
                         for candidate, candidate_module in level
@@ -1567,7 +1770,10 @@ class JavaSymbols:
                     ]
                     if found:
                         location, type_node, candidate = found[0]
-                        return (location, type_node, candidate) if len(found) == 1 and type_node else None
+                        if len(found) != 1 or type_node is None:
+                            return None
+                        env = None if candidate == owner else self._inherited_env(owner, module, None, candidate)
+                        return location, type_node, candidate, env
                 if field_only:
                     return None
             scope = scope.parent
@@ -1592,10 +1798,7 @@ class JavaSymbols:
             for child in member.named_children:
                 ident = child.child_by_field_name("name")
                 if ident is not None and parser.node_text(source, ident) == name:
-                    found.add(self.resolve(
-                        path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
-                        at=type_node,
-                    ))
+                    found.add(self._declared_type(path, type_node, info.owner))
         if found:
             return True, next(iter(found)) if len(found) == 1 else None
         type_node = scope.parent.child_by_field_name("type") if scope.parent is not None else None
@@ -1604,7 +1807,10 @@ class JavaSymbols:
         ) if type_node is not None else None
         if supertype is None or supertype not in self.types:
             return False, None
-        return self._member_field(supertype, self._receiver_module(supertype, info), name)
+        # ``new Box<Circle>() { ... }``: the arguments the creation writes.
+        parameterized = self._parameterized(path, type_node, info.owner, None) if type_node is not None else None
+        env = parameterized[1] if parameterized is not None and parameterized[0] == supertype else {}
+        return self._member_field(supertype, self._receiver_module(supertype, info), name, env)
 
     def _ancestor_levels(self, owner: str, module: str) -> list[list[tuple[str, str]]]:
         """``owner`` and its source ancestors, grouped by hierarchy distance."""
@@ -1631,7 +1837,9 @@ class JavaSymbols:
         same = [location for location in locations if self.path_modules.get(location[0], "") == module]
         return same or locations
 
-    def _member_field(self, owner: str, module: str, name: str) -> tuple[bool, str | None]:
+    def _member_field(
+        self, owner: str, module: str, name: str, env: _Env | None = None,
+    ) -> tuple[bool, str | None]:
         """A field ``name`` of a source type, the nearest declaration first.
 
         A field hides any field of the same name farther up the hierarchy:
@@ -1639,23 +1847,34 @@ class JavaSymbols:
         (S11). Fields, interface constants, enum constants and record
         components count. Several declarations at one distance leave the
         type unknown, as Java reports them ambiguous.
+
+        ``env`` holds the type arguments of ``owner`` at the use; ``None``
+        when the use is in ``owner``'s own code. A field typed by a type
+        variable of an ancestor takes the argument ``owner``'s ``extends``
+        or ``implements`` clause writes (BL-26).
         """
         for level in self._ancestor_levels(owner, module):
             found: set[str | None] = set()
             for candidate, candidate_module in level:
+                candidate_env = env if candidate == owner else self._inherited_env(owner, module, env, candidate)
                 for path, declaration in self._module_locations(candidate, candidate_module):
-                    found.update(self._declared_fields(path, declaration, candidate, name))
+                    found.update(self._declared_fields(path, declaration, candidate, name, candidate_env))
             if found:
                 return True, next(iter(found)) if len(found) == 1 else None
         return False, None
 
-    def _declared_fields(self, path: str, declaration: Node, owner: str, name: str) -> set[str | None]:
+    def _inherited_env(self, owner: str, module: str, env: _Env | None, ancestor: str) -> _Env:
+        """The type arguments ``owner`` gives ``ancestor``; ``env`` holds
+        ``owner``'s own, ``None`` for its own code (its bounds)."""
+        start = env if env is not None else self._owner_env(owner, module)
+        return self._supertype_env(owner, module, start, ancestor) or {}
+
+    def _declared_fields(
+        self, path: str, declaration: Node, owner: str, name: str, env: _Env | None = None,
+    ) -> set[str | None]:
         """Types of the fields ``name`` one type declaration writes."""
-        source = self.units[path].source
         return {
-            owner if type_node is None else self.resolve(
-                path, parser.node_text(source, type_node), owner, allow_ambiguous=True, at=type_node,
-            )
+            owner if type_node is None else self._declared_type(path, type_node, owner, env)
             for type_node in self._field_type_nodes(path, declaration, name)
         }
 
@@ -1818,10 +2037,10 @@ class JavaSymbols:
             # ``obj.field`` or ``Type.CONSTANT``: the declared field type.
             target = receiver.child_by_field_name("object")
             field = receiver.child_by_field_name("field")
-            owner = self.receiver_type(info, target, invocation, depth + 1) if target is not None else None
-            if owner is None or field is None or owner not in self.types:
+            typed = self._receiver_env(info, target, invocation, depth + 1) if target is not None else None
+            if typed is None or field is None or typed[0] not in self.types:
                 return None
-            return self._field_type(owner, parser.node_text(source, field), info.module)
+            return self._field_type(typed[0], parser.node_text(source, field), info.module, typed[1])
         if receiver.type != "method_invocation":
             return None
         parent_receiver, name, arguments = parser.invocation_parts(receiver, source)
@@ -1856,15 +2075,223 @@ class JavaSymbols:
         if len({candidate.parameters for candidate in declarations}) != 1:
             return None
         returns: set[str | None] = set()
+        context: tuple[str, _Env] | None = None
         for candidate in declarations:
             type_node = candidate.node.child_by_field_name("type")
-            returns.add(self.resolve(
-                candidate.method.path,
-                parser.node_text(self.units[candidate.method.path].source, type_node),
-                candidate.owner,
-                at=type_node,
-            ) if type_node is not None else None)
+            if type_node is None:
+                returns.add(None)
+                continue
+            text = parser.node_text(self.units[candidate.method.path].source, type_node)
+            returned = self.resolve(candidate.method.path, text, candidate.owner, at=type_node)
+            if returned is None and type_node.type == "type_identifier" and self._type_variable(text, type_node):
+                # ``box.get()`` returning ``T``: the argument the receiver
+                # or the call proves for ``T`` (BL-26).
+                if context is None:
+                    context = self._receiver_env(info, parent_receiver, receiver, depth + 1) or (owner, {})
+                env = self._call_env(info, candidate, context, receiver, arguments, depth + 1)
+                returned = self._declared_type(candidate.method.path, type_node, candidate.owner, env)
+            returns.add(returned)
         return next(iter(returns)) if len(returns) == 1 else None
+
+    def _receiver_env(
+        self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
+    ) -> tuple[str, _Env] | None:
+        """The static type of a receiver and its type arguments (BL-26).
+
+        The arguments are read where the sources write them: the declared
+        type of a variable, parameter or field, a creation or a cast, or a
+        method's declared return type. ``this`` and an unqualified call see
+        the caller's type from its own code: each type variable takes its
+        bound. Any other receiver has an unknown argument for every
+        parameter.
+        """
+        if depth > 16:
+            return None
+        path = info.method.path
+        source = self.units[path].source
+        if node is None or node.type == "this":
+            return info.owner, self._owner_env(info.owner, self._module_of(info.owner, path))
+        if node.type == "parenthesized_expression" and node.named_children:
+            return self._receiver_env(info, node.named_children[0], invocation, depth + 1)
+        typed = self.receiver_type(info, node, invocation, depth + 1)
+        if typed is None:
+            return None
+        parameterized: tuple[str, _Env] | None = None
+        if node.type in {"object_creation_expression", "cast_expression"}:
+            type_node = node.child_by_field_name("type")
+            if type_node is not None:
+                parameterized = self._parameterized(path, type_node, info.owner, None)
+        elif node.type == "identifier" or (
+            node.type == "field_access" and (target := node.child_by_field_name("object")) is not None
+            and target.type == "this" and node.child_by_field_name("field") is not None
+        ):
+            field = node.child_by_field_name("field") if node.type == "field_access" else node
+            written = self._written_variable(
+                info, parser.node_text(source, field), invocation, field_only=node.type == "field_access",
+            ) if field is not None else None
+            if written is not None:
+                parameterized = self._parameterized(*written)
+        elif node.type == "method_invocation":
+            parameterized = self._returned(info, node, depth + 1)
+        if parameterized is not None and parameterized[0] == typed:
+            return parameterized
+        return typed, {}
+
+    def _returned(self, info: _Method, invocation: Node, depth: int) -> tuple[str, _Env] | None:
+        """The declared return type of a call and its type arguments, when
+        one declaration on a source receiver binds it."""
+        source = self.units[info.method.path].source
+        parent_receiver, name, arguments = parser.invocation_parts(invocation, source)
+        context = self._receiver_env(info, parent_receiver, invocation, depth + 1)
+        if context is None:
+            return None
+        owner = context[0]
+        locations = self._type_candidates(owner, info.method.path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        declarations = self.by_owner.get((owner, name, len(arguments), module), []) or [
+            candidate for base, base_module in self.ancestors(owner, module)
+            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])
+        ]
+        if len(declarations) != 1:
+            return None
+        declaration = declarations[0]
+        type_node = declaration.node.child_by_field_name("type")
+        if type_node is None:
+            return None
+        env = self._call_env(info, declaration, context, invocation, arguments, depth + 1)
+        return self._parameterized(declaration.method.path, type_node, declaration.owner, env)
+
+    def _call_env(
+        self, info: _Method, declaration: _Method, context: tuple[str, _Env], invocation: Node,
+        arguments: list[Node], depth: int,
+    ) -> _Env:
+        """The type arguments a call gives its declaration's type variables:
+        those of the receiver, through the ``extends`` and ``implements``
+        clauses up to the declaring type, then the method's own."""
+        receiver_type, receiver_env = context
+        module = self._module_of(receiver_type, info.method.path)
+        env = dict(self._supertype_env(receiver_type, module, receiver_env, declaration.owner) or {})
+        env.update(self._method_arguments(info, declaration, invocation, arguments, depth))
+        return env
+
+    def _method_arguments(
+        self, info: _Method, declaration: _Method, invocation: Node, arguments: list[Node], depth: int,
+    ) -> _Env:
+        """The type arguments of a generic method at a call (JLS 18).
+
+        Written ones (``this.<Circle>first(xs)``) come first. Otherwise a
+        type variable takes the one type its arguments prove: an argument
+        passed as ``T``, or a type argument of a JDK container or source
+        generic type passed as ``List<T>`` or ``Box<? extends T>``. Two
+        different types, an unknown one, or another position leave it
+        untyped; a variable that no parameter names takes its bound.
+        """
+        parameters = self._declared_type_parameters(declaration.node)
+        if not parameters:
+            return {}
+        path = info.method.path
+        written = invocation.child_by_field_name("type_arguments")
+        if written is not None:
+            if len(written.named_children) != len(parameters):
+                return {name: None for name, _parameter in parameters}
+            return {
+                name: self._type_argument_value(path, argument, info.owner, None)
+                for (name, _parameter), argument in zip(parameters, written.named_children, strict=True)
+            }
+        names = {name for name, _parameter in parameters}
+        formals = declaration.node.child_by_field_name("parameters")
+        typed = [
+            formal for formal in (formals.named_children if formals is not None else [])
+            if formal.type in {"formal_parameter", "spread_parameter"}
+        ]
+        constraints: dict[str, set[str | None]] = defaultdict(set)
+        exact = not declaration.varargs and len(typed) == len(arguments)
+        for position, formal in enumerate(typed):
+            type_node = formal.child_by_field_name("type") if formal.type == "formal_parameter" else None
+            argument = arguments[position] if exact else None
+            if type_node is None or argument is None:
+                # A varargs parameter or a different arity: nothing proven.
+                for name in self._mentioned(declaration.method.path, formal, names):
+                    constraints[name].add(None)
+                continue
+            for name, value in self._inferred(info, declaration, type_node, argument, invocation, names, depth):
+                constraints[name].add(value)
+        return {
+            name: self._bound(declaration.method.path, parameter, declaration.owner)
+            if name not in constraints else (
+                next(iter(constraints[name])) if len(constraints[name]) == 1 else None
+            )
+            for name, parameter in parameters
+        }
+
+    def _mentioned(self, path: str, node: Node, names: set[str]) -> list[str]:
+        """The type variables among ``names`` that ``node`` writes."""
+        text = parser.node_text(self.units[path].source, node)
+        return [name for name in names if re.search(rf"(?<![\w$.]){re.escape(name)}(?![\w$])", text)]
+
+    def _inferred(
+        self, info: _Method, declaration: _Method, type_node: Node, argument: Node, invocation: Node,
+        names: set[str], depth: int,
+    ) -> list[tuple[str, str | None]]:
+        """``(type variable, argument type)`` pairs one parameter proves."""
+        path = declaration.method.path
+        source = self.units[path].source
+        mentioned = self._mentioned(path, type_node, names)
+        if not mentioned:
+            return []
+        text = parser.node_text(source, type_node).strip()
+        if type_node.type == "type_identifier" and text in names:
+            value = self.expression_type(info, argument, invocation, depth + 1)
+            return [(text, _BOXED.get(value, value) if value is not None else None)]
+        if type_node.type != "generic_type":
+            return [(name, None) for name in mentioned]
+        written = parser.child_by_type(type_node, "type_arguments")
+        slots: dict[int, str] = {}
+        for index, slot in enumerate(written.named_children if written is not None else []):
+            if slot.type == "wildcard" and re.match(r"\?\s*extends\b", parser.node_text(source, slot)):
+                slot = slot.named_children[-1]
+            if slot.type == "type_identifier" and parser.node_text(source, slot) in names:
+                slots[index] = parser.node_text(source, slot)
+        values: tuple[str | None, ...] | None = None
+        name_node = type_node.named_children[0]
+        container = self.resolve(
+            path, parser.node_text(source, name_node), declaration.owner, allow_ambiguous=True, at=name_node,
+        )
+        count = len(written.named_children) if written is not None else 0
+        if container in _GENERIC_CONTAINERS:
+            view = self._generic_view(info, argument, invocation)
+            if view is not None and view[0] == _GENERIC_CONTAINERS[container][0] and len(view[1]) == count:
+                values = view[1]
+        elif container is not None and container in self.types:
+            passed = self._receiver_env(info, argument, invocation, depth + 1)
+            locations = self._type_candidates(container, path)
+            if passed is not None and len(locations) == 1:
+                env = self._supertype_env(
+                    passed[0], self._module_of(passed[0], info.method.path), passed[1], container,
+                )
+                declared = self._declared_type_parameters(locations[0][1])
+                if env is not None and len(declared) == count:
+                    values = tuple(env.get(name) for name, _parameter in declared)
+        found = [(name, values[index] if values is not None else None) for index, name in slots.items()]
+        # A variable written elsewhere in the type, as ``List<Box<T>>``.
+        found.extend((name, None) for name in mentioned if name not in slots.values())
+        return found
+
+    def _dispatch_receiver_type(
+        self, info: _Method, receiver: Node | None, invocation: Node, object_method: bool,
+    ) -> str | None:
+        """The receiver type a call dispatches on. For an ``Object`` method a
+        type variable is not typed by its bound: its runtime type is unknown
+        (ADR-81 rule 4)."""
+        if not object_method:
+            return self.receiver_type(info, receiver, invocation)
+        self._bounds = False
+        try:
+            return self.receiver_type(info, receiver, invocation)
+        finally:
+            self._bounds = True
 
     def _qualified_this(self, info: _Method, receiver: Node) -> str | None:
         """``Outer.this``: the named type, when it encloses the expression."""
@@ -1963,12 +2390,13 @@ class JavaSymbols:
                 return True
         return False
 
-    def _field_type(self, owner: str, name: str, module: str) -> str | None:
-        """Declared type of a field on a source type or its ancestors."""
+    def _field_type(self, owner: str, name: str, module: str, env: _Env) -> str | None:
+        """Declared type of a field on a source type or its ancestors, read
+        through a receiver whose type arguments are ``env``."""
         locations = self.types.get(owner, [])
         if len(locations) == 1:
             module = self.path_modules.get(locations[0][0], module)
-        return self._member_field(owner, module, name)[1]
+        return self._member_field(owner, module, name, env)[1]
 
     def _receiver_module(self, receiver_type: str, caller: _Method) -> str:
         locations = self._type_candidates(receiver_type, caller.method.path)
@@ -2387,7 +2815,9 @@ class JavaSymbols:
                     receiver, name = parts[0], parser.node_text(source, parts[-1])
                     if in_anonymous_body and _refers_to_anonymous_instance(source, receiver):
                         continue
-                    receiver_type = self.receiver_type(info, receiver, invocation)
+                    receiver_type = self._dispatch_receiver_type(
+                        info, receiver, invocation, name in {method for method, _arity in _OBJECT_DISPATCH},
+                    )
                     if receiver_type is None:
                         continue
                     arities = self._declared_arities(receiver_type, name, info.method.path, info.module)
@@ -2408,7 +2838,9 @@ class JavaSymbols:
                         # ``this`` is the anonymous instance, whose members
                         # come from an often external supertype.
                         continue
-                    receiver_type = lexical_owner or self.receiver_type(info, receiver, invocation)
+                    receiver_type = lexical_owner or self._dispatch_receiver_type(
+                        info, receiver, invocation, (name, len(arguments)) in _OBJECT_DISPATCH,
+                    )
                     if receiver_type is None:
                         continue
                     arity = len(arguments)

@@ -309,13 +309,13 @@ def _case(id: str, caller: str, item: str | None, *rows: Row) -> Case:
 
 
 CASES: list[Case] = [
-    _case("A1-box", "Generics.box", "BL-26",
+    _case("A1-box", "Generics.box", None,
           ("a1.box", "Box.get", "exact"), ("a1.box", "Circle.area", "exact")),
-    _case("A1-repo", "Generics.repo", "BL-26",
+    _case("A1-repo", "Generics.repo", None,
           ("a1.repo", "Repo.find", "possible"), ("a1.repo", "Circle.area", "exact")),
-    _case("A1-field", "CircleBox.run", "BL-26",
+    _case("A1-field", "CircleBox.run", None,
           ("a1.field", "Circle.area", "exact")),
-    _case("A1-generic-method", "Generics.useFirst", "BL-26",
+    _case("A1-generic-method", "Generics.useFirst", None,
           ("a1.first", "Generics.first", "exact"), ("a1.first", "Circle.area", "exact")),
     _case("A2-list", "Containers.listGet", None,
           ("a2.list", "Circle.area", "exact")),
@@ -335,7 +335,7 @@ CASES: list[Case] = [
           ("a5.switch", "Circle.area", "exact")),
     _case("A6", "Inner.run", None,
           ("a6", "Outer.helper", "exact")),
-    _case("A7", "Generics.bounded", "BL-26",
+    _case("A7", "Generics.bounded", "BL-28",
           ("a7", "Circle.area", "possible"), ("a7", "Square.area", "possible"),
           ("a7", "Shape.area", "possible")),
     _case("A8", "Threads.start", "BL-25",
@@ -358,7 +358,7 @@ CASES: list[Case] = [
     _case("B4", "Dispatch.run", "BL-28",
           ("b4", "Circle.area", "possible"), ("b4", "Square.area", "possible"),
           ("b4", "Shape.area", "possible")),
-    _case("B5", "Handlers.run", "BL-26",
+    _case("B5", "Handlers.run", None,
           ("b5", "GenericHandler.handle", "exact"), ("b5", "Handler2.handle", "possible")),
 ]
 
