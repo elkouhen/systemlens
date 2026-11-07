@@ -373,16 +373,17 @@ it fills the gaps. A receiver is typed from a field, parameter, local or
 type it encloses, or a capitalized type name for a static call;
 `receiver::name` is a call when that name has one declared arity.
 A ternary takes the type its two branches share; branches of different
-types leave it untyped (BL-23). A zero-argument `getX()` (`isX()` for a `boolean`) that no
-source type declares takes the field type when Lombok `@Data`, `@Value` or
-`@Getter` generates it. `toString()`, `hashCode()` and `equals(x)` return
-`String`, `int` and `boolean` on any receiver.
+types leave it untyped (BL-23). A zero-argument `getX()` (`isX()` for a
+`boolean`) that no source type declares takes the field type when Lombok
+`@Data`, `@Value` or `@Getter` generates it. `toString()`, `hashCode()`
+and `equals(x)` return `String`, `int` and `boolean` on any receiver.
 Variables declared by an enclosing statement also type receivers: an enhanced
 `for` variable, a single-type `catch` parameter, a try-with-resources
 resource, and an explicitly typed lambda parameter. A `var` loop variable
 takes the element type the iterable's written type argument gives through
 the container view below, and nothing otherwise (BL-23). A multi-catch
 parameter has no type, but still shadows a field of the same name.
+
 A pattern variable takes its written type where JLS 6.3.1 proves it in
 scope through `!`, `&&`, `||` and parentheses: the true or false branch of
 an `if`, `while` or `?:`, the right operand of `&&` or `||`, the
@@ -391,6 +392,7 @@ statements after an `if (!(o instanceof C c))` whose branch ends in
 included. Record pattern components count; a `var` component has no type.
 Elsewhere the name keeps its outer meaning. The Kafka payload pass shares
 these rules through `discovery/java/patterns.py`.
+
 An untyped lambda parameter is typed only when the lambda is a direct
 argument of a JDK callback whose parameter the receiver's written type
 arguments fix (BL-14). The receiver is a variable, a field or `this.field`
@@ -402,6 +404,15 @@ and `max`, and `Map.forEach`, `compute*` and `merge`, which give the key
 or the value. `? extends X` gives `X`. Any other target (a source method,
 an assignment, a raw or wildcard type, a type changed by `map`) leaves the
 parameter untyped, but it still shadows a field.
+
+The same view types a call chained on a JDK container accessor (BL-27).
+The accessor returns the type argument it names: `get(int)`, `getFirst()`
+and `getLast()` of a collection, `next()` of an `Iterator` (also reached
+through `iterator()`), `get()`, `orElse`, `orElseGet` and `orElseThrow`
+of an `Optional`, so `stream().findFirst().get()` too, `get(key)` of a
+`Map`, and `getKey()` and `getValue()` of a written `Map.Entry<K, V>`.
+A raw or wildcard container, or a chain through `map`, gives no type.
+
 A `var` initializer is typed where it is written, not at the call site: a
 local declared after it never shadows the field it names, and initializers
 that name each other in a cycle get no type.
@@ -861,6 +872,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T9 | `var` loop variable typed by the iterable's written type argument | `covered` (BL-23) | |
 | T10 | Ternary receiver whose branches share a type | `covered` (BL-23) | |
 | T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
+| T12 | Element of a JDK container accessor chain | `covered` (BL-27) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
 | F3 | Anonymous subclass overriding a source method | `defect` | not planned |
@@ -905,7 +917,7 @@ aligned it.
 | # | Shape | Status | Item |
 |---|---|---|---|
 | A1 | Type-variable return or field: `box.get()`, `repo.find()` through `extends Repo<Circle>`, inherited `T value`, `<T> T first(List<T>)` | `missing` | BL-26 |
-| A2 | Element of a JDK container accessor: `List.get`, `Optional.get`, `Map.get`, `stream().findFirst().get()` | `missing` | BL-27 |
+| A2 | Element of a JDK container accessor: `List.get`, `Optional.get`, `Map.get`, `stream().findFirst().get()` | `covered` | BL-27 |
 | A3 | `var` loop variable | `covered` | BL-23 |
 | A4 | Ternary receiver whose branches share a type | `covered` | BL-23 |
 | A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `covered` | BL-23 |

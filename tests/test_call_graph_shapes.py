@@ -1326,6 +1326,63 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Inner.run", {"Outer.helper": "exact", "Service.go": "exact"}),
+    Shape("T12", """
+        import java.util.Iterator;
+        import java.util.List;
+        import java.util.Map;
+        import java.util.Optional;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List<? extends Circle> circles;
+          Optional<Circle> maybe;
+          Map<String, Circle> byName;
+          void run(Map.Entry<String, Circle> entry, Iterator<Circle> it) { //@Use.run
+            circles.get(0).area();
+            circles.getFirst().area();
+            maybe.orElseThrow().area();
+            maybe.orElse(null).area();
+            byName.get("x").area();
+            byName.values().iterator().next().area();
+            entry.getValue().area();
+            it.next().area();
+            circles.stream().filter(c -> true).findFirst().get().area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact"}),
+    Shape("T12-unwritten", """
+        import java.util.List;
+        import java.util.Map;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List raw;
+          List<?> any;
+          List<Circle> circles;
+          Map<String, Circle> byName;
+          void run() { //@Use.run
+            raw.get(0).area();
+            any.get(0).area();
+            circles.stream().map(c -> c).findFirst().get().area();
+            byName.keySet().iterator().next().area();
+          }
+        }
+        """, "Use.run", {},
+        note="BL-27: a raw or wildcard container, or a type-changing chain, gives nothing"),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {

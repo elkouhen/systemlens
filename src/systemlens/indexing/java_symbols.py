@@ -157,6 +157,9 @@ _GENERIC_CONTAINERS: dict[str, tuple[str, int]] = {
         "java.util.NavigableMap", "java.util.TreeMap", "java.util.concurrent.ConcurrentMap",
         "java.util.concurrent.ConcurrentHashMap",
     )},
+    "java.util.Iterator": ("iterator", 1),
+    "java.util.ListIterator": ("iterator", 1),
+    "java.util.Map.Entry": ("entry", 2),
 }
 _ELEMENT_CALLBACKS = (
     "filter", "map", "flatMap", "forEach", "forEachOrdered", "peek", "anyMatch", "allMatch",
@@ -203,7 +206,26 @@ _GENERIC_CALLS: dict[tuple[str, str, int], tuple[str, tuple[int, ...]]] = {
     ("optional", "filter", 1): ("optional", (0,)),
     ("map", "keySet", 0): ("iterable", (0,)),
     ("map", "values", 0): ("iterable", (1,)),
+    ("iterable", "iterator", 0): ("iterator", (0,)),
+    ("stream", "iterator", 0): ("iterator", (0,)),
 }
+# Calls that return one type argument of their JDK container (BL-27):
+# (receiver kind, method name, argument count) -> type argument index.
+_ELEMENT_ACCESSORS: dict[tuple[str, str, int], int] = {
+    ("iterable", "get", 1): 0,
+    ("iterable", "getFirst", 0): 0,
+    ("iterable", "getLast", 0): 0,
+    ("optional", "get", 0): 0,
+    ("optional", "orElse", 1): 0,
+    ("optional", "orElseGet", 1): 0,
+    ("optional", "orElseThrow", 0): 0,
+    ("optional", "orElseThrow", 1): 0,
+    ("map", "get", 1): 1,
+    ("iterator", "next", 0): 0,
+    ("entry", "getKey", 0): 0,
+    ("entry", "getValue", 0): 1,
+}
+_ACCESSOR_CALLS = {(name, count) for _kind, name, count in _ELEMENT_ACCESSORS}
 
 
 def _written_type(source: bytes, parameter: Node) -> str:
@@ -1806,6 +1828,13 @@ class JavaSymbols:
         if (name, len(arguments)) in _OBJECT_RETURNS:
             # ``java.lang.Object`` fixes these return types for every receiver.
             return _OBJECT_RETURNS[(name, len(arguments))]
+        if (name, len(arguments)) in _ACCESSOR_CALLS:
+            # ``circles.get(0)``, ``maybe.get()``: the element type a JDK
+            # container's written type arguments give (BL-27).
+            view = self._generic_view(info, parent_receiver, receiver, depth + 1)
+            index = _ELEMENT_ACCESSORS.get((view[0], name, len(arguments))) if view is not None else None
+            if view is not None and index is not None:
+                return view[1][index]
         owner = self.receiver_type(info, parent_receiver, receiver, depth + 1)
         if owner is None:
             return None
