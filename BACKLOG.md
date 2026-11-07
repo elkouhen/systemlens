@@ -5,8 +5,9 @@ against CodeQL, and validated the same day by the product owner, who
 asked for every item to be processed autonomously, with the decisions
 taken on their behalf listed at the end of the run. The lot order
 stands. Owner: SystemLens implementer. Reviewer: product owner.
-Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21 to BL-29.
-Each delivered item's Delivery line names its commit and test.
+Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21 to BL-32;
+the backlog is fully processed. Each delivered item's Delivery line
+names its commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
 so each item stands on its own. Item IDs continue the numbering of the
@@ -54,7 +55,7 @@ unresolved or `possible`.
 | [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `delivered` |
 | [BL-30](#bl-30) | Keep a dispatch open when a lambda or an anonymous class implements the type | P3 | `delivered` |
 | [BL-31](#bl-31) | Dispatch a call on an external class to its source subclasses | P3 | `delivered` |
-| [BL-32](#bl-32) | Apply ADR-81 rule 1 in the CodeQL query and the Joern export | P3 | `open` |
+| [BL-32](#bl-32) | Apply ADR-81 rule 1 in the CodeQL query and the Joern export | P3 | `delivered` |
 
 Priority reads: P1 adds edges CodeQL finds on everyday modern Java
 (`Optional`, streams, `var`, generics, patterns) without touching a
@@ -461,7 +462,22 @@ dropped on 2026-11-07, and waits for a decision record.
 - **Acceptance:** the ADR-81 regression fixtures give `possible` with
   each engine; the parity test rows for rule 1 pass in both directions.
 - **Depends on:** ADR-81, accepted; no new record.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** CodeQL checks each concrete production subtype of the
+  receiver's dispatch bound for a written body (`exactMethodImpl`);
+  Joern's export lists internal types and the adapter applies the
+  `source` engine's generated-member rules. Parity row B6, six cases,
+  passes in the default suite and in the `slow` CodeQL test; the ADR-81
+  S10 fixtures give the `source` rows with CodeQL and Joern 4.0.674 in
+  `slow` tests. The `source` engine is unchanged, so no call shape is
+  added. On fresh copies, `compare-engines` before and after gives
+  identical results: train-ticket 406/406 flows and 1712/1712 edges with
+  zero differences for `codeql`, and for `joern` the existing 11 flow
+  and 7 edge confidence changes; the lab 23 flows, `codeql` 103 edges
+  with the one `ProductEntity.toDomain` edge, `joern` 91 edges with its
+  existing 11 unresolved-signature differences. Commit `5e1921f`. The
+  code-flow signature moves to v51 so existing indexes rebuild the
+  BL-23 to BL-32 edges (commit `c9230cf`).
 - **Why P3:** aligns CodeQL on `source`, outside the product owner's
   question; listed so the asymmetry is not forgotten.
 
