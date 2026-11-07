@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v27-strategy1-kebab-listener-keys"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v28-inherited-mappings-gateway-filters"
 
 
 def current_endpoint_inventory_signature() -> str:

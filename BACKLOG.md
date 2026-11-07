@@ -3,7 +3,9 @@
 Status: reviewed item by item by the product owner on 2026-11-07, who
 kept the twelve items below, all `open` and all P1, and dropped the
 others (Appendix B). Owner: SystemLens implementer. Reviewer: product
-owner. Baseline: commit `4a12ad5`.
+owner. Baseline: commit `4a12ad5`. Delivered on 2026-11-07: eleven items;
+BL-18 waits for a manual trackpad check. Each item's Delivery line names
+its commit and regression test.
 
 This backlog replaces the ten files of `docs/plans/`, the 2026-11-06
 review backlog, `BACKLOG.previous.md` and
@@ -31,18 +33,18 @@ application `apps/supermarket-demo`, and
 
 | ID | Title | Priority | Status |
 |---|---|---|---|
-| [BL-01](#bl-01) | Keep a dispatch `exact` only when its implementor set is complete | P1 | `open` |
-| [BL-02](#bl-02) | Use the Feign client name as the HTTP peer | P1 | `open` |
-| [BL-04](#bl-04) | Attribute inherited request mappings to the implementing type | P1 | `open` |
-| [BL-06](#bl-06) | Apply gateway path filters before route matching | P1 | `open` |
-| [BL-08](#bl-08) | Scope a RestClient `baseUrl` to its own client | P1 | `open` |
-| [BL-09](#bl-09) | Type Kafka payload variables in their own scope | P1 | `open` |
-| [BL-11](#bl-11) | Persist one flow set whatever the engine or command | P1 | `open` |
-| [BL-12](#bl-12) | Reconcile an OUT followed by another OUT | P1 | `open` |
-| [BL-14](#bl-14) | Resolve calls on untyped lambda parameters | P1 | `open` |
-| [BL-16](#bl-16) | Use one zoom step on both graph surfaces | P1 | `open` |
-| [BL-17](#bl-17) | Keep the camera on window resize | P1 | `open` |
-| [BL-18](#bl-18) | Pan with a trackpad scroll and zoom with a pinch | P1 | `open` |
+| [BL-01](#bl-01) | Keep a dispatch `exact` only when its implementor set is complete | P1 | `delivered` |
+| [BL-02](#bl-02) | Use the Feign client name as the HTTP peer | P1 | `delivered` |
+| [BL-04](#bl-04) | Attribute inherited request mappings to the implementing type | P1 | `delivered` |
+| [BL-06](#bl-06) | Apply gateway path filters before route matching | P1 | `delivered` |
+| [BL-08](#bl-08) | Scope a RestClient `baseUrl` to its own client | P1 | `delivered` |
+| [BL-09](#bl-09) | Type Kafka payload variables in their own scope | P1 | `delivered` |
+| [BL-11](#bl-11) | Persist one flow set whatever the engine or command | P1 | `delivered` |
+| [BL-12](#bl-12) | Reconcile an OUT followed by another OUT | P1 | `delivered` |
+| [BL-14](#bl-14) | Resolve calls on untyped lambda parameters | P1 | `delivered` |
+| [BL-16](#bl-16) | Use one zoom step on both graph surfaces | P1 | `delivered` |
+| [BL-17](#bl-17) | Keep the camera on window resize | P1 | `delivered` |
+| [BL-18](#bl-18) | Pan with a trackpad scroll and zoom with a pinch | P1 | `blocked: no trackpad check` |
 
 ## P1: false facts and graph defects
 
@@ -84,7 +86,7 @@ lab.
   (5648 `exact`), the 271 lost edges all from Lombok `@Data`
   `equals`/`hashCode` on `Object` fields (Q11), 165 `medium` flows
   unchanged. No flow lost. ADR-81 rule 1 is not applied to CodeQL and
-  Joern. Commit: pending.
+  Joern. Commit: `453cc2b` (ADR-81 accepted) and `f8125d5`.
 - **Why P1:** false `exact` edges; Feign fallbacks are a common Spring
   idiom.
 
@@ -111,7 +113,7 @@ lab.
   (`OrganizationController.findByIdWithDepartmentsAndEmployees` to
   `DepartmentController.findByOrganizationWithEmployees`). Feign joins the
   route-declaring clients, so a dynamic Feign route is never projected onto
-  every host route. commit: pending.
+  every host route. commit: `8a2ce31`.
 - **Why P1:** Feign is the most common inter-service client in Spring.
 
 <a id="bl-04"></a>
@@ -137,7 +139,7 @@ lab.
   declaration, so no code flow starts from it. Neither the sample nor
   train-ticket has the shape: their REST endpoints are unchanged (0
   inheritance links; the index costs 0.16 s on train-ticket).
-  commit: pending.
+  commit: `4af157e`.
 - **Why P1:** contract-first and shared-API interfaces are common.
 
 <a id="bl-06"></a>
@@ -166,7 +168,7 @@ lab.
   `organization-service`, by coincidence) to 6 (to each of the three
   services, from both gateway files). A rewrite that depends on a pattern
   segment makes the call `<dynamic>` with no relation. The gateway files
-  still belong to `config-service`, which serves them. commit: pending.
+  still belong to `config-service`, which serves them. commit: `307e473`.
 - **Why P1:** wrong gateway-to-service relations on a reference project.
 
 <a id="bl-08"></a>
@@ -186,7 +188,7 @@ lab.
   one file now each get their own host and base path; a client bound to
   several bases, or a URI with an unresolved leading part, takes no base.
   Neither the sample nor train-ticket uses RestClient: no measured change.
-  commit: pending.
+  commit: `8d3faac`.
 - **Why P1:** a false HTTP relation; local fix.
 
 <a id="bl-09"></a>
@@ -205,7 +207,7 @@ lab.
 - **Status:** `delivered`.
 - **Delivery:** regression tests
   `test_payload_variable_is_typed_in_its_own_scope` in
-  `tests/test_kafka_extraction_regressions.py`; commit: pending.
+  `tests/test_kafka_extraction_regressions.py`; commit: `ab96497`.
 - **Why P1:** a false fact that ADR-76 pairing trusts.
 
 <a id="bl-11"></a>
@@ -239,7 +241,7 @@ lab.
   passes name a scheduler `@Scheduled(cron=...)`. `CODE_FLOW_SIGNATURE`
   moves to v49, so old indexes rebuild their flows. Train-ticket, source
   engine: 406 flows before and after, identical IDs, and `flows calculate`
-  gives the same 406. Commit: pending.
+  gives the same 406. Commit: `46cd407`.
 - **Why P1:** duplicate and divergent flows are visible in every export.
 
 <a id="bl-12"></a>
@@ -261,7 +263,7 @@ lab.
   once OUT1 has its edge. Only a following input of the same service
   continues an effect locally. `CODE_FLOW_SIGNATURE` moves to v50, so old
   indexes reconcile again. Train-ticket (319 complete, 87 partial) and the
-  lab (23 complete), source engine: no status changes. Commit: pending.
+  lab (23 complete), source engine: no status changes. Commit: `51011b3`.
 - **Why P1:** a false `complete` status.
 
 <a id="bl-14"></a>
@@ -282,7 +284,7 @@ lab.
   `tests/test_source_engine.py`. On the sample, `analyze compare-engines
   --engines source,codeql` went from 72 shared edges and 8 CodeQL-only
   edges to 80 shared and 0 CodeQL-only; flows unchanged (4, `low`).
-  Commit: pending.
+  Commit: `7ea0c24`.
 - **Why P1:** lost edges of the default engine on a reference project.
 
 <a id="bl-16"></a>
@@ -301,7 +303,7 @@ lab.
 - **Delivery:** `test_one_wheel_notch_zooms_both_graph_surfaces_by_the_same_step`
   in `tests/test_browser_export.py` measures 1.197 per notch on both
   surfaces, around the pointer (the call tree gave 1.062 before); commit:
-  pending.
+  `bb5ec3c`.
 - **Why P1:** a reported navigation defect; no contract change.
 
 <a id="bl-17"></a>
@@ -321,7 +323,7 @@ lab.
 - **Delivery:** the rule is in `docs/UX-UI.md`; the window resize and
   `refreshToolbarReservation` refit only a camera the user never moved.
   `test_window_resize_keeps_the_user_camera_and_refits_an_untouched_graph`
-  in `tests/test_browser_export.py`; commit: pending.
+  in `tests/test_browser_export.py`; commit: `07c4214`.
 - **Why P1:** a reported navigation defect.
 
 <a id="bl-18"></a>
@@ -345,7 +347,7 @@ lab.
   surfaces apply it. `test_trackpad_scroll_pans_and_pinch_or_line_wheel_zooms`
   in `tests/test_browser_export.py` asserts pan, pan, zoom, zoom for a
   horizontal pixel wheel, a vertical pixel wheel, a line wheel and a pinch;
-  the manual Mac trackpad check is pending; commit: pending.
+  the manual Mac trackpad check is pending; commit: `1f246c3`.
 - **Why P1:** the product owner reported that viewport navigation does
   not work; last of P1 because it needs a decision and hardware.
 
