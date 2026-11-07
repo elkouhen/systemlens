@@ -265,7 +265,13 @@ lab.
   sample's `compare-engines` gap closes for those 8 sites.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-case-analysis.md`: F2.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** regression test
+  `test_an_untyped_lambda_parameter_takes_a_provable_element_type` in
+  `tests/test_source_engine.py`. On the sample, `analyze compare-engines
+  --engines source,codeql` went from 72 shared edges and 8 CodeQL-only
+  edges to 80 shared and 0 CodeQL-only; flows unchanged (4, `low`).
+  Commit: pending.
 - **Why P1:** lost edges of the default engine on a reference project.
 
 <a id="bl-16"></a>

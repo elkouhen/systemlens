@@ -365,9 +365,20 @@ source type declares takes the field type when Lombok `@Data`, `@Value` or
 `String`, `int` and `boolean` on any receiver.
 Variables declared by an enclosing statement also type receivers: an enhanced
 `for` variable, a single-type `catch` parameter, a try-with-resources
-resource, and an explicitly typed lambda parameter. An untyped lambda
-parameter, a `var` loop variable or a multi-catch parameter has no type, but
-still shadows a field of the same name.
+resource, and an explicitly typed lambda parameter. A `var` loop variable
+or a multi-catch parameter has no type, but still shadows a field of the
+same name.
+An untyped lambda parameter is typed only when the lambda is a direct
+argument of a JDK callback whose parameter the receiver's written type
+arguments fix (BL-14). The receiver is a variable, a field or `this.field`
+written as a `java.util` collection, `Stream`, `Optional` or `Map`, or a
+chain that keeps its arguments: `stream()`, `filter`, `sorted`,
+`findFirst`, `keySet()`, `values()`. The callbacks are `forEach`,
+`filter`, `map`, `anyMatch` and their kin, comparators of `sorted`, `min`
+and `max`, and `Map.forEach`, `compute*` and `merge`, which give the key
+or the value. `? extends X` gives `X`. Any other target (a source method,
+an assignment, a raw or wildcard type, a type changed by `map`) leaves the
+parameter untyped, but it still shadows a field.
 A `var` initializer is typed where it is written, not at the call site: a
 local declared after it never shadows the field it names, and initializers
 that name each other in a cycle get no type.

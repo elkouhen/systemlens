@@ -256,7 +256,7 @@ class Svc {
     for (Order o : orders) { o.process(); }
     try (Resource r = open()) { r.use(); } catch (Failure e) { e.report(); }
     orders.forEach((Order x) -> x.fail());
-    orders.forEach(order -> order.fail());
+    java.util.function.Consumer<Order> sink = order -> order.fail();
   }
 }
 """
@@ -290,7 +290,8 @@ def test_variables_declared_by_enclosing_statements_type_their_receivers(tmp_pat
         ("p.Svc.open", line("try (Resource"), "exact"),
     ]
     # The untyped lambda parameter ``order`` shadows the field of the same
-    # name: only the typed lambda ``x`` yields ``fail``.
+    # name, and an assignment target types no lambda parameter: only the
+    # typed lambda ``x`` yields ``fail``.
     assert sum(callee == "p.Order.fail" for callee, _line, _dispatch in calls) == 1
 
 
@@ -758,3 +759,76 @@ class Svc {
         for call in symbols.fallback_calls(set(), closed_world=True)
     }
     assert calls == {("findByName", "possible"), ("helper", "exact")}
+
+
+_UNTYPED_LAMBDAS = """package p;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Stream;
+class Employee { void hire() {} void fire() {} }
+class Department {
+  Long getId() { return 1L; }
+  Long getOrganizationId() { return 1L; }
+  void setEmployees(List<Employee> employees) {}
+}
+class Repo {
+  private List<Department> departments = new ArrayList<>();
+  Department findById(Long id) {
+    return departments.stream()
+        .filter(a -> a.getId().equals(id))
+        .findFirst()
+        .orElseThrow();
+  }
+  List<Department> findByOrganization(Long organizationId) {
+    return departments.stream()
+        .filter(a -> a.getOrganizationId().equals(organizationId))
+        .toList();
+  }
+  void withEmployees(Long organizationId) {
+    List<Department> found = findByOrganization(organizationId);
+    found.forEach(d -> d.setEmployees(null));
+  }
+  void shapes(Map<Long, Employee> staff, Optional<Employee> maybe, Stream<? extends Employee> all) {
+    staff.forEach((id, e) -> e.hire());
+    maybe.ifPresent(e -> e.fire());
+    all.sorted((left, right) -> { left.hire(); return 0; });
+  }
+  void unproven(List<?> anything, List raw, Map<Long, Department> byId) {
+    anything.forEach(x -> x.getId());
+    raw.forEach(x -> x.getId());
+    byId.computeIfAbsent(1L, key -> key.getId());
+    apply(x -> x.getId());
+  }
+  void apply(java.util.function.Function<Department, Long> f) {}
+}
+"""
+
+
+def test_an_untyped_lambda_parameter_takes_a_provable_element_type(tmp_path: Path) -> None:
+    """BL-14: a lambda passed to a JDK collection, stream, optional or map
+    callback takes its parameter type from the receiver's written type
+    arguments; any other target leaves the parameter unresolved."""
+    symbols = _symbols(tmp_path, {"app/src/main/java/p/Repo.java": _UNTYPED_LAMBDAS})
+
+    def line(text: str) -> int:
+        return next(
+            number for number, value in enumerate(_UNTYPED_LAMBDAS.splitlines(), 1) if text in value
+        )
+
+    calls = sorted(
+        (call.caller.rsplit(".", 1)[-1], call.callee.removeprefix("p."), call.call_line)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if call.caller.startswith("p.Repo.")
+    )
+    assert calls == [
+        ("findById", "Department.getId", line("a.getId()")),
+        ("findByOrganization", "Department.getOrganizationId", line("a.getOrganizationId()")),
+        ("shapes", "Employee.fire", line("e.fire()")),
+        ("shapes", "Employee.hire", line("e.hire()")),
+        ("shapes", "Employee.hire", line("left.hire()")),
+        ("unproven", "Repo.apply", line("apply(x ->")),
+        ("withEmployees", "Department.setEmployees", line("d.setEmployees")),
+        ("withEmployees", "Repo.findByOrganization", line("findByOrganization(organizationId);")),
+    ]

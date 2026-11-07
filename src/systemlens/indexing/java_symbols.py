@@ -137,6 +137,73 @@ _LOMBOK_GETTERS = {"Data", "Getter", "Value"}
 # Functional JDK interfaces: a lambda or method reference can implement them
 # anywhere, so dispatch on them is never exact.
 _FUNCTIONAL_JDK = {"java.lang.Runnable", "java.util.concurrent.Callable"}
+# JDK generic types whose type arguments type an untyped lambda parameter
+# (BL-14): the element of a collection, stream or optional, or the key and
+# value of a map. Each maps to its kind and its number of type arguments.
+_GENERIC_CONTAINERS: dict[str, tuple[str, int]] = {
+    **{name: ("iterable", 1) for name in (
+        "java.lang.Iterable", "java.util.Collection", "java.util.List", "java.util.ArrayList",
+        "java.util.LinkedList", "java.util.Set", "java.util.HashSet", "java.util.LinkedHashSet",
+        "java.util.SortedSet", "java.util.NavigableSet", "java.util.TreeSet", "java.util.Queue",
+        "java.util.Deque", "java.util.ArrayDeque", "java.util.Vector", "java.util.PriorityQueue",
+        "java.util.concurrent.CopyOnWriteArrayList", "java.util.concurrent.CopyOnWriteArraySet",
+        "java.util.concurrent.ConcurrentLinkedQueue", "java.util.concurrent.BlockingQueue",
+        "java.util.concurrent.LinkedBlockingQueue",
+    )},
+    "java.util.stream.Stream": ("stream", 1),
+    "java.util.Optional": ("optional", 1),
+    **{name: ("map", 2) for name in (
+        "java.util.Map", "java.util.HashMap", "java.util.LinkedHashMap", "java.util.SortedMap",
+        "java.util.NavigableMap", "java.util.TreeMap", "java.util.concurrent.ConcurrentMap",
+        "java.util.concurrent.ConcurrentHashMap",
+    )},
+}
+_ELEMENT_CALLBACKS = (
+    "filter", "map", "flatMap", "forEach", "forEachOrdered", "peek", "anyMatch", "allMatch",
+    "noneMatch", "takeWhile", "dropWhile", "mapToInt", "mapToLong", "mapToDouble",
+)
+# The functional parameter a JDK method declares, by receiver kind, method
+# name, argument count, lambda position and lambda parameter count: the type
+# argument of the receiver each lambda parameter takes, in order.
+_LAMBDA_PARAMETERS: dict[tuple[str, str, int, int, int], tuple[int, ...]] = {
+    ("iterable", "forEach", 1, 0, 1): (0,),
+    ("iterable", "removeIf", 1, 0, 1): (0,),
+    ("iterable", "replaceAll", 1, 0, 1): (0,),
+    ("iterable", "sort", 1, 0, 2): (0, 0),
+    **{("stream", name, 1, 0, 1): (0,) for name in _ELEMENT_CALLBACKS},
+    ("stream", "sorted", 1, 0, 2): (0, 0),
+    ("stream", "min", 1, 0, 2): (0, 0),
+    ("stream", "max", 1, 0, 2): (0, 0),
+    ("stream", "reduce", 1, 0, 2): (0, 0),
+    ("stream", "reduce", 2, 1, 2): (0, 0),
+    **{("optional", name, 1, 0, 1): (0,) for name in ("filter", "map", "flatMap", "ifPresent")},
+    ("optional", "ifPresentOrElse", 2, 0, 1): (0,),
+    ("map", "forEach", 1, 0, 2): (0, 1),
+    ("map", "replaceAll", 1, 0, 2): (0, 1),
+    ("map", "computeIfAbsent", 2, 1, 1): (0,),
+    ("map", "computeIfPresent", 2, 1, 2): (0, 1),
+    ("map", "compute", 2, 1, 2): (0, 1),
+    ("map", "merge", 3, 2, 2): (1, 1),
+}
+# Calls that keep a container's type arguments under another kind:
+# (receiver kind, method name, argument count) -> (result kind, arguments).
+_GENERIC_CALLS: dict[tuple[str, str, int], tuple[str, tuple[int, ...]]] = {
+    ("iterable", "stream", 0): ("stream", (0,)),
+    ("iterable", "parallelStream", 0): ("stream", (0,)),
+    **{("stream", name, 1): ("stream", (0,)) for name in (
+        "filter", "peek", "limit", "skip", "sorted", "takeWhile", "dropWhile",
+    )},
+    **{("stream", name, 0): ("stream", (0,)) for name in (
+        "distinct", "sorted", "parallel", "sequential", "unordered",
+    )},
+    ("stream", "findFirst", 0): ("optional", (0,)),
+    ("stream", "findAny", 0): ("optional", (0,)),
+    ("stream", "min", 1): ("optional", (0,)),
+    ("stream", "max", 1): ("optional", (0,)),
+    ("optional", "filter", 1): ("optional", (0,)),
+    ("map", "keySet", 0): ("iterable", (0,)),
+    ("map", "values", 0): ("iterable", (1,)),
+}
 
 
 def _written_type(source: bytes, parameter: Node) -> str:
@@ -227,6 +294,19 @@ class _Method:
     binds_statically: bool = False
     # The last parameter is ``T...``: any arity from the fixed count up.
     varargs: bool = False
+
+
+@dataclass(frozen=True)
+class _Declarator:
+    """How a scope declares a variable: its written type, if any.
+
+    ``value`` is the initializer of a ``var``; ``lambda_slot`` is
+    ``(lambda, position, count)`` for an untyped lambda parameter.
+    """
+
+    type_node: Node | None = None
+    value: Node | None = None
+    lambda_slot: tuple[Node, int, int] | None = None
 
 
 class JavaSymbols:
@@ -1120,37 +1200,175 @@ class JavaSymbols:
         of each enclosing class, declared or inherited, before those of its
         outer classes. ``field_only`` (``this.name``) reads only the fields
         of the innermost class. A declaration whose type is not written
-        still shadows the outer ones (S5, S6, S14).
+        still shadows the outer ones (S5, S6, S14). An untyped lambda
+        parameter takes a type only from a JDK callback (BL-14).
         """
-        path = info.method.path
-        source = self.units[path].source
         scope = invocation.parent
         while scope is not None:
             if not field_only:
-                declared, scoped_type = self._scoped_declaration(info, scope, name, invocation)
-                if declared:
-                    return scoped_type
-                for declaration in reversed(scope.named_children):
-                    if (
-                        declaration.type != "local_variable_declaration"
-                        or declaration.end_byte > invocation.start_byte
-                    ):
-                        continue
-                    type_node = declaration.child_by_field_name("type")
-                    for child in declaration.named_children:
-                        ident = child.child_by_field_name("name")
-                        if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                            if parser.node_text(source, type_node).strip() == "var":
-                                # ``var`` takes the type of its initializer.
-                                return self._initializer_type(info, child.child_by_field_name("value"))
-                            return self.resolve(
-                                path, parser.node_text(source, type_node), info.owner,
-                                allow_ambiguous=True, at=type_node,
-                            )
+                declarator = self._declarator(info, scope, name, invocation)
+                if declarator is not None:
+                    return self._declarator_type(info, declarator)
             if scope.type in _TYPES or _is_anonymous_body(scope):
                 declared, field_type = self._class_scope_field(info, scope, name)
                 if declared or field_only:
                     return field_type
+            scope = scope.parent
+        return None
+
+    def _declarator(self, info: _Method, scope: Node, name: str, invocation: Node) -> _Declarator | None:
+        """How ``scope`` declares ``name`` for ``invocation``: as a variable
+        the scope itself introduces, or as a preceding local."""
+        declarator = self._scoped_declaration(info, scope, name, invocation)
+        if declarator is not None:
+            return declarator
+        source = self.units[info.method.path].source
+        for declaration in reversed(scope.named_children):
+            if declaration.type != "local_variable_declaration" or declaration.end_byte > invocation.start_byte:
+                continue
+            type_node = declaration.child_by_field_name("type")
+            for child in declaration.named_children:
+                ident = child.child_by_field_name("name")
+                if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
+                    return _Declarator(type_node, child.child_by_field_name("value"))
+        return None
+
+    def _declarator_type(self, info: _Method, declarator: _Declarator) -> str | None:
+        if declarator.lambda_slot is not None:
+            return self._lambda_parameter_type(info, *declarator.lambda_slot)
+        type_node = declarator.type_node
+        if type_node is None:
+            return None
+        path = info.method.path
+        text = parser.node_text(self.units[path].source, type_node).strip()
+        if text == "var":
+            # ``var`` takes the type of its initializer.
+            return self._initializer_type(info, declarator.value)
+        return self.resolve(path, text, info.owner, allow_ambiguous=True, at=type_node)
+
+    def _lambda_parameter_type(self, info: _Method, lambda_node: Node, position: int, count: int) -> str | None:
+        """The type of an untyped lambda parameter, when its target proves it.
+
+        The lambda must be a direct argument of a JDK collection, stream,
+        optional or map method whose functional parameter is fixed by the
+        receiver's written type arguments, as ``Iterable<T>.forEach`` takes
+        a ``Consumer<? super T>``. Any other target leaves it unknown.
+        """
+        arguments = lambda_node.parent
+        call = arguments.parent if arguments is not None and arguments.type == "argument_list" else None
+        if call is None or call.type != "method_invocation":
+            return None
+        receiver, name, call_arguments = parser.invocation_parts(call, self.units[info.method.path].source)
+        index = next((
+            number for number, argument in enumerate(call_arguments)
+            if (argument.start_byte, argument.end_byte) == (lambda_node.start_byte, lambda_node.end_byte)
+        ), None)
+        if index is None or receiver is None:
+            return None
+        view = self._generic_view(info, receiver, call)
+        if view is None:
+            return None
+        kind, type_arguments = view
+        slots = _LAMBDA_PARAMETERS.get((kind, name, len(call_arguments), index, count))
+        return type_arguments[slots[position]] if slots is not None else None
+
+    def _generic_view(
+        self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
+    ) -> tuple[str, tuple[str | None, ...]] | None:
+        """The JDK container kind of an expression and its type arguments.
+
+        Read from the written type of a variable, field or ``this.field``,
+        then through calls that keep the arguments (``stream()``,
+        ``filter``, ``findFirst``, ``keySet()``). ``None`` for anything else.
+        """
+        if node is None or depth > 16:
+            return None
+        source = self.units[info.method.path].source
+        if node.type == "parenthesized_expression" and node.named_children:
+            return self._generic_view(info, node.named_children[0], invocation, depth + 1)
+        if node.type == "method_invocation":
+            receiver, name, arguments = parser.invocation_parts(node, source)
+            inner = self._generic_view(info, receiver, node, depth + 1)
+            rule = _GENERIC_CALLS.get((inner[0], name, len(arguments))) if inner is not None else None
+            if inner is None or rule is None:
+                return None
+            return rule[0], tuple(inner[1][index] for index in rule[1])
+        field_only = False
+        if node.type == "field_access":
+            target = node.child_by_field_name("object")
+            field = node.child_by_field_name("field")
+            if target is None or target.type != "this" or field is None:
+                return None
+            name, field_only = parser.node_text(source, field), True
+        elif node.type == "identifier":
+            name = parser.node_text(source, node)
+        else:
+            return None
+        written = self._written_variable(info, name, invocation, field_only=field_only)
+        if written is None:
+            return None
+        path, type_node, owner = written
+        container = self.resolve(
+            path, parser.node_text(self.units[path].source, type_node), owner, allow_ambiguous=True, at=type_node,
+        )
+        # The written declaration must be the one the type pass reads.
+        if container not in _GENERIC_CONTAINERS or container != self.variable_type(
+            info, name, invocation, field_only=field_only,
+        ):
+            return None
+        kind, arity = _GENERIC_CONTAINERS[container]
+        type_arguments = parser.child_by_type(type_node, "type_arguments")
+        written_arguments = type_arguments.named_children if type_arguments is not None else []
+        if len(written_arguments) != arity:
+            return None
+        return kind, tuple(self._type_argument(path, argument, owner) for argument in written_arguments)
+
+    def _type_argument(self, path: str, argument: Node, owner: str) -> str | None:
+        """A written type argument; ``? extends X`` gives ``X``, any other
+        wildcard nothing."""
+        if argument.type == "wildcard":
+            bound = argument.named_children[-1] if argument.named_children else None
+            text = parser.node_text(self.units[path].source, argument)
+            if bound is None or not re.match(r"\?\s*extends\b", text):
+                return None
+            argument = bound
+        return self.resolve(
+            path, parser.node_text(self.units[path].source, argument), owner, allow_ambiguous=True, at=argument,
+        )
+
+    def _written_variable(
+        self, info: _Method, name: str, invocation: Node, *, field_only: bool = False,
+    ) -> tuple[str, Node, str] | None:
+        """The written type of the variable ``name`` at ``invocation``:
+        ``(path, type node, owner)``, following :meth:`variable_type`'s
+        lexical lookup, or ``None`` when it is not written."""
+        path = info.method.path
+        scope = invocation.parent
+        while scope is not None:
+            if not field_only:
+                declarator = self._declarator(info, scope, name, invocation)
+                if declarator is not None:
+                    if declarator.type_node is None or declarator.lambda_slot is not None:
+                        return None
+                    return path, declarator.type_node, info.owner
+            if _is_anonymous_body(scope):
+                declared, _type = self._class_scope_field(info, scope, name)
+                if declared or field_only:
+                    return None
+            elif scope.type in _TYPES:
+                owner = self.owner(path, scope)
+                for level in self._ancestor_levels(owner, self.path_modules.get(path, info.module)):
+                    found = [
+                        (location, type_node, candidate)
+                        for candidate, candidate_module in level
+                        for location, declaration in self._module_locations(candidate, candidate_module)
+                        for type_node in self._field_type_nodes(location, declaration, name)
+                    ]
+                    if found:
+                        location, type_node, candidate = found[0]
+                        return (location, type_node, candidate) if len(found) == 1 and type_node else None
+                if field_only:
+                    return None
             scope = scope.parent
         return None
 
@@ -1233,17 +1451,25 @@ class JavaSymbols:
     def _declared_fields(self, path: str, declaration: Node, owner: str, name: str) -> set[str | None]:
         """Types of the fields ``name`` one type declaration writes."""
         source = self.units[path].source
-        found: set[str | None] = set()
+        return {
+            owner if type_node is None else self.resolve(
+                path, parser.node_text(source, type_node), owner, allow_ambiguous=True, at=type_node,
+            )
+            for type_node in self._field_type_nodes(path, declaration, name)
+        }
+
+    def _field_type_nodes(self, path: str, declaration: Node, name: str) -> list[Node | None]:
+        """Written types of the fields ``name`` one type declaration holds;
+        ``None`` stands for an enum constant, typed by the enum itself."""
+        source = self.units[path].source
+        found: list[Node | None] = []
         if declaration.type == "record_declaration":
             parameters = declaration.child_by_field_name("parameters")
             for parameter in parameters.named_children if parameters is not None else []:
                 ident = parameter.child_by_field_name("name")
                 type_node = parameter.child_by_field_name("type")
                 if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
-                    found.add(self.resolve(
-                        path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
-                        at=type_node,
-                    ))
+                    found.append(type_node)
         body = declaration.child_by_field_name("body")
         members = list(body.named_children) if body is not None else []
         for member in list(members):
@@ -1255,15 +1481,12 @@ class JavaSymbols:
                 for child in member.named_children:
                     ident = child.child_by_field_name("name")
                     if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
-                        found.add(self.resolve(
-                            path, parser.node_text(source, type_node), owner, allow_ambiguous=True,
-                            at=type_node,
-                        ))
+                        found.append(type_node)
             elif member.type == "enum_constant" and declaration.type == "enum_declaration":
                 # Enum constants are fields of the enum type itself.
                 ident = member.child_by_field_name("name")
                 if ident is not None and parser.node_text(source, ident) == name:
-                    found.add(owner)
+                    found.append(None)
         return found
 
     def _initializer_type(self, info: _Method, value: Node | None) -> str | None:
@@ -1287,23 +1510,14 @@ class JavaSymbols:
 
     def _scoped_declaration(
         self, info: _Method, scope: Node, name: str, invocation: Node,
-    ) -> tuple[bool, str | None]:
+    ) -> _Declarator | None:
         """A variable that ``scope`` itself declares for the code it encloses.
 
-        Returns ``(True, type)`` when ``scope`` declares ``name``; the type is
-        ``None`` when it is not written (``var``, an untyped lambda
-        parameter, a multi-catch). Such a declaration still shadows fields.
+        Returns ``None`` when ``scope`` does not declare ``name``. A
+        declarator without a written type (``var`` loop variable, multi-catch,
+        varargs) or an untyped lambda parameter still shadows fields.
         """
-        path = info.method.path
-        source = self.units[path].source
-
-        def typed(type_node: Node | None, value: Node | None = None) -> tuple[bool, str | None]:
-            if type_node is None:
-                return True, None
-            text = parser.node_text(source, type_node).strip()
-            if text == "var":
-                return True, self._initializer_type(info, value)
-            return True, self.resolve(path, text, info.owner, allow_ambiguous=True, at=type_node)
+        source = self.units[info.method.path].source
 
         def named(node: Node | None) -> bool:
             return node is not None and parser.node_text(source, node) == name
@@ -1315,14 +1529,14 @@ class JavaSymbols:
             ):
                 type_node = scope.child_by_field_name("type")
                 if type_node is not None and parser.node_text(source, type_node).strip() == "var":
-                    return True, None
-                return typed(type_node)
+                    return _Declarator()
+                return _Declarator(type_node)
         elif scope.type == "catch_clause":
             parameter = parser.child_by_type(scope, "catch_formal_parameter")
             if parameter is not None and named(parameter.child_by_field_name("name")):
                 catch_type = parser.child_by_type(parameter, "catch_type")
                 alternatives = catch_type.named_children if catch_type is not None else []
-                return typed(alternatives[0]) if len(alternatives) == 1 else (True, None)
+                return _Declarator(alternatives[0] if len(alternatives) == 1 else None)
         elif scope.type == "try_with_resources_statement":
             resources = parser.child_by_type(scope, "resource_specification")
             for resource in resources.named_children if resources is not None else []:
@@ -1331,32 +1545,33 @@ class JavaSymbols:
                     and resource.end_byte <= invocation.start_byte
                     and named(resource.child_by_field_name("name"))
                 ):
-                    return typed(resource.child_by_field_name("type"), resource.child_by_field_name("value"))
+                    return _Declarator(resource.child_by_field_name("type"), resource.child_by_field_name("value"))
         elif scope.type == "lambda_expression":
             parameters = scope.child_by_field_name("parameters")
             if parameters is not None and parameters.type == "identifier":
                 if named(parameters):
-                    return True, None
+                    return _Declarator(lambda_slot=(scope, 0, 1))
             elif parameters is not None:
+                untyped = [parameter for parameter in parameters.named_children if parameter.type == "identifier"]
                 for parameter in parameters.named_children:
                     if parameter.type == "identifier" and named(parameter):
-                        return True, None
+                        return _Declarator(lambda_slot=(scope, untyped.index(parameter), len(untyped)))
                     if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
-                        return typed(parameter.child_by_field_name("type"))
+                        return _Declarator(parameter.child_by_field_name("type"))
         elif scope.type in {"method_declaration", "constructor_declaration"}:
             # ``info`` itself, an anonymous class method in its body, or the
             # method enclosing a local class.
             parameters = scope.child_by_field_name("parameters")
             for parameter in parameters.named_children if parameters is not None else []:
                 if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
-                    return typed(parameter.child_by_field_name("type"))
+                    return _Declarator(parameter.child_by_field_name("type"))
                 if parameter.type == "spread_parameter" and any(
                     named(child.child_by_field_name("name"))
                     for child in parameter.named_children if child.type == "variable_declarator"
                 ):
                     # A varargs parameter is an array; it shadows outer names.
-                    return True, None
-        return False, None
+                    return _Declarator()
+        return None
 
     def receiver_type(self, info: _Method, receiver: Node | None, invocation: Node, depth: int = 0) -> str | None:
         """Read declared receiver/return types without evaluating method bodies."""
