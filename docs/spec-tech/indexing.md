@@ -190,6 +190,16 @@ type has other same-name overloads with the call's arity that agree with
 it on every typed argument, the call reaches each of them as `possible`
 and none as `exact`.
 
+The query applies ADR-81. A target is `exact` when it is the one
+production body among CodeQL's viable implementations: a body under a
+Maven or Gradle test source set (`src/test`, `src/<name>Test`) never
+counts, so a user-built database holding tests gives the automatic
+database's answer. A call whose declared method belongs to a
+`@FeignClient` interface or one of its supertypes has no `exact` target:
+the fallback class is `possible` and the interface method stays a
+target. A call to `equals`, `hashCode` or `toString` on a receiver typed
+`Object` or by a type variable produces no row.
+
 Constructor calls follow ADR-75. A `new T(...)`, `this(...)` or
 `super(...)` row names the constructor `T.<init>`, `exact` unless an
 untyped argument leaves same-arity overloads open, as above. The implicit
@@ -317,6 +327,7 @@ method has a source file among the indexed files.
 | One body and the abstract declaration the call names | body `exact`, declaration `possible` |
 | Several bodies | every method `possible` |
 | Any of the above, and a linked body in an anonymous class, a lambda or a library | every source method `possible` |
+| Any of the above, on a call named on a `@FeignClient` interface or one of its direct supertypes (`proxied_types`) | every source method `possible` (ADR-81) |
 | No resolved signature (`Owner.name:<unresolvedSignature>(n)`), one source method `name` with `n` parameters on `Owner`, without a body | that method `possible`; a concrete body is left to the symbol pass |
 
 Static initializers, lambdas and anonymous-class methods are never
@@ -437,6 +448,17 @@ engine the pass is the whole call graph and runs in a closed world, like
 CodeQL's `exactVirtualMethod`: a unique source implementation of a
 source interface is also `exact`. Gap-filling for `codeql` stays open-world, so
 there interface dispatch to a subtype is `possible`.
+Both stay `exact` only when the implementor set is complete (ADR-81):
+every concrete source class, record or enum below the receiver, in the
+modules the caller sees, inherits or declares one target and generates no
+member of its own for the call. A record accessor, a Lombok getter,
+setter, `equals`, `hashCode` or `toString`, a body inherited from an
+external class or from `Object`, and a `@FeignClient` proxy break that
+rule. The targets then stay `possible`, and the abstract declaration the
+call names joins them, as CodeQL reports it. A subtype body whose
+signature stays unresolved (varargs, an external wildcard import) and
+whose written parameter types match the contract is a `possible` target.
+The check costs one scan of the source types per receiver type, cached.
 Several implementations are always `possible`. A call with no source body
 reaches the one abstract declaration no source type implements, such as a
 Spring Data query method, as a `possible` target. The pass drops ambiguous

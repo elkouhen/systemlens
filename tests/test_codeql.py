@@ -17,7 +17,10 @@ def test_query_scopes_source_calls_and_folds_dispatch_resolution() -> None:
     assert "this.getEnclosingCallable().fromSource()" in codeql._QUERY
     assert "predicate exactTarget(MethodCall call, Method target)" in codeql._QUERY
     assert "predicate resolvedTarget(MethodCall call, Method target, string confidence)" in codeql._QUERY
-    assert codeql._QUERY.count("exactVirtualMethod(call)") == 1
+    # ``exactVirtualMethod`` without test bodies (ADR-81 rule 2).
+    assert "forall(Callable other | other = viableCallable(call) and other != target | testSource(other))" in (
+        codeql._QUERY
+    )
     assert "not exists(Method exact | exactTarget(call, exact))" in codeql._QUERY
     assert "target.fromSource()" in codeql._QUERY
 

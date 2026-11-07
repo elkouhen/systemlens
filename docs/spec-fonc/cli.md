@@ -308,12 +308,18 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   overloads. Overrides typed through an external wildcard import still match
   their contract. A call is `exact` when one concrete source body can receive
   it, including the unique implementation of an interface; several
-  implementations stay `possible`. A Spring Data query method declared in the
+  implementations stay `possible`. So does a call that a record accessor, a
+  Lombok-generated member, a body inherited from a library class or from
+  `Object`, or a `@FeignClient` proxy can also receive (ADR-81); the
+  declaration the call names is then also a target. A Spring Data query method declared in the
   sources is a `possible`, non-inferred target: the receiver type declares it.
   Library methods and unknown argument types stay unresolved.
 - `codeql` resolves calls from CodeQL's typed program model. It needs the
   CodeQL CLI. A call whose argument type CodeQL cannot resolve reaches every
-  matching same-name overload as `possible` instead of one as `exact`. It
+  matching same-name overload as `possible` instead of one as `exact`.
+  Bodies under test source sets never make a call `possible`, a Feign
+  fallback is never `exact`, and `equals`, `hashCode` or `toString` on an
+  `Object` or type-variable receiver gives no edge (ADR-81). It
   accepts `--engine-database` and refreshes one module.
 - `joern` builds a code property graph of the projected Java sources with
   `joern-parse` (`javasrc2cpg`, no build) and reads its call graph. It needs
@@ -321,7 +327,8 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   and linked) for the Joern launchers. One linked body is `exact`; a unique implementation is
   `exact` with its interface declaration as a `possible` witness; several
   implementations are all `possible`, as are the targets of a call that
-  an anonymous class, a lambda or a library class can also receive. A
+  an anonymous class, a lambda or a library class can also receive, or
+  that names a `@FeignClient` interface method (ADR-81). A
   Lombok file keeps its written lines. A call whose argument types Joern
   cannot resolve reaches the owner's one abstract method of that name and
   arity as `possible`. Other calls Joern cannot resolve are

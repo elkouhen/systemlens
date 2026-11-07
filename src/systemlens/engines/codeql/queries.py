@@ -32,12 +32,16 @@ class SourceMethodCall extends MethodCall {
 }
 
 /**
- * Resolve a call when CodeQL can identify one exact virtual-dispatch target.
- * The target must also be source-backed because the Python join needs a file
- * and line that exist in the indexed repository.
+ * A callable of a Maven or Gradle test source set (`src/test`,
+ * `src/integrationTest`). Test sources are never part of the world
+ * (ADR-81 rule 2): a user-built database may hold them.
  */
-predicate exactTarget(MethodCall call, Method target) {
-  target = exactVirtualMethod(call) and target.fromSource()
+predicate testSource(Callable callable) {
+  callable.getFile().getRelativePath().regexpMatch("(.*/)?src/(test|[^/]*Test)/.*")
+}
+
+predicate productionSource(Callable callable) {
+  callable.fromSource() and not testSource(callable)
 }
 
 /**
@@ -47,6 +51,45 @@ predicate exactTarget(MethodCall call, Method target) {
  */
 Method declaredMethod(MethodCall call) {
   result = call.getMethod().getSourceDeclaration()
+}
+
+/**
+ * A call Spring may dispatch to a `@FeignClient` proxy, which no source
+ * body stands for: its fallback class is never exact (ADR-81 rule 3).
+ */
+predicate proxiedCall(MethodCall call) {
+  exists(RefType client |
+    client.getAnAnnotation().getType().hasName("FeignClient") and
+    client.getASourceSupertype*() = declaredMethod(call).getDeclaringType()
+  )
+}
+
+/**
+ * Resolve a call when CodeQL can identify one exact virtual-dispatch target,
+ * `exactVirtualMethod` without the implementations of test sources. The
+ * target must also be source-backed because the Python join needs a file
+ * and line that exist in the indexed repository.
+ */
+predicate exactTarget(MethodCall call, Method target) {
+  target = viableCallable(call) and productionSource(target) and
+  not proxiedCall(call) and
+  forall(Callable other | other = viableCallable(call) and other != target | testSource(other))
+}
+
+/**
+ * A call to an `Object` method on a receiver typed `Object` or by a type
+ * variable: its runtime type is unknown, so it has no edge (ADR-81 rule 4).
+ */
+predicate unknownObjectReceiver(MethodCall call) {
+  (
+    call.getMethod().hasName(["hashCode", "toString"]) and call.getNumArgument() = 0
+    or
+    call.getMethod().hasName("equals") and call.getNumArgument() = 1
+  ) and
+  (
+    call.getQualifier().getType() instanceof TypeObject or
+    call.getQualifier().getType() instanceof BoundedType
+  )
 }
 
 /**
@@ -109,7 +152,7 @@ predicate resolvedSingleOverload(MethodCall call, Method target, string confiden
   exactTarget(call, target) and confidence = "exact"
   or
   not exists(Method exact | exactTarget(call, exact)) and
-  target = viableCallable(call) and target.fromSource() and confidence = "possible"
+  target = viableCallable(call) and productionSource(target) and confidence = "possible"
   or
   // In buildless databases a virtual implementation can be unavailable even
   // though the source-declared interface method is indexed. Keep that
@@ -195,7 +238,8 @@ string nodeName(Callable callable) {
 }
 
 predicate callTarget(Call call, Callable target, string confidence) {
-  resolvedTarget(call, target, confidence) and not target instanceof InitializerMethod
+  resolvedTarget(call, target, confidence) and not target instanceof InitializerMethod and
+  not unknownObjectReceiver(call)
   or
   constructorTarget(call, target, confidence)
 }

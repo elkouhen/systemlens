@@ -72,11 +72,18 @@
       )
     }
   }
+  // `@FeignClient` interfaces and their direct supertypes (ADR-81 rule 3):
+  // Spring implements them with a runtime proxy that no source body is.
+  val proxiedTypes = cpg.typeDecl.l
+    .filter(_.annotation.name("FeignClient").nonEmpty)
+    .flatMap(declaration => declaration.fullName :: declaration.inheritsFromTypeFullName.l)
+    .distinct
   val document = ujson.Obj(
     "schema" -> "systemlens-joern-v1",
     "methods" -> ujson.Arr.from(methods),
     "calls" -> ujson.Arr.from(calls),
     "payload_sends" -> ujson.Arr.from(payloadSends),
+    "proxied_types" -> ujson.Arr.from(proxiedTypes),
   )
   os.write.over(os.Path(outFile), ujson.write(document))
 }

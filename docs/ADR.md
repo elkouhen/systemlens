@@ -1996,6 +1996,22 @@ an `Object` receiver fan out to every override in the sources.
 on them lose confidence. No edge is invented. On train-ticket the measured
 change is recorded before delivery; a flow lost entirely must be explained.
 
+**Delivery (2026-11-07):** the `source` engine checks every concrete
+source subtype of the receiver in the caller's visible modules (rules 1
+and 3) and treats an override with an unresolved signature as a
+`possible` target; the declaration the call names joins the targets of
+an incomplete dispatch, as CodeQL reports it. The CodeQL query computes
+`exactVirtualMethod` without test bodies, never makes a call on a
+`@FeignClient` interface `exact`, and drops `Object` methods on `Object`
+or type-variable receivers (rules 2 to 4). Joern's export lists the
+`@FeignClient` types and their direct supertypes (rule 3); its projection
+never holds test sources (rule 2). Rule 1 for CodeQL and Joern
+(generated or external implementors) is not implemented. On
+train-ticket the `source` engine keeps its 1712 edges and 165 flows
+unchanged; CodeQL loses 271 edges (56 `exact`, 215 `possible`), all
+from Lombok `@Data` `equals` and `hashCode` calls on `Object` fields
+(rule 4), and keeps its 165 flows and their confidences.
+
 ## ADR-83: Check a supplied CodeQL database against the indexed sources
 
 **Status:** Accepted on 2026-11-04 with lot 1 of the

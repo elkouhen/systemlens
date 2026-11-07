@@ -244,3 +244,87 @@ def test_q7_a_generic_receiver_keeps_its_declared_method_row(tmp_path: Path) -> 
     assert ("com.acme.Api.generic", 6, "com.acme.Gateway.send", 3, "possible") in calls
     # The interface witness beside the concrete candidates.
     assert ("com.acme.Api.two", 9, "com.acme.Two.on", 3, "possible") in calls
+
+
+_PORT = "package com.acme;\npublic interface Port {\n    void send();\n}\n"
+_ADAPTER = (
+    "package com.acme;\npublic class Adapter implements Port {\n"
+    "    public void send() { }\n}\n"
+)
+_CALLER = (
+    "package com.acme;\npublic class Api {\n    private Port port;\n"
+    "    public void run() {\n        port.send();\n    }\n}\n"
+)
+
+
+def test_q6_a_test_implementation_never_lowers_a_production_exact_edge(tmp_path: Path) -> None:
+    calls = _calls(tmp_path, {
+        "src/main/java/com/acme/Port.java": _PORT,
+        "src/main/java/com/acme/Adapter.java": _ADAPTER,
+        "src/main/java/com/acme/Api.java": _CALLER,
+        "src/test/java/com/acme/FakePort.java": (
+            "package com.acme;\npublic class FakePort implements Port {\n"
+            "    public void send() { }\n}\n"
+        ),
+    })
+
+    # ADR-81 rule 2: the user-built database holds src/test, which is no
+    # part of the world.
+    assert {call for call in calls if call[0] == "com.acme.Api.run"} == {
+        ("com.acme.Api.run", 5, "com.acme.Adapter.send", 3, "exact"),
+        ("com.acme.Api.run", 5, "com.acme.Port.send", 3, "possible"),
+    }
+
+
+def test_q8_a_feign_fallback_is_never_the_exact_target(tmp_path: Path) -> None:
+    calls = _calls(tmp_path, {
+        "src/main/java/com/acme/UsersClient.java": (
+            "package com.acme;\n"
+            "import org.springframework.cloud.openfeign.FeignClient;\n"
+            "@FeignClient(name = \"users\", fallback = UsersFallback.class)\n"
+            "public interface UsersClient {\n    String list();\n}\n"
+        ),
+        "src/main/java/com/acme/UsersFallback.java": (
+            "package com.acme;\npublic class UsersFallback implements UsersClient {\n"
+            "    public String list() { return \"\"; }\n}\n"
+        ),
+        "src/main/java/com/acme/Api.java": (
+            "package com.acme;\npublic class Api {\n    private UsersClient users;\n"
+            "    public void run() {\n        users.list();\n    }\n}\n"
+        ),
+    })
+
+    # ADR-81 rule 3: the interface method carries the HTTP call.
+    assert {call for call in calls if call[0] == "com.acme.Api.run"} == {
+        ("com.acme.Api.run", 5, "com.acme.UsersClient.list", 5, "possible"),
+        ("com.acme.Api.run", 5, "com.acme.UsersFallback.list", 3, "possible"),
+    }
+
+
+def test_q11_object_methods_on_an_unknown_runtime_type_have_no_edge(tmp_path: Path) -> None:
+    calls = _calls(tmp_path, {
+        "src/main/java/com/acme/Money.java": (
+            "package com.acme;\npublic class Money {\n"
+            "    public boolean equals(Object o) { return true; }\n"
+            "    public int hashCode() { return 1; }\n}\n"
+        ),
+        "src/main/java/com/acme/Trip.java": (
+            "package com.acme;\npublic class Trip {\n"
+            "    public boolean equals(Object o) { return true; }\n"
+            "    public int hashCode() { return 1; }\n}\n"
+        ),
+        "src/main/java/com/acme/Api.java": (
+            "package com.acme;\npublic class Api {\n"
+            "    public boolean same(Object a, Object b) {\n"
+            "        return a.equals(b) && a.hashCode() == b.hashCode();\n    }\n"
+            "    public <T> int hash(T value) {\n        return value.hashCode();\n    }\n"
+            "    public int money(Money money) {\n        return money.hashCode();\n    }\n"
+            "}\n"
+        ),
+    })
+
+    # ADR-81 rule 4: no fan-out to every override; a typed receiver keeps
+    # its edge.
+    assert {call for call in calls if call[0].startswith("com.acme.Api.")} == {
+        ("com.acme.Api.money", 10, "com.acme.Money.hashCode", 4, "exact"),
+    }

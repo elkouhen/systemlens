@@ -70,10 +70,21 @@ lab.
 - **Acceptance:** one regression test per finding, each failing at
   `4a12ad5`; the train-ticket change in edges and flow confidences is
   recorded, and any lost flow is explained.
-- **Depends on:** ADR-81 (proposed).
+- **Depends on:** ADR-81 (accepted 2026-11-07).
 - **Origin:** `docs/plans/call-graph-review-2026-11-04.md`: lot 3 (S9,
   S10, Q6, Q8, Q11).
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** regression tests, each failing at `4a12ad5`:
+  `tests/test_dispatch_completeness_regressions.py` (S9, S10 twice, Q8
+  for `source`); `test_q6_*`, `test_q8_*`, `test_q11_*` in
+  `tests/test_codeql_review_regressions.py`; `test_q8_*` and
+  `test_q6_q8_*` in `tests/test_joern_engine.py`. Train-ticket, before
+  (`43c91f4`) and after: `source` 1712 edges (1233 `exact`) and 165
+  `medium` flows, unchanged; `codeql` 6398 edges (5704 `exact`) to 6127
+  (5648 `exact`), the 271 lost edges all from Lombok `@Data`
+  `equals`/`hashCode` on `Object` fields (Q11), 165 `medium` flows
+  unchanged. No flow lost. ADR-81 rule 1 is not applied to CodeQL and
+  Joern. Commit: pending.
 - **Why P1:** false `exact` edges; Feign fallbacks are a common Spring
   idiom.
 

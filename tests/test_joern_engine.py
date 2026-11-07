@@ -392,3 +392,79 @@ def test_an_unresolved_signature_on_a_source_owner_keeps_its_one_method_possible
         ("app.ContactsController.create", "app.ContactsService.create", 46, "possible"),
     }
     assert calls[0].callee_line == 30
+
+
+def _feign_call() -> dict[str, object]:
+    return {
+        "caller": "app.Api.run:void()", "caller_file": "src/App.java",
+        "caller_line": 10, "line": 11, "target": "app.UsersClient.list:java.lang.String()",
+        "dispatch": "DYNAMIC_DISPATCH",
+        "callees": [
+            _row("app.UsersClient.list:java.lang.String()", 2, abstract=True),
+            _row("app.UsersFallback.list:java.lang.String()", 5),
+        ],
+    }
+
+
+def test_q8_a_feign_fallback_stays_a_possible_target() -> None:
+    """ADR-81 rule 3: a ``@FeignClient`` proxy is a body no source stands for.
+
+    The export lists the Feign interface in ``proxied_types``; its fallback
+    class is then no exact target, and the interface method stays a target.
+    """
+    document = {**_document(_feign_call()), "proxied_types": ["app.UsersClient"]}
+
+    assert _edges(parse_calls(document)) == {
+        ("app.Api.run", "app.UsersClient.list", 11, "possible"),
+        ("app.Api.run", "app.UsersFallback.list", 11, "possible"),
+    }
+    # An export from an older script lists no proxied type.
+    assert ("app.Api.run", "app.UsersFallback.list", 11, "exact") in _edges(
+        parse_calls(_document(_feign_call()))
+    )
+
+
+@pytest.mark.slow
+@_JOERN
+def test_q6_q8_joern_ignores_test_bodies_and_keeps_feign_fallbacks_possible(tmp_path: Path) -> None:
+    """ADR-81 rules 2 and 3 with the real engine."""
+    repo = tmp_path / "repo"
+    sources = {
+        "src/main/java/app/Port.java": "package app;\npublic interface Port {\n  void send();\n}\n",
+        "src/main/java/app/Adapter.java": (
+            "package app;\npublic class Adapter implements Port {\n  public void send() { }\n}\n"
+        ),
+        "src/test/java/app/FakePort.java": (
+            "package app;\npublic class FakePort implements Port {\n  public void send() { }\n}\n"
+        ),
+        "src/main/java/app/UsersClient.java": (
+            "package app;\n"
+            "import org.springframework.cloud.openfeign.FeignClient;\n"
+            "@FeignClient(name = \"users\", fallback = UsersFallback.class)\n"
+            "public interface UsersClient {\n  String list();\n}\n"
+        ),
+        "src/main/java/app/UsersFallback.java": (
+            "package app;\npublic class UsersFallback implements UsersClient {\n"
+            "  public String list() { return \"\"; }\n}\n"
+        ),
+        "src/main/java/app/Api.java": (
+            "package app;\npublic class Api {\n  private Port port;\n  private UsersClient users;\n"
+            "  public void run() {\n    port.send();\n    users.list();\n  }\n}\n"
+        ),
+    }
+    for relative, text in sources.items():
+        (repo / relative).parent.mkdir(parents=True, exist_ok=True)
+        (repo / relative).write_text(text, encoding="utf-8")
+    java = sorted(path for path in sources if "/src/test/" not in f"/{path}")
+    engine = load_engine("joern")
+    assert engine is not None
+
+    with engine.open(EngineRequest(repo_root=repo, allowed_paths=java, timeout_seconds=600)) as session:
+        calls = session.calls()
+
+    assert {edge for edge in _edges(calls) if edge[0] == "app.Api.run"} == {
+        ("app.Api.run", "app.Adapter.send", 6, "exact"),
+        ("app.Api.run", "app.Port.send", 6, "possible"),
+        ("app.Api.run", "app.UsersClient.list", 7, "possible"),
+        ("app.Api.run", "app.UsersFallback.list", 7, "possible"),
+    }

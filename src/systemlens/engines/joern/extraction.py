@@ -26,7 +26,12 @@ source-to-source calls and never guesses a target (ADR-61, ADR-85):
   concrete target overrides, is no target;
 - a concrete body Joern links but the adapter cannot report, in an
   anonymous class, a lambda or a library, still counts as a candidate:
-  every source target of that call stays ``possible`` (ADR-70, ADR-81).
+  every source target of that call stays ``possible`` (ADR-70, ADR-81);
+- a call whose named method belongs to a ``@FeignClient`` interface or a
+  direct supertype, listed in ``proxied_types``, reaches a runtime proxy
+  no source body stands for: every target, a fallback class included,
+  stays ``possible`` (ADR-81 rule 3). Test sources are never indexed, so
+  their bodies are never targets (rule 2).
 
 Joern names a method of a local class after the enclosing method and its
 signature (``pkg.App.create:void().Local.go:void()``); the adapter drops
@@ -203,8 +208,11 @@ def parse_calls(
     calls: set[MethodCall] = set()
     try:
         declared = _declared_methods(document, indexed)
+        # An export from an older script lists no proxied type.
+        listed = document.get("proxied_types", [])
+        proxied = frozenset(str(name) for name in listed) if isinstance(listed, list) else frozenset()
         for row in _rows(document, "calls"):
-            calls.update(_calls_of(row, indexed, declared))
+            calls.update(_calls_of(row, indexed, declared, proxied))
     except (KeyError, TypeError, ValueError) as exc:
         raise JoernError("Joern returned an unexpected call schema.") from exc
     return sorted(calls, key=lambda call: (
@@ -283,6 +291,7 @@ def _unresolved_signature_call(
 def _calls_of(
     row: Mapping[str, object], indexed: frozenset[str],
     declared: Mapping[tuple[str, int], list[_Method]] | None = None,
+    proxied: frozenset[str] = frozenset(),
 ) -> list[MethodCall]:
     call_line = int(str(row["line"]))
     if call_line <= 0:
@@ -319,7 +328,7 @@ def _calls_of(
         not method.abstract and not method.initializer
         and (method.external or method.anonymous)
         for method in linked
-    )
+    ) or _qualified(target).rsplit(".", 1)[0] in proxied
     caller_name = "<anonymous>" if caller.anonymous else caller.qualified
     caller_types = None if caller.anonymous else caller.parameter_types
 

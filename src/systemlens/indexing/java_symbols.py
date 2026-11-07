@@ -548,6 +548,143 @@ class JavaSymbols:
             self._dispatch_signatures[
                 (dispatch_owner, dispatch_module, dispatch_name, len(signature))
             ].append(signature)
+        # Concrete bodies whose signature stays unresolved: dispatch cannot
+        # index them, yet they may override a contract (S9, ADR-81).
+        self._unresolved_bodies: dict[tuple[str, int], list[_Method]] = defaultdict(list)
+        for info in self.methods.values():
+            if info.concrete and not info.binds_statically and None in info.parameters:
+                name = info.method.qualified_method.rsplit(".", 1)[-1]
+                self._unresolved_bodies[(name, len(info.parameters))].append(info)
+        # ``@FeignClient`` interfaces: Spring implements them with a runtime
+        # proxy that no source body stands for (Q8, ADR-81 rule 3).
+        self.proxied_interfaces: set[tuple[str, str]] = {
+            (owner, self.path_modules.get(path, ""))
+            for owner, locations in self.types.items()
+            for path, node in locations
+            if node.type == "interface_declaration" and self._feign_client(path, node)
+        }
+        self._subtypes: dict[tuple[str, str], list[tuple[str, str, str, Node]]] = {}
+
+    def _feign_client(self, path: str, declaration: Node) -> bool:
+        unit = self.units[path]
+        for annotation in parser.annotations_of(declaration):
+            written = parser.node_text(unit.source, annotation.child_by_field_name("name") or annotation)
+            if written.rsplit(".", 1)[-1] != "FeignClient":
+                continue
+            qualified = written if "." in written else unit.imports.get(written, "")
+            if "feign" in qualified or any("feign" in package for package in unit.wildcards):
+                return True
+        return False
+
+    def _concrete_subtypes(self, owner: str, module: str) -> list[tuple[str, str, str, Node]]:
+        """Source classes, records and enums that can be the runtime type of
+        a receiver typed ``owner``: ``(type, module, path, declaration)``."""
+        key = (owner, module)
+        found = self._subtypes.get(key)
+        if found is None:
+            found = []
+            for candidate, locations in self.types.items():
+                for path, node in locations:
+                    if node.type not in {"class_declaration", "record_declaration", "enum_declaration"}:
+                        continue
+                    modifiers = parser.modifiers_node(node)
+                    if node.type == "class_declaration" and modifiers is not None and (
+                        "abstract" in parser.node_text(self.units[path].source, modifiers).split()
+                    ):
+                        continue
+                    candidate_module = self.path_modules.get(path, "")
+                    if key in self.ancestors(candidate, candidate_module):
+                        found.append((candidate, candidate_module, path, node))
+            self._subtypes[key] = found
+        return found
+
+    def _generated_member(self, path: str, declaration: Node, name: str, arity: int) -> bool:
+        """Whether the compiler or Lombok writes ``name`` on this type.
+
+        A record accessor and Lombok's getters, setters, ``equals``,
+        ``hashCode`` and ``toString`` are implementors without an indexed
+        body (ADR-81 rule 1).
+        """
+        source = self.units[path].source
+        fields: list[tuple[str, Node | None]] = []
+        if declaration.type == "record_declaration":
+            parameters = declaration.child_by_field_name("parameters")
+            for parameter in parameters.named_children if parameters is not None else []:
+                ident = parameter.child_by_field_name("name")
+                if ident is not None and arity == 0 and parser.node_text(source, ident) == name:
+                    return True
+            return False
+        if declaration.type != "class_declaration":
+            return False
+        if (name, arity) in {("equals", 1), ("hashCode", 0)}:
+            return self._lombok_annotated(path, declaration, {"Data", "Value", "EqualsAndHashCode"})
+        if (name, arity) == ("toString", 0):
+            return self._lombok_annotated(path, declaration, {"Data", "Value", "ToString"})
+        prefix = next((prefix for prefix in ("get", "is", "set") if name.startswith(prefix)), None)
+        if prefix is None or arity != (1 if prefix == "set" else 0):
+            return False
+        accessors = {"Getter"} if prefix != "set" else {"Setter"}
+        class_level = self._lombok_annotated(
+            path, declaration, accessors | ({"Data"} if prefix == "set" else {"Data", "Value"}),
+        )
+        body = declaration.child_by_field_name("body")
+        for member in body.named_children if body is not None else []:
+            if member.type != "field_declaration":
+                continue
+            modifiers = parser.modifiers_node(member)
+            if modifiers is not None and "static" in parser.node_text(source, modifiers).split():
+                continue
+            if not class_level and not self._lombok_annotated(path, member, accessors):
+                continue
+            for child in member.named_children:
+                ident = child.child_by_field_name("name")
+                field_name = parser.node_text(source, ident) if ident is not None else ""
+                fields.append((field_name, member.child_by_field_name("type")))
+        suffix = name[len(prefix):]
+        return any(
+            field_name and field_name[:1].upper() + field_name[1:] == suffix
+            and (prefix != "is" or (type_node is not None and parser.node_text(source, type_node) == "boolean"))
+            for field_name, type_node in fields
+        )
+
+    def _incomplete_implementors(
+        self, receiver_type: str, caller: _Method, name: str, arity: int, targets: list[IntegrationMethod],
+    ) -> bool:
+        """Whether some runtime type of the receiver has a body no target is.
+
+        Every concrete source subtype of the receiver, in the modules the
+        caller sees, must inherit or declare one of ``targets`` and generate
+        no member of its own for the call. Otherwise its body is generated
+        (record, Lombok), inherited from an external class or ``Object``, or
+        unresolved, and no target is exact (S10, ADR-81 rule 1). A
+        ``@FeignClient`` proxy is such a body too (Q8, rule 3).
+        """
+        receiver_module = self._receiver_module(receiver_type, caller)
+        if self._proxied(receiver_type, receiver_module):
+            return True
+        receiver_ancestors = self.ancestors(receiver_type, receiver_module)
+        # A subtype body with an unresolved signature may not override the
+        # contract: it proves nothing (S9).
+        bodies = {
+            (info.owner, info.module)
+            for target in targets
+            for info in [self.methods.get(target.id)]
+            if info is not None and (None not in info.parameters or (info.owner, info.module) in receiver_ancestors)
+        }
+        visible = self.visible_modules(caller.module) | {receiver_module}
+        for owner, module, path, node in self._concrete_subtypes(receiver_type, receiver_module):
+            if module not in visible:
+                continue
+            if (owner, module) not in bodies and self._generated_member(path, node, name, arity):
+                return True
+            if not bodies & self.ancestors(owner, module):
+                return True
+        return False
+
+    def _proxied(self, receiver_type: str, receiver_module: str) -> bool:
+        """Whether a ``@FeignClient`` proxy can be the receiver at run time."""
+        key = (receiver_type, receiver_module)
+        return any(key in self.ancestors(*client) for client in self.proxied_interfaces)
 
     def _complete_override_signatures(self) -> None:
         """Give an override the signature of the one contract it can match.
@@ -868,7 +1005,10 @@ class JavaSymbols:
             return [contract] if contract.concrete else []
         name = contract.method.qualified_method.rsplit(".", 1)[-1]
         if not any(parameter is None for parameter in contract.parameters):
-            return self.dispatch.get((contract.owner, contract.module, name, contract.parameters), [])
+            return [
+                *self.dispatch.get((contract.owner, contract.module, name, contract.parameters), []),
+                *self._unresolved_overrides(contract, name),
+            ]
         # Generic contracts can expose a type variable in the source AST
         # while a concrete implementation has a resolved parameter type.
         # Gather compatible arities and let the caller reject ambiguity.
@@ -887,7 +1027,27 @@ class JavaSymbols:
         # for dispatch, yet it still implements itself.
         if contract.concrete:
             candidates.setdefault(contract.method.id, contract)
+        for override in self._unresolved_overrides(contract, name):
+            candidates.setdefault(override.method.id, override)
         return list(candidates.values())
+
+    def _unresolved_overrides(self, contract: _Method, name: str) -> list[_Method]:
+        """Subtype bodies that may override ``contract`` but whose signature
+        stays unresolved (varargs, an external wildcard import): possible
+        implementors, never proof of a unique one (S9, ADR-81)."""
+        key = (contract.owner, contract.module)
+        return [
+            info for info in self._unresolved_bodies.get((name, len(contract.parameters)), [])
+            if info is not contract and (info.owner, info.module) != key
+            and key in self.ancestors(info.owner, info.module)
+            and all(
+                expected == actual if expected is not None and actual is not None
+                else expected_written == actual_written
+                for expected, actual, expected_written, actual_written in zip(
+                    contract.parameters, info.parameters, contract.written, info.written, strict=True,
+                )
+            )
+        ]
 
     def constant_body_overrides(self, method: IntegrationMethod) -> list[IntegrationMethod]:
         """Bodies of enum constants that override ``method`` (H9).
@@ -2184,9 +2344,11 @@ class JavaSymbols:
                 pruned = False
                 external = False
                 declaration: _Method | None = None
-                if receiver is not None and (
+                # ``super.m()`` binds statically: no runtime type matters.
+                virtual = not (receiver is not None and (
                     receiver.type == "super" or any(child.type == "super" for child in invocation.children)
-                ):
+                ))
+                if receiver is not None and not virtual:
                     super_base = self._super_base(info, receiver, receiver_type)
                     if super_base is None:
                         continue
@@ -2226,6 +2388,17 @@ class JavaSymbols:
                     (info.method.id, line, target.id) in exact_sites for target in targets
                 ):
                     continue
+                incomplete = virtual and receiver_type in self.types and not any(
+                    self.methods[target.id].binds_statically for target in targets if target.id in self.methods
+                ) and self._incomplete_implementors(receiver_type, info, name, arguments_count, targets)
+                if (
+                    incomplete and declaration is not None and not declaration.concrete
+                    and all(target.id != declaration.method.id for target in targets)
+                ):
+                    # The declaration the call names is a target, as a typed
+                    # engine reports it when no implementation is exact; on
+                    # a Feign client it carries the HTTP call (ADR-81 rule 3).
+                    targets = [declaration.method, *targets]
                 # A concrete method declared by the receiver's own type is an
                 # exact call. Interface dispatch to a unique source
                 # implementation is exact only in a closed world, like
@@ -2233,10 +2406,12 @@ class JavaSymbols:
                 # add implementations and the call stays possible. A target
                 # left unique by preferring the caller's module stays
                 # possible: the preference is a heuristic, not a proof. A call
-                # on an external interface stays possible (ADR-71).
+                # on an external interface stays possible (ADR-71). So does a
+                # call whose receiver has an implementor without a known
+                # body (ADR-81).
                 dispatch = (
                     "exact"
-                    if len(targets) == 1 and not pruned and not external and (
+                    if len(targets) == 1 and not pruned and not external and not incomplete and (
                         self._declared_concretely(targets[0], receiver_type, info)
                         or closed_world and self._concrete(targets[0])
                     )
