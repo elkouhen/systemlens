@@ -467,11 +467,20 @@ An unqualified call binds to the innermost enclosing type, anonymous classes
 included, that declares or inherits the name at any arity; a named inner
 class thus reaches its outer type's methods. A scope with an external
 supertype stops the search, since that supertype may declare the name,
-unless it is a JDK type with fixed members (`Runnable`, `Callable`,
-`Serializable`, `Comparable`, `AutoCloseable`, `Closeable`, `Cloneable`)
-or a Spring interface that declares only its own members: `UserDetails`,
-`GrantedAuthority`, `CommandLineRunner`, `ApplicationRunner`,
-`InitializingBean` and `DisposableBean`.
+unless the pass knows every member name of that supertype. A name it
+declares still stops the search; any other name goes on outward.
+
+The supertypes with fixed members are the JDK types `Object`, `Runnable`,
+`Callable`, `Thread`, `TimerTask`, `Serializable`, `Comparable`,
+`AutoCloseable`, `Closeable` and `Cloneable`, the Spring interfaces
+`UserDetails`, `GrantedAuthority`, `CommandLineRunner`,
+`ApplicationRunner`, `InitializingBean` and `DisposableBean`, and the
+Spring adapters `WebMvcConfigurerAdapter` and
+`WebSecurityConfigurerAdapter` (BL-25). So `helper()` inside
+`new Thread() { public void run() { helper(); } }` reaches the enclosing
+class's `helper`, attributed to the creating method (ADR-62), while a
+`start()` there stays unresolved since `Thread` declares it. Any other
+external supertype keeps the call unresolved.
 A name no enclosing type has resolves through a single static import, then
 through the one static wildcard import whose source type declares that name
 and arity. Several candidates stay unresolved.
@@ -869,7 +878,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | |
 | S2 | Static call and static import | `covered` | |
-| S3 | Unqualified call to an outer type, from an inner or anonymous class | `covered` | |
+| S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes | `covered` | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
@@ -957,7 +966,7 @@ aligned it.
 | A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `covered` | BL-23 |
 | A6 | `Outer.this.helper()` from an inner class | `covered` | BL-23 |
 | A7 | Receiver typed by a bounded type variable (G4): implementations `covered` by BL-26, declared row `missing` | `missing` | BL-28 |
-| A8 | Unqualified call inside an anonymous `Thread` | `missing` | BL-25 |
+| A8 | Unqualified call inside an anonymous `Thread` | `covered` | BL-25 |
 | A9 | Lambda passed to a source functional interface parameter | `missing` | BL-24 |
 | A10 | Method reference: one arity `covered`; overloaded name `missing` | `missing` | BL-24 |
 | B1 | Local or `final` field declared `Shape`, created as `Circle` | `defect` | BL-29 |

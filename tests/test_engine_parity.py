@@ -338,7 +338,7 @@ CASES: list[Case] = [
     _case("A7", "Generics.bounded", "BL-28",
           ("a7", "Circle.area", "possible"), ("a7", "Square.area", "possible"),
           ("a7", "Shape.area", "possible")),
-    _case("A8", "Threads.start", "BL-25",
+    _case("A8", "Threads.start", None,
           ("a8", "Threads.helper", "exact")),
     _case("A9", "Events.run", "BL-24",
           ("a9", "Events.register", "exact"), ("a9", "Circle.area", "exact")),

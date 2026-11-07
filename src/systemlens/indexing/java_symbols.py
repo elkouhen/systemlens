@@ -106,8 +106,9 @@ _OBJECT_METHODS = {
 _OBJECT_RETURNS = {("toString", 0): "java.lang.String", ("hashCode", 0): "int", ("equals", 1): "boolean"}
 _ENUM_METHODS = {"name", "ordinal", "values", "valueOf", "compareTo", "getDeclaringClass", "describeConstable"}
 # Method names of the few external supertypes whose members are fixed by the
-# Java SE API or by a Spring interface that declares only them (beyond the
-# ``Object`` methods). Any other external supertype may declare any name.
+# Java SE API or by a Spring type that declares only them (beyond the
+# ``Object`` methods). Any other external supertype may declare any name, so
+# an unqualified call in its anonymous or named subclass stays unresolved.
 _KNOWN_EXTERNAL_MEMBERS: dict[str, frozenset[str]] = {
     "org.springframework.security.core.userdetails.UserDetails": frozenset({
         "getAuthorities", "getPassword", "getUsername", "isAccountNonExpired",
@@ -125,6 +126,34 @@ _KNOWN_EXTERNAL_MEMBERS: dict[str, frozenset[str]] = {
     "java.lang.Comparable": frozenset({"compareTo"}),
     "java.lang.AutoCloseable": frozenset({"close"}),
     "java.io.Closeable": frozenset({"close"}),
+    # Classes an anonymous body often extends (BL-25): every public,
+    # protected or static member name, removed or deprecated ones included.
+    "java.lang.Object": frozenset(),
+    "java.lang.Thread": frozenset({
+        "activeCount", "checkAccess", "countStackFrames", "currentThread", "destroy", "dumpStack",
+        "enumerate", "getAllStackTraces", "getContextClassLoader", "getDefaultUncaughtExceptionHandler",
+        "getId", "getName", "getPriority", "getStackTrace", "getState", "getThreadGroup",
+        "getUncaughtExceptionHandler", "holdsLock", "interrupt", "interrupted", "isAlive", "isDaemon",
+        "isInterrupted", "isVirtual", "join", "ofPlatform", "ofVirtual", "onSpinWait", "resume", "run",
+        "setContextClassLoader", "setDaemon", "setDefaultUncaughtExceptionHandler", "setName",
+        "setPriority", "setUncaughtExceptionHandler", "sleep", "start", "startVirtualThread", "stop",
+        "suspend", "threadId", "yield",
+    }),
+    "java.util.TimerTask": frozenset({"run", "cancel", "scheduledExecutionTime"}),
+    "org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter": frozenset({
+        "configurePathMatch", "configureContentNegotiation", "configureAsyncSupport",
+        "configureDefaultServletHandling", "addFormatters", "addInterceptors", "addResourceHandlers",
+        "addCorsMappings", "addViewControllers", "configureViewResolvers", "addArgumentResolvers",
+        "addReturnValueHandlers", "configureMessageConverters", "extendMessageConverters",
+        "configureHandlerExceptionResolvers", "extendHandlerExceptionResolvers", "getValidator",
+        "getMessageCodesResolver",
+    }),
+    "org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter": frozenset({
+        "setApplicationContext", "setTrustResolver", "setContentNegotationStrategy",
+        "setObjectPostProcessor", "setAuthenticationConfiguration", "configure", "getHttp",
+        "authenticationManagerBean", "authenticationManager", "userDetailsServiceBean",
+        "userDetailsService", "init", "getApplicationContext",
+    }),
 }
 # Supertypes of external JDK types, fixed by the Java SE API.
 _KNOWN_EXTERNAL_SUPERTYPES: dict[str, tuple[str, ...]] = {

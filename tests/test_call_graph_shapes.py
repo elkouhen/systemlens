@@ -175,6 +175,98 @@ SHAPES: list[Shape] = [
         }
         """, "Jwt.authenticate", {"Jwt.name": "exact"},
         note="review D6: UserDetails declares fixed members, so name() is the outer method"),
+    Shape("S3-anonymous-thread", """
+        class Use {
+          void helper() {} //@Use.helper
+          void start() { //@Use.start
+            Thread t = new Thread() {
+              public void run() {
+                helper();
+              }
+            };
+            t.start();
+          }
+        }
+        """, "Use.start", {"Use.helper": "exact"},
+        note="BL-25: Thread's members are fixed, so helper() is the outer method"),
+    Shape("S3-anonymous-thread-member", """
+        class Use {
+          void interrupt() {} //@Use.interrupt
+          void start() { //@Use.start
+            Thread t = new Thread() {
+              public void run() {
+                interrupt();
+              }
+            };
+            t.start();
+          }
+        }
+        """, "Use.start", {}, absent=("Use.interrupt",),
+        note="BL-25: Thread declares interrupt(), so the call stays unresolved"),
+    Shape("S3-anonymous-timer-task", """
+        import java.util.TimerTask;
+        class Use {
+          void helper() {} //@Use.helper
+          void cancel() {} //@Use.cancel
+          TimerTask task() { //@Use.task
+            return new TimerTask() {
+              public void run() {
+                helper();
+                cancel();
+              }
+            };
+          }
+        }
+        """, "Use.task", {"Use.helper": "exact"}, absent=("Use.cancel",),
+        note="BL-25: TimerTask declares cancel(), so that call stays unresolved"),
+    Shape("S3-anonymous-object", """
+        class Use {
+          void helper() {} //@Use.helper
+          Object make() { //@Use.make
+            return new Object() {
+              void go() {
+                helper();
+              }
+            };
+          }
+        }
+        """, "Use.make", {"Use.helper": "exact"}),
+    Shape("S3-anonymous-spring-adapters", """
+        import org.springframework.web.servlet.config.annotation.WebMvcConfigurerAdapter;
+        import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
+        class Use {
+          void helper() {} //@Use.helper
+          void init() {} //@Use.init
+          void build() { //@Use.build
+            Object mvc = new WebMvcConfigurerAdapter() {
+              void go() {
+                helper();
+              }
+            };
+            Object security = new WebSecurityConfigurerAdapter() {
+              void go() {
+                helper();
+                init();
+              }
+            };
+          }
+        }
+        """, "Use.build", {"Use.helper": "exact"}, absent=("Use.init",),
+        note="BL-25: init() is a WebSecurityConfigurerAdapter member and stays unresolved"),
+    Shape("S3-anonymous-unknown-external", """
+        import com.example.lib.Task;
+        class Use {
+          void helper() {} //@Use.helper
+          void build() { //@Use.build
+            Task task = new Task() {
+              public void run() {
+                helper();
+              }
+            };
+          }
+        }
+        """, "Use.build", {}, absent=("Use.helper",),
+        note="BL-25: an external supertype outside the lists may declare helper()"),
     Shape("S4", """
         class Base {
           private void go() {} //@Base.go
