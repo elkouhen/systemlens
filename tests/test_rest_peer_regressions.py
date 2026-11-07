@@ -1,6 +1,7 @@
 """Regression coverage for REST peer identity and route ownership.
 
-Each test reproduces one defect of BACKLOG.md on a minimal fixture.
+Each test reproduces one defect of the 2026-11-07 backlog (``BACKLOG.md``
+in Git at ``b8277bc``) on a minimal fixture.
 """
 from pathlib import Path
 

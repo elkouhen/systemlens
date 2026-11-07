@@ -804,14 +804,13 @@ leave the previous successful snapshot intact.
 shape through the symbol pass in a closed world, as the `source` engine
 does, and checks each target and its confidence. The table below lists
 the shapes; the test fails when a row has no case or a case has no row.
-A shape not delivered is a strict expected failure naming the
-[backlog](../../BACKLOG.md) item that owns it.
+A shape not delivered is a strict expected failure that says why.
 
 Status values: `covered`, `defect` (wrong edge or wrong confidence),
 `missing` (no edge), `out of scope` (kept unresolved on purpose).
 `scripts/count_call_shapes.py` counts each shape in a Java tree.
 
-| # | Shape | Status | Backlog |
+| # | Shape | Status | Plan |
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | |
 | S2 | Static call and static import | `covered` | |

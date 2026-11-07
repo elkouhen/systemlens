@@ -1964,7 +1964,7 @@ test is replaced by a regression test for deep modules.
 
 **Status:** Accepted on 2026-11-07 by the product owner, as written
 (rules 1 to 4). Proposed on 2026-11-04 for lot 3 of the call-graph
-review, now backlog item [BL-01](../BACKLOG.md#bl-01).
+review (backlog item BL-01, `BACKLOG.md` in Git at `b8277bc`).
 Amends ADR-66 and ADR-70.
 
 **Context:** In a closed world, the `source` engine marks a call `exact`

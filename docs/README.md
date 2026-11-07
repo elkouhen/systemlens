@@ -29,7 +29,6 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 |---|---|
 | [README.md](../README.md) | Installing SystemLens or finding the first CLI workflow. |
 | [AGENTS.md](../AGENTS.md) | Applying repository rules, documentation ownership, or validation gates. |
-| [BACKLOG.md](../BACKLOG.md) | Picking up an open item by priority, or tracing a former plan, now in Git at `4a12ad5`. |
 
 ### Documentation owners and guides
 

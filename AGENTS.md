@@ -17,7 +17,6 @@ documents and summarizes the documentation hygiene expected in this repository.
 | [`docs/ADR.md`](docs/ADR.md) | Architecture decisions: context, choice, consequences | Before revisiting an existing technical choice |
 | [`docs/PDR.md`](docs/PDR.md) | Product decisions: visible rules, vocabulary, defaults, deferred concerns, and whether each is open to revision | Before changing a rule a user sees |
 | [`docs/process/delivery-practices.md`](docs/process/delivery-practices.md) | Session hygiene, status vocabulary, defect rule, review checklist, request brief | At the start of a session and before declaring work done |
-| [`BACKLOG.md`](BACKLOG.md) | The twelve open P1 items kept on 2026-11-07, with their acceptance and origin; appendices of delivered and dropped items. The former plans are in Git at `4a12ad5` | When fixing a defect, picking up planned work, or tracing an item to its former plan |
 | [`../systemlens-skill/`](../systemlens-skill/) | Companion skill repo: agent workflow, bundled rule packs, operational guidance | Whenever a SystemLens change can affect the skill or its docs |
 | [`../systemlens-observability-lab/`](../systemlens-observability-lab/) | Infrastructure and a test application for observability/integration testing | When validating SystemLens against a real running app/infra, or working on observability-related integration tests |
 

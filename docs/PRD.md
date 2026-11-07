@@ -5,7 +5,7 @@ success measures. It does not define command contracts, implementation details,
 or HTML interaction rules.
 
 Status: current. Owner: the product owner. Last revised: 2026-11-01.
-Related: [product decisions](PDR.md), [backlog](../BACKLOG.md),
+Related: [product decisions](PDR.md),
 [functional specification](SPEC-FONC.md), [glossary](glossary.md).
 
 ## 1. Problem
