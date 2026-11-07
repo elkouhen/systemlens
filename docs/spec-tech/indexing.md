@@ -369,17 +369,28 @@ source symbol pass then follows receiver-typed calls between indexed Java
 methods: with the `source` engine it is the whole call graph, with `codeql`
 it fills the gaps. A receiver is typed from a field, parameter, local or
 `var` initializer, a declared return type, a field access (`obj.field`,
-`Type.CONSTANT`, enum constants), an array element, or a capitalized type
-name for a static call; `receiver::name` is a call when that name has one
-declared arity. A zero-argument `getX()` (`isX()` for a `boolean`) that no
+`Type.CONSTANT`, enum constants), an array element, `Outer.this` from a
+type it encloses, or a capitalized type name for a static call;
+`receiver::name` is a call when that name has one declared arity.
+A ternary takes the type its two branches share; branches of different
+types leave it untyped (BL-23). A zero-argument `getX()` (`isX()` for a `boolean`) that no
 source type declares takes the field type when Lombok `@Data`, `@Value` or
 `@Getter` generates it. `toString()`, `hashCode()` and `equals(x)` return
 `String`, `int` and `boolean` on any receiver.
 Variables declared by an enclosing statement also type receivers: an enhanced
 `for` variable, a single-type `catch` parameter, a try-with-resources
 resource, and an explicitly typed lambda parameter. A `var` loop variable
-or a multi-catch parameter has no type, but still shadows a field of the
-same name.
+takes the element type the iterable's written type argument gives through
+the container view below, and nothing otherwise (BL-23). A multi-catch
+parameter has no type, but still shadows a field of the same name.
+A pattern variable takes its written type where JLS 6.3.1 proves it in
+scope through `!`, `&&`, `||` and parentheses: the true or false branch of
+an `if`, `while` or `?:`, the right operand of `&&` or `||`, the
+statements after an `if (!(o instanceof C c))` whose branch ends in
+`return`, `throw`, `break` or `continue`, and a `switch` case, guard
+included. Record pattern components count; a `var` component has no type.
+Elsewhere the name keeps its outer meaning. The Kafka payload pass shares
+these rules through `discovery/java/patterns.py`.
 An untyped lambda parameter is typed only when the lambda is a direct
 argument of a JDK callback whose parameter the receiver's written type
 arguments fix (BL-14). The receiver is a variable, a field or `this.field`
@@ -840,13 +851,16 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | G3 | Generic implementation `class Generic<T> implements Handler<T>` | `defect`: reached `possible`, not `exact` | BL-26 |
 | G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `missing` | not planned |
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
-| T2 | Pattern variable of `instanceof Circle c` | `missing` | not planned |
-| T3 | Pattern variable of a `switch` pattern | `missing` | not planned |
+| T2 | Pattern variable of `instanceof Circle c` | `covered` (BL-23) | |
+| T3 | Pattern variable of a `switch` pattern | `covered` (BL-23) | |
 | T4 | `var` initializer typed where it is written | `covered` | |
 | T5 | Names in anonymous, local and inner classes, innermost scope first | `covered` | |
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
 | T7 | A local class is visible only to the end of its block | `covered` | |
 | T8 | A type parameter hides a source type of the same simple name | `covered` | |
+| T9 | `var` loop variable typed by the iterable's written type argument | `covered` (BL-23) | |
+| T10 | Ternary receiver whose branches share a type | `covered` (BL-23) | |
+| T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
 | F3 | Anonymous subclass overriding a source method | `defect` | not planned |
@@ -885,16 +899,17 @@ pass. A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
 `CallGraphSession.calls()` and expects the same rows from CodeQL.
 
 The table uses the status values of the call shapes above; the item
-column names the owner of each case not yet aligned.
+column names the owner of each case not yet aligned, or the item that
+aligned it.
 
 | # | Shape | Status | Item |
 |---|---|---|---|
 | A1 | Type-variable return or field: `box.get()`, `repo.find()` through `extends Repo<Circle>`, inherited `T value`, `<T> T first(List<T>)` | `missing` | BL-26 |
 | A2 | Element of a JDK container accessor: `List.get`, `Optional.get`, `Map.get`, `stream().findFirst().get()` | `missing` | BL-27 |
-| A3 | `var` loop variable | `missing` | BL-23 |
-| A4 | Ternary receiver whose branches share a type | `missing` | BL-23 |
-| A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `missing` | BL-23 |
-| A6 | `Outer.this.helper()` from an inner class | `missing` | BL-23 |
+| A3 | `var` loop variable | `covered` | BL-23 |
+| A4 | Ternary receiver whose branches share a type | `covered` | BL-23 |
+| A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `covered` | BL-23 |
+| A6 | `Outer.this.helper()` from an inner class | `covered` | BL-23 |
 | A7 | Receiver typed by a bounded type variable (G4) | `missing` | BL-26 |
 | A8 | Unqualified call inside an anonymous `Thread` | `missing` | BL-25 |
 | A9 | Lambda passed to a source functional interface parameter | `missing` | BL-24 |

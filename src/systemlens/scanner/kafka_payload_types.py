@@ -30,6 +30,7 @@ from pathlib import Path
 from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
+from systemlens.discovery.java import patterns as java_patterns
 from systemlens.domain.message_types import message_type_key
 from systemlens.scanner._core import _kafka_payload_type, _split_java_type_arguments
 
@@ -496,102 +497,6 @@ class _Typer:
             return True, self._declared(path, source, type_node, resource)
         return False, None
 
-    def _pattern_binding(self, source: bytes, pattern: Node, name: str) -> Node | None:
-        """The type node of pattern variable ``name`` bound by ``pattern``."""
-        if pattern.type == "instanceof_expression":
-            ident = pattern.child_by_field_name("name")
-            if ident is not None:
-                return pattern.child_by_field_name("right") if java_parser.node_text(source, ident) == name else None
-            inner = pattern.child_by_field_name("pattern")
-            return self._pattern_binding(source, inner, name) if inner is not None else None
-        for item in java_parser.walk(pattern):
-            if item.type not in {"type_pattern", "record_pattern_component"}:
-                continue
-            parts = [part for part in item.named_children if part.type != "modifiers"]
-            if len(parts) >= 2 and parts[-1].type == "identifier" and java_parser.node_text(source, parts[-1]) == name:
-                return parts[-2]
-        return None
-
-    def _binds(self, source: bytes, condition: Node | None, name: str, when: bool) -> Node | None:
-        """Type node of ``name`` when ``condition`` evaluating to ``when`` binds it.
-
-        Follows JLS 6.3.1 for parentheses, ``!``, ``&&`` and ``||`` only;
-        any other expression binds nothing.
-        """
-        if condition is None:
-            return None
-        kind = condition.type
-        if kind == "parenthesized_expression":
-            return self._binds(source, next(iter(condition.named_children), None), name, when)
-        if kind == "instanceof_expression":
-            return self._pattern_binding(source, condition, name) if when else None
-        if kind == "unary_expression":
-            operator = condition.child_by_field_name("operator")
-            if operator is not None and java_parser.node_text(source, operator) == "!":
-                return self._binds(source, condition.child_by_field_name("operand"), name, not when)
-            return None
-        if kind == "binary_expression":
-            operator = condition.child_by_field_name("operator")
-            text = java_parser.node_text(source, operator) if operator is not None else ""
-            if (text, when) in {("&&", True), ("||", False)}:
-                return (
-                    self._binds(source, condition.child_by_field_name("left"), name, when)
-                    or self._binds(source, condition.child_by_field_name("right"), name, when)
-                )
-        return None
-
-    @staticmethod
-    def _completes_abruptly(statement: Node | None) -> bool:
-        """Whether ``statement`` surely ends in ``return``, ``throw``, ``break`` or ``continue``."""
-        abrupt = {"return_statement", "throw_statement", "break_statement", "continue_statement"}
-        if statement is None:
-            return False
-        if statement.type == "block":
-            statements = [item for item in statement.named_children if "comment" not in item.type]
-            return bool(statements) and statements[-1].type in abrupt
-        return statement.type in abrupt
-
-    def _flow_binding(self, source: bytes, scope: Node, child: Node, name: str) -> Node | None:
-        """Type node of a pattern variable ``name`` that ``scope`` introduces into ``child``."""
-        kind = scope.type
-        if kind in {"if_statement", "while_statement", "ternary_expression"}:
-            condition = scope.child_by_field_name("condition")
-            if child == scope.child_by_field_name("consequence") or (
-                kind == "while_statement" and child == scope.child_by_field_name("body")
-            ):
-                return self._binds(source, condition, name, True)
-            if child == scope.child_by_field_name("alternative"):
-                return self._binds(source, condition, name, False)
-            return None
-        if kind == "binary_expression" and child == scope.child_by_field_name("right"):
-            operator = scope.child_by_field_name("operator")
-            text = java_parser.node_text(source, operator) if operator is not None else ""
-            if text in {"&&", "||"}:
-                return self._binds(source, scope.child_by_field_name("left"), name, text == "&&")
-            return None
-        if kind in {"switch_rule", "switch_block_statement_group"}:
-            for label in scope.named_children:
-                if label.type == "switch_label":
-                    found = self._pattern_binding(source, label, name)
-                    if found is not None:
-                        return found
-            if kind == "switch_rule":
-                return None
-        if kind in {"block", "switch_block_statement_group", "constructor_body"}:
-            # ``if (!(x instanceof T v)) return;`` binds ``v`` in the statements after it.
-            for statement in scope.named_children:
-                if statement.start_byte >= child.start_byte:
-                    break
-                if (
-                    statement.type == "if_statement"
-                    and statement.child_by_field_name("alternative") is None
-                    and self._completes_abruptly(statement.child_by_field_name("consequence"))
-                ):
-                    found = self._binds(source, statement.child_by_field_name("condition"), name, False)
-                    if found is not None:
-                        return found
-        return None
-
     @staticmethod
     def _is_callable_boundary(scope: Node) -> bool:
         """A method, constructor, lambda or initializer: the widest scope of a pattern variable."""
@@ -608,7 +513,7 @@ class _Typer:
                 continue
             if current.type in {"instanceof_expression", "type_pattern", "record_pattern_component"}:
                 if current.type == "instanceof_expression":
-                    if self._pattern_binding(source, current, name) is not None:
+                    if java_patterns.pattern_binding(source, current, name) is not None:
                         return True
                 else:
                     parts = current.named_children
@@ -629,7 +534,7 @@ class _Typer:
         """
         child, scope = node, node.parent
         while scope is not None:
-            pattern_type = self._flow_binding(source, scope, child, name)
+            pattern_type = java_patterns.flow_binding(source, scope, child, name)
             if pattern_type is not None:
                 return self._declared(path, source, pattern_type, scope)
             if scope.type == "try_with_resources_statement":

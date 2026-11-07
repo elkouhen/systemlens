@@ -194,6 +194,7 @@ they are not cross-module entry points.
 | Java AST endpoint extraction | `scanner/` package (`__init__.py` re-exports the public surface) |
 | Maven/Gradle module facts or Java source inventory | `discovery/build/` |
 | Shared Java parser primitives | `discovery/java/parser.py` |
+| Scope of Java pattern variables (JLS 6.3.1) | `discovery/java/patterns.py` |
 | Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
 | Kafka payload type informativeness and comparison | `domain/message_types.py` |

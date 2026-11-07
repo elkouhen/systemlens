@@ -831,8 +831,81 @@ SHAPES: list[Shape] = [
             }
           }
         }
+        """, "Use.run", {"Circle.area": "exact"}),
+    Shape("T2-scope", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Square c;
+          void run(Shape s, boolean flag) { //@Use.run
+            if (s instanceof Circle c) {
+            } else {
+              c.area();
+            }
+            if (!(s instanceof Circle c)) {
+              c.area();
+            }
+            if (s instanceof Circle c || flag) {
+              c.area();
+            }
+          }
+        }
+        """, "Use.run", {"Square.area": "exact"},
+        note="BL-23: outside the branch where its instanceof is true, the name is the field"),
+    Shape("T2-and", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        record Pair(Circle left, Square right) {}
+        class Use {
+          double run(Object o) { //@Use.run
+            if (o instanceof Pair(Circle l, var r)) {
+              l.area();
+            }
+            return o instanceof Circle c && c.area() > 0 ? 1 : 0;
+          }
+        }
         """, "Use.run", {"Circle.area": "exact"},
-        pending="not planned: the variable of an instanceof pattern has no type"),
+        note="BL-23: the right operand of && and a record pattern component"),
+    Shape("T2-flow", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Square c;
+          Square d;
+          void run(Shape s) { //@Use.run
+            if (!(s instanceof Circle d)) {
+            } else {
+              d.area();
+            }
+            if (!(s instanceof Circle c)) {
+              return;
+            }
+            c.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact"},
+        note="BL-23: the else branch of a negated instanceof and the statements after an early return"),
     Shape("T3", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -851,8 +924,29 @@ SHAPES: list[Shape] = [
             };
           }
         }
-        """, "Use.run", {"Circle.area": "exact"},
-        pending="not planned: the variable of a switch pattern has no type"),
+        """, "Use.run", {"Circle.area": "exact"}),
+    Shape("T3-group", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          void run(Shape s) { //@Use.run
+            switch (s) {
+              case Square q when q.area() > 0:
+                break;
+              default:
+                break;
+            }
+          }
+        }
+        """, "Use.run", {"Square.area": "exact"},
+        note="BL-23: a statement-group label and its guard"),
     Shape("T4", """
         class Service {
           void go() {} //@Service.go
@@ -1122,6 +1216,116 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"TextHandler.handle": "possible", "OrderHandler.handle": "possible"},
         note="review S8: the contract's signature is generic, so it does not bind to OrderHandler alone"),
+    Shape("T9", """
+        import java.util.List;
+        import java.util.Map;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List<Circle> circles;
+          Map<String, Square> byName;
+          void run() { //@Use.run
+            for (var c : circles) {
+              c.area();
+            }
+            for (var s : byName.values()) {
+              s.area();
+            }
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact", "Square.area": "exact"}),
+    Shape("T9-unwritten", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List raw;
+          List<?> any;
+          List<Circle> circles;
+          Circle c;
+          void run() { //@Use.run
+            for (var c : raw) {
+              c.area();
+            }
+            for (var c : any) {
+              c.area();
+            }
+            for (var c : circles.stream().map(x -> x).toList()) {
+              c.area();
+            }
+          }
+        }
+        """, "Use.run", {},
+        note="BL-23: no written type argument, no type; the loop variable still shadows the field"),
+    Shape("T10", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Circle a;
+          Circle b;
+          void run(boolean flag) { //@Use.run
+            (flag ? a : b).area();
+            var c = flag ? a : b;
+            c.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact"}),
+    Shape("T10-mixed", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Circle a;
+          Square b;
+          void run(boolean flag) { //@Use.run
+            (flag ? a : b).area();
+          }
+        }
+        """, "Use.run", {},
+        note="BL-23: branches of different types leave the ternary untyped"),
+    Shape("T11", """
+        class Service {
+          void go() {} //@Service.go
+        }
+        class Outer {
+          Service service;
+          void helper() {} //@Outer.helper
+          class Inner {
+            void helper() {} //@Inner.helper
+            void run() { //@Inner.run
+              Outer.this.helper();
+              Outer.this.service.go();
+            }
+          }
+        }
+        """, "Inner.run", {"Outer.helper": "exact", "Service.go": "exact"}),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {

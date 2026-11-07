@@ -12,7 +12,7 @@ from typing import Sequence
 
 from tree_sitter import Node
 
-from systemlens.discovery.java import parser
+from systemlens.discovery.java import parser, patterns
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.module_inventory import ModuleDependency
 from systemlens.indexing.file_inventory import is_test_source
@@ -230,6 +230,11 @@ def _is_anonymous_body(node: Node) -> bool:
 
 
 _CALL_SITES = {"method_invocation", "method_reference"}
+# Scopes that can introduce a pattern variable into one of their children.
+_PATTERN_SCOPES = {
+    "if_statement", "while_statement", "ternary_expression", "binary_expression", "switch_rule",
+    "switch_block_statement_group", "block", "constructor_body",
+}
 _CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation"}
 _INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer"}
 
@@ -301,12 +306,14 @@ class _Declarator:
     """How a scope declares a variable: its written type, if any.
 
     ``value`` is the initializer of a ``var``; ``lambda_slot`` is
-    ``(lambda, position, count)`` for an untyped lambda parameter.
+    ``(lambda, position, count)`` for an untyped lambda parameter;
+    ``element_of`` is the iterable of a ``var`` loop variable.
     """
 
     type_node: Node | None = None
     value: Node | None = None
     lambda_slot: tuple[Node, int, int] | None = None
+    element_of: Node | None = None
 
 
 class JavaSymbols:
@@ -1347,6 +1354,13 @@ class JavaSymbols:
             ) if type_node is not None else None
         if node.type == "parenthesized_expression" and node.named_children:
             return self.expression_type(info, node.named_children[0], invocation, depth + 1)
+        if node.type == "ternary_expression":
+            # Typed only when both branches have the same type.
+            branches = {
+                self.expression_type(info, node.child_by_field_name(branch), invocation, depth + 1)
+                for branch in ("consequence", "alternative")
+            }
+            return branches.pop() if len(branches) == 1 else None
         if node.type in {"identifier", "this", "method_invocation", "field_access", "array_access"}:
             return self.receiver_type(info, node, invocation, depth + 1)
         return None
@@ -1396,6 +1410,11 @@ class JavaSymbols:
     def _declarator_type(self, info: _Method, declarator: _Declarator) -> str | None:
         if declarator.lambda_slot is not None:
             return self._lambda_parameter_type(info, *declarator.lambda_slot)
+        if declarator.element_of is not None:
+            # ``for (var c : circles)``: the element type the iterable's
+            # written type argument gives, read in the loop header.
+            view = self._generic_view(info, declarator.element_of, declarator.element_of)
+            return view[1][0] if view is not None and view[0] == "iterable" else None
         type_node = declarator.type_node
         if type_node is None:
             return None
@@ -1674,8 +1693,8 @@ class JavaSymbols:
         """A variable that ``scope`` itself declares for the code it encloses.
 
         Returns ``None`` when ``scope`` does not declare ``name``. A
-        declarator without a written type (``var`` loop variable, multi-catch,
-        varargs) or an untyped lambda parameter still shadows fields.
+        declarator without a written type (multi-catch, varargs), an untyped
+        lambda parameter or a ``var`` loop variable still shadows fields.
         """
         source = self.units[info.method.path].source
 
@@ -1689,7 +1708,7 @@ class JavaSymbols:
             ):
                 type_node = scope.child_by_field_name("type")
                 if type_node is not None and parser.node_text(source, type_node).strip() == "var":
-                    return _Declarator()
+                    return _Declarator(element_of=scope.child_by_field_name("value"))
                 return _Declarator(type_node)
         elif scope.type == "catch_clause":
             parameter = parser.child_by_type(scope, "catch_formal_parameter")
@@ -1718,6 +1737,15 @@ class JavaSymbols:
                         return _Declarator(lambda_slot=(scope, untyped.index(parameter), len(untyped)))
                     if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
                         return _Declarator(parameter.child_by_field_name("type"))
+        elif scope.type in _PATTERN_SCOPES:
+            # A pattern variable where its ``instanceof`` is proven, or in
+            # its ``switch`` case (JLS 6.3.1).
+            child = invocation
+            while child.parent is not None and child.parent != scope:
+                child = child.parent
+            type_node = patterns.flow_binding(source, scope, child, name) if child.parent == scope else None
+            if type_node is not None:
+                return _Declarator(type_node)
         elif scope.type in {"method_declaration", "constructor_declaration"}:
             # ``info`` itself, an anonymous class method in its body, or the
             # method enclosing a local class.
@@ -1758,6 +1786,10 @@ class JavaSymbols:
             # ``values[0].name()``: the element type of the array.
             array = self.expression_type(info, receiver.child_by_field_name("array"), invocation, depth + 1)
             return array[:-2] if array is not None and array.endswith("[]") else None
+        if receiver.type == "field_access" and (
+            (this := receiver.child_by_field_name("field")) is not None and this.type == "this"
+        ):
+            return self._qualified_this(info, receiver)
         if receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
             return self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
         if receiver.type == "field_access":
@@ -1804,6 +1836,20 @@ class JavaSymbols:
                 at=type_node,
             ) if type_node is not None else None)
         return next(iter(returns)) if len(returns) == 1 else None
+
+    def _qualified_this(self, info: _Method, receiver: Node) -> str | None:
+        """``Outer.this``: the named type, when it encloses the expression."""
+        target = receiver.child_by_field_name("object")
+        if target is None:
+            return None
+        path = info.method.path
+        named = self.resolve(path, parser.node_text(self.units[path].source, target), info.owner, at=target)
+        scope = receiver.parent
+        while scope is not None:
+            if scope.type in _TYPES and self.owner(path, scope) == named:
+                return named
+            scope = scope.parent
+        return None
 
     def _record_component_type(self, owner: str, name: str, path: str) -> str | None:
         """Declared type of the record component ``name`` of ``owner``."""
