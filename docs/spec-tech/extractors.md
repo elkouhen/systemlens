@@ -224,6 +224,19 @@ source super types. A `var` takes its initializer's type. Calls, getters and
 field accesses resolve the receiver's source declaration through the file's
 own types, its imports, its package and its wildcard imports.
 
+Each scope shadows the outer ones (BL-09). A try-with-resources resource
+is visible in its body and in later resources. An anonymous class body
+offers its own fields, then those of its source supertype, also through
+`this.`; `this.x` never reaches the outer class. A `switch` pattern binds
+in its rule or statement group, guard included.
+
+An `instanceof` pattern binds where JLS 6.3.1 proves it through `!`, `&&`,
+`||` and parentheses: the true or false branch of an `if`, `while` or
+ternary, the right operand of `&&` or `||`, and the statements after an
+`if (!(x instanceof T v))` without `else` whose branch ends in `return`,
+`throw`, `break` or `continue`. Any other pattern variable of the name in
+the enclosing method, lambda or initializer makes the name unknown.
+
 A call is typed only when one source method has that name and arity on the
 receiver type or its source supertypes; otherwise it stays unknown. A record
 accessor and a Lombok getter (`@Data`, `@Value`, `@Getter`) give the field

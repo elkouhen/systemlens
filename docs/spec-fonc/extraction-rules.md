@@ -441,6 +441,12 @@ declaration, a getter, a Lombok builder, or `MessageBuilder.withPayload`.
 When the value stays unknown, the value type `V` of the receiving
 `KafkaTemplate<K, V>` is used, unless `V` itself names no DTO.
 
+A variable is typed in its own scope, never from an outer field of the
+same name: an `instanceof` or `switch` pattern variable, a
+try-with-resources resource and an anonymous-class field each give their
+declared type. When a pattern variable of that name exists but its scope
+cannot be proven to cover the send, the value is unknown.
+
 `KafkaTemplate.sendDefault` publishes to the template's default topic: a
 `setDefaultTopic("...")` on that template in the same file, else the
 `spring.kafka.template.default-topic` property, else a dynamic topic. Its

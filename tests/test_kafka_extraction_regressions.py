@@ -1020,3 +1020,63 @@ class C {
         for e in infer_kafka_topic_strategy1_endpoints(tmp_path)
     )
     assert facts == [("cmd.creee", "Order", 9), ("cmd.creee", "Order", 13)], facts
+
+
+# BL-09 (review finding K5): a variable is typed in its own scope. Each
+# fixture declares an outer field ``Order e`` whose type must never leak
+# into a pattern variable, a resource or an anonymous-class field ``e``.
+_SCOPED_SHAPES = [
+    ("instanceof", "Order e; void s(Object x) { if (x instanceof OrderEvent e) { SEND(e); } }", "OrderEvent"),
+    ("instanceof-and",
+     "Order e; void s(Object x) { if (x instanceof OrderEvent e && e.id() != null) SEND(e); }", "OrderEvent"),
+    ("instanceof-else",
+     "Order e; void s(Object x) { if (!(x instanceof OrderEvent e)) { return; } else { SEND(e); } }",
+     "OrderEvent"),
+    ("instanceof-early-return",
+     "Order e; void s(Object x) { if (!(x instanceof OrderEvent e)) return; SEND(e); }", "OrderEvent"),
+    ("instanceof-ternary",
+     "Order e; Object s(Object x) { return x instanceof OrderEvent e ? SEND(e) : null; }", "OrderEvent"),
+    ("record-pattern",
+     "record Wrap(OrderEvent v) {} Order e; void s(Object x) { if (x instanceof Wrap(OrderEvent e)) SEND(e); }",
+     "OrderEvent"),
+    ("instanceof-unproven-scope",
+     "Order e; void s(Object x) { if (!(x instanceof OrderEvent e)) { log(); } SEND(e); } void log() {}",
+     None),
+    ("switch-rule",
+     "Order e; void s(Object x) { switch (x) { case OrderEvent e -> SEND(e); default -> {} } }", "OrderEvent"),
+    ("switch-group",
+     "Order e; void s(Object x) { switch (x) { case OrderEvent e: SEND(e); break; default: } }", "OrderEvent"),
+    ("switch-guard",
+     "Order e; void s(Object x) { switch (x) { case OrderEvent e when e.id() != null -> SEND(e); "
+     "default -> {} } }", "OrderEvent"),
+    ("try-resource",
+     "Order e; OrderEvent open() { return null; } void s() { try (OrderEvent e = open()) { SEND(e); } }",
+     "OrderEvent"),
+    ("try-resource-var",
+     "Order e; OrderEvent open() { return null; } void s() { try (var e = open()) { SEND(e); } }",
+     "OrderEvent"),
+    ("try-resource-unknown", "Order e; void s() { try (var e = open()) { SEND(e); } }", None),
+    ("anonymous-field",
+     "Order e; void s() { new Runnable() { OrderEvent e; public void run() { SEND(e); } }; }", "OrderEvent"),
+    ("anonymous-this-field",
+     "Order e; void s() { new Runnable() { OrderEvent e; public void run() { SEND(this.e); } }; }",
+     "OrderEvent"),
+    ("anonymous-this-field-unknown",
+     "Order e; void s() { new Runnable() { public void run() { SEND(this.e); } }; }", None),
+    # The outer field itself stays typed where nothing shadows it.
+    ("outer-field", "Order e; void s() { SEND(e); }", "Order"),
+    ("outer-field-from-anonymous",
+     "Order e; void s() { new Runnable() { public void run() { SEND(e); } }; }", "Order"),
+    ("outer-field-beside-pattern",
+     "Order e; void s(Object x) { if (x instanceof OrderEvent v) { return; } SEND(e); }", "Order"),
+]
+
+
+@pytest.mark.parametrize("path", ["template", "strategy1"])
+@pytest.mark.parametrize(
+    ("shape", "members", "expected"), _SCOPED_SHAPES, ids=[shape for shape, _, _ in _SCOPED_SHAPES],
+)
+def test_payload_variable_is_typed_in_its_own_scope(
+    tmp_path: Path, path: str, shape: str, members: str, expected: str | None,
+) -> None:
+    assert _producer_types(tmp_path, members, path) == [expected], shape

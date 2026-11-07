@@ -191,7 +191,10 @@ lab.
   unknown, never the outer field's type.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-review-2026-11-03.md`: K5.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** regression tests
+  `test_payload_variable_is_typed_in_its_own_scope` in
+  `tests/test_kafka_extraction_regressions.py`; commit: pending.
 - **Why P1:** a false fact that ADR-76 pairing trusts.
 
 <a id="bl-11"></a>
