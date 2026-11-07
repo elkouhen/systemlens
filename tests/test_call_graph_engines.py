@@ -19,7 +19,7 @@ from systemlens.callgraph.model import (
     SourceMethod,
 )
 from systemlens.callgraph.registry import declarations, engine_names, init_profiles, load_engine
-from systemlens.callgraph.source import SourceEngine
+from systemlens.engines.custom.engine import SourceEngine
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.engines import codeql
 from systemlens.indexing.service import index_repo

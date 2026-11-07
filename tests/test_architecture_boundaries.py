@@ -103,11 +103,14 @@ def test_engine_names_stay_in_engine_packages_and_the_registry() -> None:
     """
     import re
 
-    from systemlens.callgraph.registry import declarations
+    from systemlens.callgraph.registry import DEFAULT_ENGINE, declarations
     import systemlens.storage.persisted_names as persisted_names
 
+    # The default engine's name, ``source``, is also an ordinary word of the
+    # core; the import rule below guards its package instead.
     names = {"codeql", "joern"} | {
-        item.name for item in declarations() if item.factory.startswith("systemlens.engines.")
+        item.name for item in declarations()
+        if item.factory.startswith("systemlens.engines.") and item.name != DEFAULT_ENGINE
     }
     pattern = re.compile("|".join(sorted(map(re.escape, names))), re.IGNORECASE)
     persisted = sorted(
@@ -142,3 +145,24 @@ def test_engine_names_stay_in_engine_packages_and_the_registry() -> None:
             if pattern.search(line)
         )
     assert not offenders, "engine names outside engines/ and the registry:\n" + "\n".join(offenders)
+
+
+def test_no_core_module_imports_an_engine_package() -> None:
+    """ADR-85: the core reaches an engine only through the registry.
+
+    Every engine, the in-house one under ``engines/custom/`` included, is
+    built from its declaration's factory; no core module imports it.
+    """
+    import re
+
+    from systemlens.callgraph.registry import _DECLARATIONS
+
+    assert "systemlens.engines.custom.declaration" in _DECLARATIONS
+    pattern = re.compile(r"^\s*(?:from|import)\s+systemlens\.engines\b", re.MULTILINE)
+    offenders = [
+        str(path.relative_to(SOURCE_ROOT))
+        for path in sorted(SOURCE_ROOT.rglob("*.py"))
+        if path.relative_to(SOURCE_ROOT).parts[0] != "engines"
+        and pattern.search(path.read_text(encoding="utf-8"))
+    ]
+    assert not offenders, "core modules importing an engine package: " + ", ".join(offenders)

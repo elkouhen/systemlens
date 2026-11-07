@@ -1,0 +1,4 @@
+kafka:
+  topics:
+    OrdersCreated:
+      nom: commerce.orders.created

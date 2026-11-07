@@ -42,7 +42,7 @@ import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from systemlens.callgraph.model import CallGraphError, MethodCall, SourceMethod
+from systemlens.callgraph.model import CallGraphError, MethodCall, PayloadTypeEvidence, SourceMethod
 
 SCHEMA = "systemlens-joern-v1"
 _UNRESOLVED = ("<unresolvedNamespace>", "<unresolvedSignature>", "<unknownFullName>")
@@ -354,3 +354,136 @@ def _callee_rows(row: Mapping[str, object]) -> list[Mapping[str, object]]:
     if not isinstance(callees, list):
         raise TypeError("callees")
     return callees
+
+
+# Strategy1 payload evidence (ADR-85 amendment). The rules follow the
+# CodeQL query ``_KAFKA_MESSAGE_TYPES_QUERY``; the stage decides which
+# types are informative (ADR-76).
+_WRAPPER_ARGUMENT = {"Message": 0, "GenericMessage": 0, "ProducerRecord": 1}
+_NO_SOURCE_TYPE = {"Object", *_WRAPPER_ARGUMENT}
+_DECLARATION_PREFIX = re.compile(r"^(?:@[\w.]+(?:\([^()]*\))?\s+|final\s+)*")
+
+
+def _simple_name(full_name: str) -> str | None:
+    """``com.example.Outer$Inner`` is ``Inner``; an unknown type is ``None``.
+
+    Joern spells a type it could not resolve ``<unresolvedNamespace>.Name``:
+    the written simple name is still the evidence CodeQL would report.
+    """
+    if not full_name or full_name == "ANY" or full_name.startswith("<unknown"):
+        return None
+    return re.split(r"[.$]", full_name)[-1] or None
+
+
+def _written_simple(written: str) -> str:
+    """``com.x.Box<com.x.Item>`` is ``Box<com.x.Item>``, as CodeQL names it."""
+    base, separator, rest = written.partition("<")
+    return base.strip().rsplit(".", 1)[-1] + separator + rest
+
+
+def _written_type(declaration: str, name: str) -> str:
+    """``final Message<OrderCreated> message`` is ``Message<OrderCreated>``."""
+    text = _DECLARATION_PREFIX.sub("", declaration.strip())
+    if name and text.endswith(name):
+        text = text[: -len(name)]
+    return text.strip()
+
+
+def _type_arguments(written: str) -> list[str]:
+    open_index = written.find("<")
+    if open_index < 0 or not written.endswith(">"):
+        return []
+    arguments: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for character in written[open_index + 1:-1]:
+        if character == "<":
+            depth += 1
+        elif character == ">":
+            depth -= 1
+        if character == "," and depth == 0:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(character)
+    arguments.append("".join(current).strip())
+    return arguments
+
+
+def _assigned_types(
+    variable: str, assignments: list[Mapping[str, object]],
+) -> set[str]:
+    """Types of the values assigned to ``variable``, through other variables.
+
+    The local data flow of the CodeQL query: a value whose type names
+    ``Object`` or a wrapper is no source, and a variable assigned from
+    another variable takes that variable's sources.
+    """
+    found: set[str] = set()
+    pending, seen = [variable], set()
+    while pending:
+        current = pending.pop()
+        if not current or current in seen:
+            continue
+        seen.add(current)
+        for assignment in assignments:
+            if str(assignment.get("target", "")) != current:
+                continue
+            simple = _simple_name(str(assignment.get("type", "")))
+            if simple is not None and simple not in _NO_SOURCE_TYPE:
+                found.add(simple)
+            pending.append(str(assignment.get("variable", "")))
+    return found
+
+
+def _send_types(send: Mapping[str, object]) -> set[str]:
+    variable = str(send.get("variable", ""))
+    written = _written_type(str(send.get("declaration", "")), variable)
+    base = _written_simple(written).partition("<")[0] if written else ""
+    erased = _simple_name(str(send.get("type", ""))) or ""
+    if base in _WRAPPER_ARGUMENT or erased in _WRAPPER_ARGUMENT:
+        # Joern erases type arguments: only the written declaration names
+        # the payload a wrapper carries.
+        arguments = _type_arguments(written)
+        index = _WRAPPER_ARGUMENT.get(base, -1)
+        if 0 <= index < len(arguments) and arguments[index] not in {"?", "Object"}:
+            return {_written_simple(arguments[index])}
+        return set()
+    assignments = send.get("assignments", [])
+    if not isinstance(assignments, list):
+        raise TypeError("assignments")
+    sources = _assigned_types(variable, assignments)
+    if sources:
+        return sources
+    if written:
+        return {_written_simple(written)}
+    return {erased} if erased else set()
+
+
+def parse_payload_types(
+    document: Mapping[str, object], indexed_paths: Iterable[str] = (),
+) -> list[PayloadTypeEvidence]:
+    """Payload types of the export's Strategy1 Kafka sends.
+
+    An export without the ``payload_sends`` list, from an older script,
+    has no evidence.
+    """
+    _check_schema(document)
+    indexed = frozenset(indexed_paths)
+    sends = document.get("payload_sends", [])
+    if not isinstance(sends, list):
+        raise JoernError("Joern export has no 'payload_sends' list.")
+    evidence: set[PayloadTypeEvidence] = set()
+    try:
+        for send in sends:
+            path = _path(send.get("file"))
+            line = int(str(send.get("line", -1)))
+            if not path or line <= 0 or (indexed and path not in indexed):
+                continue
+            evidence.update(
+                PayloadTypeEvidence(path=path, line=line, message_type=message_type)
+                for message_type in _send_types(send)
+            )
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise JoernError("Joern returned an unexpected payload schema.") from exc
+    return sorted(evidence, key=lambda item: (item.path, item.line, item.message_type))

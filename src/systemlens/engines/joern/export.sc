@@ -1,7 +1,7 @@
 // SystemLens export of a Java code property graph (ADR-85).
 //
-// Writes one JSON document with every internal method and every call that
-// is not an operator. Each call lists the methods Joern's call graph links
+// Writes one JSON document with every internal method, every call that
+// is not an operator, and the payload evidence of Strategy1 Kafka sends. Each call lists the methods Joern's call graph links
 // it to; the Python adapter decides which of them become call-graph edges.
 // File paths are relative to the directory given to joern-parse.
 
@@ -33,10 +33,50 @@
       "callees" -> ujson.Arr.from(call.callee.l.map(methodJson)),
     )
   }
+  // Strategy1 sends (ADR-85 amendment, ADR-5): the payload is the second
+  // argument of an `envoyerMessageKafka*` call, as in the CodeQL query. The
+  // adapter types it from the written declaration and the local
+  // assignments of the calling method; Joern's own types are erased.
+  def declarationCode(argument: Any): String =
+    argument match {
+      case identifier: io.shiftleft.codepropertygraph.generated.nodes.Identifier =>
+        identifier.refsTo.l.headOption.map(_.propertiesMap.getOrDefault("CODE", "").toString).getOrElse("")
+      case _ => ""
+    }
+  def variableName(argument: Any): String =
+    argument match {
+      case identifier: io.shiftleft.codepropertygraph.generated.nodes.Identifier => identifier.name
+      case _ => ""
+    }
+  val payloadSends = cpg.call.name("envoyerMessageKafka.*").l.flatMap { call =>
+    call.argument.l.find(_.argumentIndex == 2).map { payload =>
+      val assignments = call.method.assignment.l.flatMap { assignment =>
+        val target = assignment.argument.l.find(_.argumentIndex == 1)
+        val source = assignment.argument.l.find(_.argumentIndex == 2)
+        (target, source) match {
+          case (Some(t), Some(v)) => Some(ujson.Obj(
+            "target" -> variableName(t),
+            "type" -> v.propertiesMap.getOrDefault("TYPE_FULL_NAME", "").toString,
+            "variable" -> variableName(v),
+          ))
+          case _ => None
+        }
+      }
+      ujson.Obj(
+        "file" -> call.method.filename,
+        "line" -> line(call.lineNumber.map(_.toInt)),
+        "type" -> payload.propertiesMap.getOrDefault("TYPE_FULL_NAME", "").toString,
+        "variable" -> variableName(payload),
+        "declaration" -> declarationCode(payload),
+        "assignments" -> ujson.Arr.from(assignments),
+      )
+    }
+  }
   val document = ujson.Obj(
     "schema" -> "systemlens-joern-v1",
     "methods" -> ujson.Arr.from(methods),
     "calls" -> ujson.Arr.from(calls),
+    "payload_sends" -> ujson.Arr.from(payloadSends),
   )
   os.write.over(os.Path(outFile), ujson.write(document))
 }

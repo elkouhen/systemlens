@@ -6,8 +6,9 @@ external engine), builds a CPG with ``joern-parse --language javasrc`` (Lombok i
 runs ``export.sc`` once, and answers ``calls`` and ``methods`` from the
 exported JSON. The CPG is cached in ``.systemlens/joern/`` with a
 fingerprint of the projection and of the Joern installation, as ADR-84
-does for CodeQL. Joern reports no reachability, no Kafka payload type and
-no module refresh; the shared source passes keep those duties (ADR-85).
+does for CodeQL. Joern reports the payload evidence of Strategy1 Kafka
+sends, but no reachability and no module refresh; the shared source
+passes keep those duties (ADR-85).
 """
 
 import json
@@ -32,7 +33,12 @@ from systemlens.callgraph.model import (
 )
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.engines.joern.declaration import DECLARATION, unavailable_reason
-from systemlens.engines.joern.extraction import JoernError, parse_calls, parse_methods
+from systemlens.engines.joern.extraction import (
+    JoernError,
+    parse_calls,
+    parse_methods,
+    parse_payload_types,
+)
 from systemlens.indexing.source_generation import remaining_timeout, run_with_progress
 from systemlens.indexing.source_projection import (
     executable_identity,
@@ -116,7 +122,8 @@ class _JoernSession:
         return []
 
     def payload_types(self) -> list[PayloadTypeEvidence]:
-        return []
+        """Strategy1 send evidence; decoded only when the stage asks for it."""
+        return parse_payload_types(self._document, self._indexed)
 
 
 class JoernEngine:

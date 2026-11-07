@@ -325,8 +325,9 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   Lombok file keeps its written lines. A call whose argument types Joern
   cannot resolve reaches the owner's one abstract method of that name and
   arity as `possible`. Other calls Joern cannot resolve are
-  dropped. It accepts no database, refreshes no module, reports no Kafka
-  payload type, and caches its graph in `.systemlens/joern/`.
+  dropped. It accepts no database and refreshes no module. Under
+  `--strategy strategy1` it completes a Strategy1 Kafka payload type, as
+  `codeql` does. It caches its graph in `.systemlens/joern/`.
 - `none` builds no interprocedural path: only same-method flows remain.
 
 Every engine makes constructors part of the call graph (ADR-75). A

@@ -2043,7 +2043,9 @@ in the index's progress lines.
 
 ## ADR-85: Let each engine own its options and add Joern
 
-**Status:** Accepted on 2026-11-06. Amends ADR-61 and ADR-66.
+**Status:** Accepted on 2026-11-06. Amends ADR-61 and ADR-66. Amended
+on 2026-11-07: the in-house engine moves to `engines/custom/`, and Joern
+reports Kafka payload evidence for Strategy1.
 
 **Context:** ADR-61 put the engine behind a seam, but the rest of the
 application still speaks CodeQL. The CLI exposes `--codeql-database`,
@@ -2137,3 +2139,30 @@ Joern now reaches the 7 `ContactsService` declarations as `possible`
 (J3), and the join's dispatch reaches their implementation as
 `possible`, inferred, where the other engines are `exact`: the 11
 `ts-contacts-service` flows stay `low`.
+
+Amendment of 2026-11-07 (validated request brief). The in-house engine
+leaves `callgraph/source.py` for `engines/custom/`, beside `codeql/` and
+`joern/`, with a `declaration.py` and an `engine.py`. Its name stays
+`source`: the configuration value, the CLI flags and the SQLite schema
+do not change. `callgraph/` keeps only the engine-neutral seam and the
+registry, and the indexing stage falls back to the default engine through
+the registry, so no core module imports a package under `engines/`.
+
+The shared symbol pass (`indexing/java_symbols.py`) and the join in
+`indexing/code_flows.py` stay in the core. They run for every engine, the
+typed ones included; moving them into `engines/custom/` would make the
+core depend on an engine package.
+
+Each engine provides its share of Strategy1 (ADR-5) through
+`payload_types()`, which the stage reads only under `--strategy
+strategy1`. Joern now reports payload evidence, which replaces "Joern
+reports no Kafka payload type" above. For each `envoyerMessageKafka*`
+call, the export script records the second argument, its declaration as
+written, and the local assignments of the calling method. The adapter
+then follows CodeQL's query: the type argument of a `Message` or
+`GenericMessage` (first) or `ProducerRecord` (second) wrapper; else the
+types of the values assigned to the variable, through other variables;
+else the argument's own type. The `source` engine has no data flow beyond
+the scanner's AST rule (ADR-76) and reports no evidence. The stage applies
+ADR-76 to every engine's evidence: a type that names no DTO stays unknown.
+

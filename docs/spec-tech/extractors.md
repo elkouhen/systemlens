@@ -294,12 +294,15 @@ The Strategy1 extractor scans the repository for Kafka YAML files once at the
 start of one indexing pass. It builds one logical-key mapping and reuses it for
 all Java files in that pass. Conflicting declarations remain unresolved.
 
-When CodeQL is available, it completes a missing Strategy1 producer type from
-the second argument, including local data-flow within the enclosing method.
-`Message<T>`, `GenericMessage<T>` and `ProducerRecord<K,V>` are unwrapped to
-their payload type. An existing AST type is never replaced. A result is
-applied only when CodeQL returns one informative type for the source call;
-ambiguous, uninformative or unresolved results remain unknown.
+With `codeql` or `joern`, the engine completes a missing Strategy1 producer
+type from the second argument, including local data flow within the
+enclosing method (`CallGraphSession.payload_types()`, ADR-85). `Message<T>`,
+`GenericMessage<T>` and `ProducerRecord<K,V>` are unwrapped to their payload
+type. An existing AST type is never replaced. A result is applied only when
+the engine returns one informative type for the source call; ambiguous,
+uninformative or unresolved results remain unknown. The stage asks the
+engine only under `--strategy strategy1`. The `source` engine returns no
+evidence: the AST rule is its whole share.
 
 Strategy1 also enables the `getXxxServiceUrl()` REST target-name convention;
 without it, SystemLens uses only an explicit URL or `lb://` service target.

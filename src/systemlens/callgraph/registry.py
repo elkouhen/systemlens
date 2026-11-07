@@ -18,7 +18,7 @@ NO_ENGINE = "none"
 DEFAULT_ENGINE = "source"
 
 _DECLARATIONS = (
-    "systemlens.callgraph.source",
+    "systemlens.engines.custom.declaration",
     "systemlens.engines.codeql.declaration",
     "systemlens.engines.joern.declaration",
 )

@@ -246,8 +246,11 @@ Every engine publishes an `EngineDeclaration` (ADR-85): `name`, `label`,
 `unavailable_reason()` check, `supports_module_refresh`, `resolves_types`,
 its `EngineOption`s, the option that holds a prebuilt database, an `init`
 profile flag, default exclusions, and an artifact-directory predicate.
-`callgraph/registry.py` lists the declaration modules and is the only core
+`callgraph/registry.py` lists the declaration modules
+(`engines.custom`, `engines.codeql`, `engines.joern`) and is the only core
 module that names them; importing a declaration never imports an adapter.
+When the selected engine is unavailable, the stage loads the default
+engine through the registry.
 
 `Config.engine_settings()` builds the `EngineSettings` a factory receives:
 the generic `engine_threads` and `engine_ram_mb`, and the engine's options.
@@ -314,8 +317,14 @@ symbol pass adds their calls. A local class method, spelled
 `pkg.App.create:void().Local.go:void()` by Joern, is mapped to the index's
 name `pkg.App.Local.go`. A call inside a lambda or an anonymous class keeps an
 `<anonymous>` caller, which the join attributes to the enclosing indexed
-method by call line. Joern returns no reachability and no Kafka payload
-type, and refreshes no module. Both launchers receive `JAVA_OPTS` with
+method by call line. Joern returns no reachability and refreshes no
+module. For Strategy1, the export also lists each `envoyerMessageKafka*`
+call with its second argument's type, its written declaration and the
+local assignments of the calling method; `parse_payload_types` follows the
+CodeQL query's rules on them: a wrapper's written type argument, else the
+types assigned to the variable through other variables, else its own type.
+The evidence is decoded only when the stage asks for it, under
+`--strategy strategy1`. Both launchers receive `JAVA_OPTS` with
 `-Xmx<engine_ram_mb>m` and `-XX:ActiveProcessorCount=<engine_threads>`;
 `engine_timeout_seconds` bounds the two processes together.
 `input_fingerprint()` is `joern-<version>`, read from the installation

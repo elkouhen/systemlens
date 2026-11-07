@@ -32,10 +32,13 @@ domain/ + infrastructure/
 ```
 
 `callgraph/` holds the engine-neutral call types, the `CallGraphEngine`
-protocol, the `EngineDeclaration` an engine publishes, the tree-sitter
-`source` engine, and the registry. Each package under `engines/` (`codeql/`,
-and any later engine) depends on `callgraph/`, never the reverse: no core
-module imports its adapter (ADR-61).
+protocol, the `EngineDeclaration` an engine publishes, and the registry.
+Each package under `engines/` (`custom/`, `codeql/`, `joern/`) depends on
+`callgraph/`, never the reverse: no core module imports an engine package
+(ADR-61, ADR-85). `engines/custom/` is the in-house tree-sitter engine,
+named `source`. The symbol pass (`indexing/java_symbols.py`) and the join
+(`indexing/code_flows.py`) stay in the core because every engine uses
+them.
 
 An engine package has a light `declaration.py` with its name, label,
 capabilities, availability check, options, `init` profile and artifact
@@ -45,7 +48,8 @@ configuration and the indexing stage read declarations, never an engine
 name; `tests/test_architecture_boundaries.py` fails when an engine name
 appears outside `engines/`, `callgraph/registry.py` and
 `storage/persisted_names.py`, which holds the persisted names that predate
-ADR-85.
+ADR-85. The default engine's name, `source`, is also an ordinary word; the
+same test fails when a core module imports a package under `engines/`.
 
 Inside `engines/codeql/`, `queries.py` holds the QL text, `database.py`
 the CLI, database lifecycle and query runner, `extraction.py` the row
@@ -61,8 +65,8 @@ modules must live in the package that owns their responsibility:
 | Package | Responsibility |
 |---|---|
 | `domain/` | Stable facts, graph primitives, module inventory types, runtime facts |
-| `callgraph/` | Engine-neutral call types, engine protocol, source engine, registry |
-| `engines/` | Optional call-graph engines backed by external analyzers, one package each |
+| `callgraph/` | Engine-neutral call types, engine protocol, registry |
+| `engines/` | Call-graph engines, one package each: `custom/` (in-house `source`), `codeql/`, `joern/` |
 | `application/` | Read-only architecture queries, federation, audits and shared projections |
 | `indexing/` | Atomic index orchestration, incremental policy and snapshot materialization |
 | `discovery/` | Maven, Gradle, Java parser, configuration and Kubernetes adapters |
@@ -202,7 +206,8 @@ they are not cross-module entry points.
 | CodeQL CLI, database lifecycle, query runner | `engines/codeql/database.py` |
 | CodeQL row parsing into call types | `engines/codeql/extraction.py` |
 | CodeQL engine adapter | `engines/codeql/engine.py` |
-| Joern export script, row parsing, adapter | `engines/joern/export.sc`, `extraction.py`, `engine.py` |
+| Joern export script, row parsing (calls, methods, Strategy1 payloads), adapter | `engines/joern/export.sc`, `extraction.py`, `engine.py` |
+| In-house `source` engine declaration and adapter | `engines/custom/declaration.py`, `engines/custom/engine.py` |
 | Call-graph stage of an index (session, join, flows) | `indexing/call_graph_stage.py` |
 | Call-graph progress export or direct engine database query | `delivery/call_graph.py` |
 | Maven/Gradle source generation | `indexing/source_generation.py` |

@@ -36,8 +36,7 @@ from systemlens.domain.code_flows import (
     CodeFlow,
 )
 from systemlens.callgraph.engine import CallGraphEngine
-from systemlens.callgraph.registry import load_engine
-from systemlens.callgraph.source import SourceEngine
+from systemlens.callgraph.registry import DEFAULT_ENGINE, load_engine
 from systemlens.indexing.source_generation import generate_sources as _generate_sources
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import (
@@ -287,7 +286,7 @@ def _index_repo(
             progress,
             f"→ Indexation : {engine.label} indisponible ; moteur source (tree-sitter) utilisé.",
         )
-        engine = SourceEngine()
+        engine = load_engine(DEFAULT_ENGINE)
     if refresh_call_graph_view and (engine is None or not engine.supports_module_refresh):
         raise ValueError(
             "Refreshing one module requires an engine that supports module refresh."
