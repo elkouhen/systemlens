@@ -52,8 +52,8 @@ unresolved or `possible`.
 | [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `delivered` |
 | [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `delivered` |
 | [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `delivered` |
-| [BL-30](#bl-30) | Keep a dispatch open when a lambda or an anonymous class implements the type | P3 | `open` |
-| [BL-31](#bl-31) | Dispatch a call on an external class to its source subclasses | P3 | `open` |
+| [BL-30](#bl-30) | Keep a dispatch open when a lambda or an anonymous class implements the type | P3 | `delivered` |
+| [BL-31](#bl-31) | Dispatch a call on an external class to its source subclasses | P3 | `delivered` |
 | [BL-32](#bl-32) | Apply ADR-81 rule 1 in the CodeQL query and the Joern export | P3 | `open` |
 
 Priority reads: P1 adds edges CodeQL finds on everyday modern Java
@@ -397,7 +397,19 @@ dropped on 2026-11-07, and waits for a decision record.
 - **Depends on:** ADR-72, proposed on 2026-11-03 and dropped by the
   product owner on 2026-11-07 (BL-19). Alignment on CodeQL reopens it;
   the product owner decides whether the drop stands.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-72 reopened and accepted under the product owner's
+  mandate, to be confirmed, and amended to the CodeQL output measured
+  after the join (commit `33cab5c`). Two rules: a call stays `possible`
+  when a lambda, a method reference or an anonymous class can implement
+  it; a variable created once with such a value reaches no named body of
+  the method it implements. B2-anonymous passes. B2-lambda passes with a
+  recorded deviation: no declared `Fn.apply` row, since a rebuild would
+  dispatch it to `FnImpl.apply`. Call shapes F2, F2-target, F2-contexts,
+  F2-created, F3 and F3-kept; two `test_code_flows.py` tests check fresh
+  and rebuilt flows. Train-ticket keeps 406 flows and 1712 edges with both
+  engines and zero `compare-engines` differences; the lab keeps 23 flows
+  and 102 edges. Persisted `source` edges are identical. Commit: `8141a30`.
 - **Why P3:** reopens a dropped decision; three to nine candidate sites
   on the reference projects.
 
@@ -418,7 +430,16 @@ dropped on 2026-11-07, and waits for a decision record.
   created-once case may become `exact` under ADR-81.
 - **Depends on:** ADR-74, proposed on 2026-11-03 and dropped on
   2026-11-07 (BL-13). The product owner decides whether the drop stands.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-74 reopened and accepted under the product owner's
+  mandate, to be confirmed (commit `33cab5c`). Parity case B3 passes, in
+  the default suite and in the `slow` CodeQL test: a created-once
+  subclass is `exact` under ADR-81, any other dispatch `possible`. Call
+  shapes H11, H11-created, H11-kept and H11-scope; a `test_code_flows.py`
+  test checks fresh and rebuilt flows. Train-ticket and the lab keep
+  their counts and persisted edges. The `TSOStr.write` flow no longer
+  exists: `TSOStr` methods are not indexed for either engine. Commit:
+  `7853549`.
 - **Why P3:** reopens a dropped decision; 43 external subclasses on
   train-ticket, one known lost flow.
 
