@@ -2861,6 +2861,25 @@ class JavaSymbols:
             return None
         return declaration.method
 
+    def _declared_row_opens_no_route(
+        self, declaration: _Method, targets: list[IntegrationMethod], module: str,
+    ) -> bool:
+        """Whether the abstract declaration a call names can join its
+        possible targets as a declared row (BL-28).
+
+        The row has no body, so it adds no route in a fresh join. A join
+        rebuilt from persisted edges dispatches a declared abstract edge to
+        every implementation, those of the caller's module first; the row
+        is kept only when that dispatch reaches no body beyond ``targets``,
+        so flows stay unchanged.
+        """
+        if declaration.concrete or any(target.id == declaration.method.id for target in targets):
+            return False
+        implementations = [candidate.method for candidate in self.implementations(declaration)]
+        local = [method for method in implementations if method.module == module] or implementations
+        reached = {target.id for target in targets}
+        return all(method.id in reached for method in local)
+
     def _call_sites(self, info: _Method) -> list[tuple[Node, Node]]:
         """The call sites whose caller is ``info``, with their context.
 
@@ -3127,6 +3146,14 @@ class JavaSymbols:
                     )
                     else "possible"
                 )
+                if (
+                    closed_world and virtual and dispatch == "possible" and declaration is not None
+                    and self._declared_row_opens_no_route(declaration, targets, info.module)
+                ):
+                    # BL-28, ADR-70 amendment: without an exact target a
+                    # typed engine also reports the abstract declaration the
+                    # call names, beside its possible implementations.
+                    targets = [declaration.method, *targets]
                 site_calls = [
                     MethodCall(
                         info.method.qualified_method, info.method.path, info.method.start_line,

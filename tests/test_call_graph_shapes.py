@@ -601,7 +601,9 @@ SHAPES: list[Shape] = [
         class SubB extends Base {
           void step() {} //@SubB.step
         }
-        """, "Base.template", {"SubA.step": "possible", "SubB.step": "possible"}),
+        """, "Base.template",
+        {"Base.step": "possible", "SubA.step": "possible", "SubB.step": "possible"},
+        note="BL-28: the abstract declaration is a declared row beside the bodies"),
     Shape("H4", """
         class Base {
           void foo() {} //@Base.foo
@@ -743,6 +745,47 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Abs.go": "possible", "I.go": "possible"},
         note="the default stays a target while one class inherits it"),
+    Shape("H14", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Shape shape;
+          void run() { //@Use.run
+            shape.area();
+          }
+        }
+        """, "Use.run", {"Shape.area": "possible", "Circle.area": "possible", "Square.area": "possible"},
+        note="BL-28: without an exact target, the declaration joins the possible bodies"),
+    Shape("H14-wider-declaration", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        interface Round extends Shape {}
+        class Circle implements Round {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Oval implements Round {
+          public double area() { return 3; } //@Oval.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Round round;
+          void run() { //@Use.run
+            round.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "possible", "Oval.area": "possible"},
+        absent=("Shape.area", "Square.area"),
+        note="BL-28: a declaration whose dispatch reaches a body the call cannot is no row"),
     Shape("H8", """
         interface Named {
           String name(); //@Named.name
@@ -910,8 +953,8 @@ SHAPES: list[Shape] = [
             t.area();
           }
         }
-        """, "Use.run", {"Circle.area": "possible", "Square.area": "possible"},
-        note="BL-26: a receiver typed by a type variable is typed by its bound"),
+        """, "Use.run", {"Shape.area": "possible", "Circle.area": "possible", "Square.area": "possible"},
+        note="BL-26: a receiver typed by a type variable is typed by its bound; BL-28: declared row"),
     Shape("G4-field", """
         class Repo {
           void save() {} //@Repo.save
@@ -1059,7 +1102,10 @@ SHAPES: list[Shape] = [
             raw.get().area();
           }
         }
-        """, "Use.run", {"Box.get": "exact", "Circle.area": "possible", "Square.area": "possible"},
+        """, "Use.run", {
+            "Box.get": "exact", "Shape.area": "possible",
+            "Circle.area": "possible", "Square.area": "possible",
+        },
         note="BL-26: a raw type erases T to its bound"),
     Shape("G6", """
         import java.util.List;
@@ -1107,7 +1153,10 @@ SHAPES: list[Shape] = [
             make().area();
           }
         }
-        """, "Use.run", {"Use.make": "exact", "Circle.area": "possible", "Square.area": "possible"},
+        """, "Use.run", {
+            "Use.make": "exact", "Shape.area": "possible",
+            "Circle.area": "possible", "Square.area": "possible",
+        },
         note="BL-26: a type variable no parameter names takes its bound"),
     Shape("G6-unproven", """
         import java.util.List;
@@ -1551,7 +1600,10 @@ SHAPES: list[Shape] = [
             handler.handle("x");
           }
         }
-        """, "Use.run", {"TextHandler.handle": "possible", "OrderHandler.handle": "possible"},
+        """, "Use.run", {
+            "Handler.handle": "possible",
+            "TextHandler.handle": "possible", "OrderHandler.handle": "possible",
+        },
         note="review S8: the contract's signature is generic, so it does not bind to OrderHandler alone"),
     Shape("T9", """
         import java.util.List;
@@ -1739,7 +1791,7 @@ SHAPES: list[Shape] = [
             ports.forEach(p -> port.send());
           }
         }
-        """, "Use.run", {"A1.send": "possible", "A2.send": "possible"}),
+        """, "Use.run", {"Port.send": "possible", "A1.send": "possible", "A2.send": "possible"}),
     Shape("F2", """
         interface Fn {
           void apply(); //@Fn.apply

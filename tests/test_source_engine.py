@@ -244,7 +244,8 @@ def test_dispatch_left_unique_by_module_preference_stays_possible(tmp_path: Path
              if call.caller.endswith("Caller.go")]
 
     # The caller's module is preferred, but the other implementation exists.
-    assert calls == [("p.CoreAdapter.send", "possible")]
+    # No target is exact, so the declaration is a declared row (BL-28).
+    assert calls == [("p.Port.send", "possible"), ("p.CoreAdapter.send", "possible")]
 
 
 _SCOPED = """package p;

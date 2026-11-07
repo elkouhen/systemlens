@@ -550,11 +550,15 @@ call names joins them, as CodeQL reports it. A subtype body whose
 signature stays unresolved (varargs, an external wildcard import) and
 whose written parameter types match the contract is a `possible` target.
 The check costs one scan of the source types per receiver type, cached.
-Several implementations are always `possible`. A call with no source body
-reaches the one abstract declaration no source type implements, such as a
-Spring Data query method, as a `possible` target. The pass drops ambiguous
-overloads while retaining an ambiguous receiver type long enough to apply
-module-scoped interface dispatch.
+Several implementations are always `possible`. Whenever no target is
+`exact`, the abstract declaration the call names joins the targets as a
+declared row, as CodeQL reports it (ADR-70, BL-28). The row is left out
+when the declaration is concrete, or when its own dispatch reaches a body
+outside the targets, so a rebuild from persisted edges opens no route.
+A call with no source body reaches the one abstract declaration no source
+type implements, such as a Spring Data query method, as a `possible`
+target. The pass drops ambiguous overloads while retaining an ambiguous
+receiver type long enough to apply module-scoped interface dispatch.
 
 The join labels an edge `inferred` only when it is a candidate dispatch to a
 concrete body. A call to a declaration without a body, such as the Spring
@@ -925,6 +929,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | not planned |
 | H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | |
 | H13 | A superclass method wins over an interface `default` | `covered` | |
+| H14 | Abstract declaration as a declared row beside possible implementations; none when its dispatch is wider | `covered` (BL-28) | |
 | G1 | Generic interface implemented with a concrete type | `covered` | |
 | G2 | Generic superclass extended with a concrete type | `covered` | |
 | G3 | Generic implementation `class Generic<T> implements Handler<T>` | `covered` (BL-26) | |
@@ -993,14 +998,14 @@ aligned it.
 | A4 | Ternary receiver whose branches share a type | `covered` | BL-23 |
 | A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `covered` | BL-23 |
 | A6 | `Outer.this.helper()` from an inner class | `covered` | BL-23 |
-| A7 | Receiver typed by a bounded type variable (G4): implementations `covered` by BL-26, declared row `missing` | `missing` | BL-28 |
+| A7 | Receiver typed by a bounded type variable (G4): implementations by BL-26, declared row by BL-28 | `covered` | BL-28 |
 | A8 | Unqualified call inside an anonymous `Thread` | `covered` | BL-25 |
 | A9 | Lambda passed to a source functional interface parameter | `covered` | BL-24 |
 | A10 | Method reference, one arity or an overloaded name | `covered` | BL-24 |
 | B1 | Local or `final` field declared `Shape`, created as `Circle` | `defect` | BL-29 |
 | B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
 | B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
-| B4 | Declared interface row beside two possible implementations | `missing` | BL-28 |
+| B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 
 ## Build layout

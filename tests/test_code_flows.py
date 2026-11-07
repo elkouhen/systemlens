@@ -2815,6 +2815,69 @@ class OrderController {
     ]
 
 
+def _dispatch_flows(tmp_path: Path, receiver: str) -> tuple[list, list, list]:
+    """Flows of a call on ``StockPort`` with two adapters, one publishing,
+    built fresh by the source engine and rebuilt from its persisted edges."""
+    source = "orders/src/main/java/com/example/OrderController.java"
+    text = f"""package com.example;
+interface StockPort {{ void publish(); }}
+class StockAdapter implements StockPort {{ public void publish() {{ kafka.send(); }} }}
+class QuietAdapter implements StockPort {{ public void publish() {{ }} }}
+class OrderController {{
+  {receiver}
+  void receive() {{ port.publish(); }}
+}}
+"""
+    path = tmp_path / source
+    path.parent.mkdir(parents=True)
+    path.write_text(text, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoints = [
+        replace(_endpoint("entry", "serve", "rest", "POST /orders", source, 7),
+                qualified_name="com.example.OrderController"),
+        replace(_endpoint("stock", "produce", "kafka", "orders.stock", source, 3),
+                qualified_name="com.example.StockAdapter"),
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [source], [module])
+    names = {method.id: method.qualified_method for method in methods}
+    graphs = []
+    fresh = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, closed_world=True,
+        call_graph_sink=graphs.append,
+    )
+    rebuilt = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=[source],
+        persisted_edges=graphs[-1].edges(), persisted_methods=graphs[-1].methods,
+    )
+    edges = sorted(
+        (names[edge.callee_id], edge.dispatch_confidence, edge.inferred)
+        for edge in graphs[-1].edges()
+    )
+
+    def shape(flows: list) -> list:
+        return [(flow.confidence, [step.name for step in flow.steps]) for flow in flows]
+
+    return edges, shape(fresh), shape(rebuilt)
+
+
+def test_the_declared_row_beside_possible_implementations_changes_no_flow(tmp_path: Path) -> None:
+    edges, fresh, rebuilt = _dispatch_flows(tmp_path, "StockPort port;")
+
+    # BL-28: the interface method is a declared, non-inferred row beside
+    # the two possible implementations; it has no body, so no new route.
+    assert edges == [
+        ("com.example.QuietAdapter.publish", "possible", True),
+        ("com.example.StockAdapter.publish", "possible", True),
+        ("com.example.StockPort.publish", "possible", False),
+    ]
+    assert fresh == rebuilt == [
+        ("low", ["POST /orders", "com.example.StockAdapter.publish", "orders.stock"]),
+    ]
+
+
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
     source_a = "orders/src/main/java/com/example/Shared.java"
     source_b = "billing/src/main/java/com/example/Shared.java"
