@@ -1754,6 +1754,8 @@ Delivery notes of 2026-11-07, within the decision:
   exported call graph (`codeql_call_graph`), spelled `Owner.<init>` or
   `Owner.<clinit>`, and a step of the flows that pass through it. It owns
   no port, so no service occurrence or flow entry shows it as its method.
+- The product owner confirmed this export rule and the narrower scope
+  of the notes above on 2026-11-07.
 
 Measured on 2026-11-07 on train-ticket, before and after, with
 `analyze compare-engines` on fresh copies (CodeQL 2.27.3, Joern 4.0.674):
