@@ -1503,7 +1503,9 @@ and the layout libraries keep their versions.
 
 **Status:** Accepted on 2026-11-03. Amends ADR-61. Amended on 2026-11-06
 by lot 3 of the review backlog (finding A4): the witness expansion adds no
-edge where a declared edge already reaches the implementation.
+edge where a declared edge already reaches the implementation. Amended on
+2026-11-07 by BL-28: a call without an exact target also reaches the
+abstract declaration it names.
 
 **Context:** On the train-ticket model the `source` engine finds the same
 flows as `codeql` (406 against 408) but persists 2052 call edges against
@@ -1555,6 +1557,35 @@ the flow search explored every method below it twice. The join now drops
 an expanded edge when a declared edge at the same site already reaches
 the same callee. The persisted graph keeps two edges at such a site, the
 exact one and the witness; flows and their confidence are unchanged.
+
+Amendment of 2026-11-07 (BL-28). Status: accepted on 2026-11-07 under the
+product owner's mandate to process the alignment backlog autonomously; to
+be confirmed by the product owner.
+
+When a closed-world call has no `exact` target, the source pass also emits
+the abstract declaration the call names as a `possible` row beside the
+possible implementations. This is the third branch of
+`resolvedSingleOverload` in the CodeQL query. The row applies to an
+interface method and to an abstract class method.
+
+The join stores the row as a declared, non-inferred edge. It has no body,
+so it opens no route: flows and their confidence are unchanged, as with
+the witness. A rebuild from persisted edges dispatches a declared abstract
+edge to every implementation, those of the caller's module first. The row
+is therefore left out when that dispatch would reach a body the call's
+targets do not include.
+
+Two cases keep a difference with CodeQL. A receiver typed by a
+sub-interface whose declaration sits in a wider interface gets no row
+when that interface has other implementations. A concrete declaration
+that is not already a target gets no row: its body would open a route
+that no runtime type takes.
+
+Measured on 2026-11-07, train-ticket keeps 406 flows and 1712 edges
+between indexed methods with both engines. On the observability lab, the
+`source` engine gains the declared row to
+`AbstractKafkaMessageProcessor.processMessage`, one of its two CodeQL-only
+edges, and goes from 101 to 102 edges; its 23 flows are unchanged.
 
 ## ADR-71: Scope external-interface dispatch to the caller's visible modules
 
