@@ -110,6 +110,13 @@ through `_resolve_rest_expression`; a non-dynamic result whose
 `service_hint_from_host` has no dot is the marker. Alias matching against
 `spring.application.name` then happens in `resolve_rest_target_service`.
 
+`_infer_restclient_endpoints` first maps each client name to its bases. A
+`baseUrl(x)` or `RestClient.create(x)` call binds the variable its builder
+chain initializes or assigns, keyed by the enclosing method for a local and
+by `None` for a field. A call reads the inline base of its own chain, else
+the binding of its root receiver; one distinct base is required. A
+`UriBuilder` lambda is relative; a URI with an unresolved leading part is not.
+
 The marker on a RestTemplate, WebClient, RestClient, HTTP-interface or Feign
 call is host evidence only. `_resolved_configured_api_call` projects a dynamic call
 onto the host's routes only for other frameworks, in practice the

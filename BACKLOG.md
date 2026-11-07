@@ -169,7 +169,13 @@ lab.
   its own host and base path.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-review-2026-11-03.md`: H9.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_rest_peer_regressions.py::test_bl08_*` (three
+  tests; the two acceptance fixtures fail at `43c91f4`). Two clients in
+  one file now each get their own host and base path; a client bound to
+  several bases, or a URI with an unresolved leading part, takes no base.
+  Neither the sample nor train-ticket uses RestClient: no measured change.
+  commit: pending.
 - **Why P1:** a false HTTP relation; local fix.
 
 <a id="bl-09"></a>

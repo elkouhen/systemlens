@@ -201,6 +201,13 @@ Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
 active-profile selection.
 
+A RestClient call uses the base URL of its own client only: a `baseUrl` or
+`RestClient.create` in its own call chain, else the one assigned to the
+variable or field the chain starts from. A local variable wins over a field
+of the same name. The base host is target evidence and the base path
+prefixes a relative URI. An absolute URI, or one whose leading part is
+unresolved, ignores the base. A client bound to several bases has none.
+
 A mutable or otherwise unresolved URL remains a dynamic, unresolved port rather
 than a guessed service link. A RestTemplate `exchange` call whose HTTP method
 is computed, and a fluent `method(HttpMethod.X)` call on WebClient or

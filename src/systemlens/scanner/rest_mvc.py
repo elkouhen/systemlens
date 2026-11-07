@@ -1660,27 +1660,140 @@ def _infer_strategy1_openapi_operation_endpoints(
     return endpoints
 
 
+def _restclient_base_argument(invocation, source: bytes):
+    """Base URL argument of ``baseUrl(x)`` or ``RestClient.create(x)``."""
+    receiver, name, args = java_parser.invocation_parts(invocation, source)
+    if len(args) != 1:
+        return None
+    if name == "baseUrl":
+        return args[0]
+    if (
+        name == "create" and receiver is not None
+        and java_parser.node_text(source, receiver).rsplit(".", 1)[-1] == "RestClient"
+    ):
+        return args[0]
+    return None
+
+
+def _restclient_bound_name(invocation, source: bytes) -> tuple[object | None, str] | None:
+    """Variable a client builder chain is assigned to, with its scope.
+
+    The scope is the enclosing method or constructor for a local, ``None``
+    for a field. A chain that is returned or passed on binds no name.
+    """
+    top = invocation
+    while (
+        top.parent is not None and top.parent.type == "method_invocation"
+        and top.parent.child_by_field_name("object") == top
+    ):
+        top = top.parent
+    parent = top.parent
+    if parent is None:
+        return None
+    if parent.type == "variable_declarator":
+        name_node = parent.child_by_field_name("name")
+        if name_node is None:
+            return None
+        declaration = parent.parent
+        scope = (
+            java_parser.enclosing(parent, "method_declaration", "constructor_declaration")
+            if declaration is not None and declaration.type == "local_variable_declaration"
+            else None
+        )
+        return scope, java_parser.node_text(source, name_node)
+    if parent.type == "assignment_expression":
+        left = parent.child_by_field_name("left")
+        if left is None:
+            return None
+        if left.type == "field_access":
+            target = left.child_by_field_name("object")
+            field = left.child_by_field_name("field")
+            if target is None or target.type != "this" or field is None:
+                return None
+            return None, java_parser.node_text(source, field)
+        if left.type == "identifier":
+            name = java_parser.node_text(source, left)
+            if name in locally_declared_names(parent, source):
+                return (
+                    java_parser.enclosing(parent, "method_declaration", "constructor_declaration"),
+                    name,
+                )
+            return None, name
+    return None
+
+
+def _restclient_chain_root(receiver, source: bytes) -> tuple[object | None, str | None]:
+    """Inline base argument of a call chain, or the client name it starts from."""
+    node = receiver
+    while node is not None and node.type == "method_invocation":
+        base = _restclient_base_argument(node, source)
+        if base is not None:
+            return base, None
+        node = node.child_by_field_name("object")
+    if node is None:
+        return None, None
+    if node.type == "identifier":
+        return None, java_parser.node_text(source, node)
+    if node.type == "field_access":
+        target = node.child_by_field_name("object")
+        field = node.child_by_field_name("field")
+        if target is not None and target.type == "this" and field is not None:
+            return None, "this." + java_parser.node_text(source, field)
+    return None, None
+
+
+def _restclient_base(argument, source: bytes, repo_root: Path, rel_path: str) -> tuple[str | None, str] | None:
+    """``(host, base path)`` of a resolved base URL, or ``None``."""
+    raw = local_string(source, argument)
+    if raw is None:
+        raw, dynamic = _resolve_rest_expression(
+            java_parser.node_text(source, argument), repo_root, rel_path,
+            shadowed=locally_declared_names(argument, source),
+        )
+        if dynamic:
+            return None
+    return url_service_hint(raw), normalize_path(raw)
+
+
 def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
-    """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations."""
+    """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations.
+
+    BL-08: a call takes the base URL of its own client only: a ``baseUrl``
+    or ``RestClient.create`` in its own chain, else the one bound to the
+    variable the chain starts from. A local binding of the enclosing method
+    wins over a field. A name bound to several bases, declared without a
+    resolvable base, or not found has no base. The base host is target
+    evidence and its path prefixes a relative route; an absolute ``uri``
+    ignores the base.
+    """
     if not _file_uses_restclient(str(repo_root), rel_path):
         return []
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:
         return []
     source, root = parsed
-    base_hosts = {
-        host
-        for candidate in java_parser.walk(root)
-        if candidate.type == "method_invocation"
-        for _receiver, candidate_name, candidate_args in [
-            java_parser.invocation_parts(candidate, source)
-        ]
-        if candidate_name == "baseUrl" and candidate_args
-        and (host := _resolved_http_host_ast(
-            candidate_args[0], source, repo_root, rel_path
-        )) is not None
-    }
-    base_host = next(iter(base_hosts)) if len(base_hosts) == 1 else None
+    bindings: dict[tuple[object | None, str], set[tuple[str | None, str] | None]] = {}
+    for candidate in java_parser.walk(root):
+        if candidate.type != "method_invocation":
+            continue
+        argument = _restclient_base_argument(candidate, source)
+        if argument is None:
+            continue
+        bound = _restclient_bound_name(candidate, source)
+        if bound is None:
+            continue
+        bindings.setdefault(bound, set()).add(
+            _restclient_base(argument, source, repo_root, rel_path)
+        )
+
+    def base_of(name: str, at) -> tuple[str | None, str] | None:
+        explicit_field = name.startswith("this.")
+        name = name.removeprefix("this.")
+        scope = java_parser.enclosing(at, "method_declaration", "constructor_declaration")
+        local = not explicit_field and name in locally_declared_names(at, source)
+        found = bindings.get((scope if local else None, name), set())
+        return next(iter(found)) if len(found) == 1 else None
+
     endpoints: list[MessageEndpoint] = []
     for invocation in java_parser.walk(root):
         if invocation.type != "method_invocation":
@@ -1694,7 +1807,34 @@ def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageE
         http_method, anchor = verb_call
         route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
         snippet = java_parser.node_text(source, invocation)
-        host = _resolved_http_host_ast(args[0], source, repo_root, rel_path) or base_host
+        host = _resolved_http_host_ast(args[0], source, repo_root, rel_path)
+        # The base applies to a relative URI only: one whose leading part
+        # is known and is not a URL, or a ``UriBuilder`` lambda.
+        written = local_string(source, args[0])
+        if written is None and args[0].type != "lambda_expression":
+            leading = _split_java_concat(java_parser.node_text(source, args[0]).strip())[:1]
+            leading_raw, leading_dynamic = (
+                _resolve_rest_expression(
+                    leading[0], repo_root, rel_path,
+                    shadowed=locally_declared_names(args[0], source),
+                ) if leading else ("", True)
+            )
+            written = None if leading_dynamic else leading_raw
+        relative = host is None and (
+            args[0].type == "lambda_expression"
+            or (written is not None and "://" not in written)
+        )
+        if relative:
+            inline, client = _restclient_chain_root(receiver, source)
+            base = (
+                _restclient_base(inline, source, repo_root, rel_path) if inline is not None
+                else base_of(client, invocation) if client is not None
+                else None
+            )
+            if base is not None:
+                host, base_path = base
+                if route != "<dynamic>":
+                    route = join_paths(base_path, route)
         if host is not None:
             snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         endpoints.append(

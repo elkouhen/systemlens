@@ -540,3 +540,76 @@ public class C {
 
     assert _rest_edges(tmp_path) == []
 
+
+# ----------------------------------------- BL-08: RestClient baseUrl scope
+def _restclient_calls(tmp_path, body: str):
+    rel = _write(tmp_path, "src/main/java/c/Clients.java", f"""
+package c;
+import org.springframework.web.client.RestClient;
+class Clients {{
+{body}
+}}
+""")
+    return sorted(
+        (e.topic, e.topic_dynamic, next(
+            (line.split(":", 1)[1] for line in e.snippet.splitlines()
+             if "systemlens-api-domain:" in line), None))
+        for e in _endpoints(tmp_path, [rel]) if e.role == "call"
+    )
+
+
+def test_bl08_each_restclient_keeps_its_own_base_url(tmp_path):
+    """BL-08: a file-wide unique base host was applied to every client."""
+    calls = _restclient_calls(tmp_path, """
+  private final RestClient inventory = RestClient.builder()
+      .baseUrl("http://inventory-service/api").build();
+  private final RestClient other;
+  Clients(RestClient.Builder builder) { this.other = builder.build(); }
+  void load() {
+    inventory.get().uri("/items").retrieve();
+    other.get().uri("/orders").retrieve();
+  }
+""")
+
+    assert calls == [
+        ("GET /api/items", False, "inventory-service"),
+        ("GET /orders", False, None),
+    ]
+
+
+def test_bl08_two_clients_in_one_file_get_their_own_host_and_path(tmp_path):
+    calls = _restclient_calls(tmp_path, """
+  private final RestClient orders;
+  private final RestClient billing = RestClient.create("http://billing-service/v2");
+  Clients() {
+    this.orders = RestClient.builder().baseUrl("http://order-service/api").build();
+  }
+  void load(String id) {
+    orders.post().uri("/orders").retrieve();
+    billing.get().uri("/invoices/{id}", id).retrieve();
+    RestClient local = RestClient.builder().baseUrl("http://audit-service").build();
+    local.get().uri("/events").retrieve();
+    RestClient.builder().baseUrl("http://inline-service/x").build().get().uri("/y").retrieve();
+    orders.get().uri("http://other-service/abs").retrieve();
+  }
+""")
+
+    assert calls == [
+        ("GET /abs", False, "other-service"),
+        ("GET /events", False, "audit-service"),
+        ("GET /v2/invoices/{id}", False, "billing-service"),
+        ("GET /x/y", False, "inline-service"),
+        ("POST /api/orders", False, "order-service"),
+    ]
+
+
+def test_bl08_client_name_with_several_bases_has_none(tmp_path):
+    calls = _restclient_calls(tmp_path, """
+  private RestClient client;
+  void a() { client = RestClient.create("http://a-service"); }
+  void b() { client = RestClient.create("http://b-service"); }
+  void load() { client.get().uri("/x").retrieve(); }
+""")
+
+    assert calls == [("GET /x", False, None)]
+
