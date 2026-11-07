@@ -48,7 +48,7 @@ unresolved or `possible`.
 | [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `delivered` |
 | [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `open` |
 | [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `open` |
-| [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `open` |
+| [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `blocked: A7 needs BL-28` |
 | [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `delivered` |
 | [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `open` |
 | [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `open` |
@@ -231,7 +231,22 @@ dropped on 2026-11-07, and waits for a decision record.
   parameter is a type variable is indexed for dispatch by erasure and is
   `exact` under the ADR-81 rules when it is the one body.
 - **Depends on:** BL-21.
-- **Status:** `open`.
+- **Status:** `blocked: A7's declared Shape.area row is BL-28's rule,
+  which waits for the ADR-70 amendment`.
+- **Delivery:** parity cases A1-box, A1-repo, A1-field,
+  A1-generic-method and B5 pass, in the default suite and in the `slow`
+  CodeQL test. A7 now gives `Circle.area` and `Square.area` `possible`,
+  as CodeQL does; CodeQL's third row, `Shape.area` `possible`, is the
+  declared row beside several possible implementations, the B4 gap. Its
+  strict expected failure now names BL-28. `test_call_graph_shapes.py`
+  covers G3 and G4 and adds G5 and G6, with negative cases: raw unbounded,
+  wildcard, `? super` and nested arguments (G5-unwritten), an unbounded
+  variable (G4-unbounded), an `Object` method (G4-object), two argument
+  types, a raw argument and varargs (G6-unproven). Train-ticket stays at
+  406 flows and 1712 edges, the lab at 23 flows, `compare-engines` at
+  zero differences; the lab's two CodeQL-only edges are a BL-28 shape
+  (`processMessage`) and the external `JpaRepository.save`
+  (`toDomain`). Commit: `7cba323`.
 - **Why P1:** generic repositories, handlers and mappers are the backbone
   of service code; every call through them is lost today.
 
