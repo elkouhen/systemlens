@@ -1299,9 +1299,7 @@ def test_graph_viewport_pan_and_zoom_follow_the_pointer() -> None:
 
         def wheel(point: tuple[float, float], delta_y: int = -100) -> float:
             before = _card_centers(page)
-            page.mouse.move(*point)
-            page.mouse.wheel(0, delta_y)
-            page.wait_for_timeout(150)
+            _wheel_notch(page, point, delta_y)
             scale, fixed, residual = _fit_uniform_zoom(before, _card_centers(page))
             assert residual < 1 and fixed is not None
             assert fixed[0] == pytest.approx(point[0], abs=1)
@@ -1374,11 +1372,29 @@ def _tree_centers(page) -> dict:
     )
 
 
-def _wheel_notch(page, point: tuple[float, float], delta_y: int = -100) -> None:
-    """Send one mouse wheel notch at a point."""
+def _dispatch_wheel(page, point: tuple[float, float], **init: float | int | bool) -> None:
+    """Dispatch one synthetic wheel event on the element under a point.
+
+    Chrome's input pipeline only sends pixel deltas, so a line-mode notch
+    of a classic mouse wheel is synthesized.
+    """
     page.mouse.move(*point)
-    page.mouse.wheel(0, delta_y)
+    page.evaluate(
+        """({ x, y, init }) => {
+            const target = document.elementFromPoint(x, y) || document.body;
+            target.dispatchEvent(new WheelEvent('wheel', {
+                bubbles: true, cancelable: true, composed: true,
+                clientX: x, clientY: y, ...init,
+            }));
+        }""",
+        {"x": point[0], "y": point[1], "init": init},
+    )
     page.wait_for_timeout(150)
+
+
+def _wheel_notch(page, point: tuple[float, float], delta_y: int = -100) -> None:
+    """Send one classic mouse wheel notch, three lines, at a point (PDR-14)."""
+    _dispatch_wheel(page, point, deltaY=3 if delta_y > 0 else -3, deltaMode=1)
 
 
 def _measure_wheel_zoom(page, centers, point: tuple[float, float], delta_y: int = -100) -> float:
@@ -1433,6 +1449,78 @@ def test_one_wheel_notch_zooms_both_graph_surfaces_by_the_same_step() -> None:
         assert tree_in == pytest.approx(graph_in, rel=0.002)
         assert tree_out == pytest.approx(graph_out, rel=0.002)
         assert tree_out == pytest.approx(1 / tree_in, rel=0.002)
+        browser.close()
+
+
+def _assert_wheel_gestures_pan_and_zoom(page, centers, point: tuple[float, float]) -> list[float]:
+    """Pixel wheels pan by their delta; line and pinch wheels zoom (PDR-14)."""
+    def pixel_wheel(delta_x: int, delta_y: int, pinch: bool = False) -> None:
+        page.mouse.move(*point)
+        if pinch:
+            page.keyboard.down("Control")
+        page.mouse.wheel(delta_x, delta_y)
+        if pinch:
+            page.keyboard.up("Control")
+        page.wait_for_timeout(150)
+
+    for delta in ((60, 0), (0, 40)):
+        before = centers(page)
+        pixel_wheel(*delta)
+        after = centers(page)
+        for key, center in before.items():
+            assert after[key][0] - center[0] == pytest.approx(-delta[0], abs=0.6)
+            assert after[key][1] - center[1] == pytest.approx(-delta[1], abs=0.6)
+
+    scales = []
+    for send in (lambda: _wheel_notch(page, point), lambda: pixel_wheel(0, -100, pinch=True)):
+        before = centers(page)
+        send()
+        scale, fixed, residual = _fit_uniform_zoom(before, centers(page))
+        assert residual < 1 and fixed is not None
+        assert fixed[0] == pytest.approx(point[0], abs=1)
+        assert fixed[1] == pytest.approx(point[1], abs=1)
+        scales.append(scale)
+    return scales
+
+
+@pytest.mark.slow
+def test_trackpad_scroll_pans_and_pinch_or_line_wheel_zooms() -> None:
+    """BL-18 (PDR-14): a pixel wheel pans; a line wheel or a pinch zooms.
+
+    Regression: a horizontal wheel did nothing and a vertical two-finger
+    scroll zoomed, on both graph surfaces.
+    """
+    document = _large_call_tree_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 1"
+        )
+        _wait_for_settled_layout(page)
+        stage = _graph_background_point(page, end_dx=-60, end_dy=-40)
+        graph_scales = _assert_wheel_gestures_pan_and_zoom(page, _card_centers, (stage["x"], stage["y"]))
+
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator("#flow-mode-expand-all").click()
+        page.wait_for_function(
+            "() => document.querySelectorAll('#graph-call-tree .graph-call-tree-node').length === 9"
+        )
+        page.wait_for_timeout(200)
+        tree = page.locator("#graph-call-tree").bounding_box()
+        assert tree
+        point = (tree["x"] + tree["width"] * .4, tree["y"] + tree["height"] * .55)
+        tree_scales = _assert_wheel_gestures_pan_and_zoom(page, _tree_centers, point)
+
+        for scale in [*graph_scales, *tree_scales]:
+            assert scale == pytest.approx(graph_scales[0], rel=0.002)
+        assert 1.1 < graph_scales[0] < 1.3
         browser.close()
 
 
@@ -3438,7 +3526,10 @@ def _assert_zoom_is_monotonic_and_settles_without_a_release_jump(page) -> None:
     before_distance = ((before[1][0] - before[0][0]) ** 2 + (before[1][1] - before[0][1]) ** 2) ** .5 if len(before) > 1 else 0
     zoom_point = _graph_background_point(page)
     page.mouse.move(zoom_point["x"], zoom_point["y"])
+    # A pinch: a pixel wheel with ctrlKey zooms (PDR-14).
+    page.keyboard.down("Control")
     page.mouse.wheel(0, -450)
+    page.keyboard.up("Control")
     # Wait until the zoom has visibly changed the scale rather than a fixed
     # 80 ms, which a loaded machine can exceed; the release-jump checks below
     # still compare the in-gesture frame with the settled frames.

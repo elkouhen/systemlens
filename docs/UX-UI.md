@@ -484,6 +484,13 @@ relation edge, or a reserved band. The zoom keeps the graph point under the
 pointer fixed. Controls, the legend, and the minimap keep their own wheel
 behavior.
 
+A wheel event zooms or pans by its kind (PDR-14). A pinch (`ctrlKey`) or a
+whole-line or page delta, as a classic mouse wheel sends, zooms around the
+pointer. Any other pixel delta, such as a two-finger trackpad scroll,
+horizontal or vertical, pans the graph by that delta. A fine-grained pixel
+mouse wheel therefore pans; `Ctrl` + wheel zooms. The call tree follows the
+same rule.
+
 For graphs of at most 12 nodes, readable fitting MUST retain a complete
 overview rather than making the graph appear empty.
 
@@ -582,7 +589,8 @@ the band above the docked key, so a fit never places a card under them.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
 One wheel notch zooms the tree by the same step as the Architecture graph,
-about 1.2 times, and keeps the tree point under the pointer fixed.
+about 1.2 times, and keeps the tree point under the pointer fixed. A
+two-finger scroll pans the tree and a pinch zooms it (PDR-14).
 The initial fit keeps a minimum canvas scale of 0.66 so deep trees do not shrink
 cards without bound. At a total scale below 0.82, method parameters and operation
 badges become visually quiet while service names and diagnostic borders remain

@@ -1966,13 +1966,21 @@
         event.stopPropagation();
         const camera = renderer.getCamera();
         const state = camera.getState();
+        const gesture = graphWheelGesture(event);
+        graphState.cameraMovedByUser = true;
+        if (gesture.pan) {
+          // A two-finger scroll moves the content against its delta, like a
+          // scrolled page.
+          camera.setState(pannedCameraState(renderer, state, { x: 0, y: 0 }, { x: -gesture.pan.x, y: -gesture.pan.y }));
+          return;
+        }
         const viewport = graphCanvas.getBoundingClientRect();
         const cursor = {
           x: event.clientX - viewport.left,
           y: event.clientY - viewport.top,
         };
-        // About 1.2 times per mouse notch (deltaY 100), whatever the target.
-        const scale = graphWheelZoomScale(event);
+        // About 1.2 times per mouse notch, whatever the target.
+        const scale = gesture.zoom;
         const maximumRatio = 100;
         // A larger Sigma ratio is a zoom-out. Bound manual wheel changes so
         // one trackpad burst cannot jump across the safe camera state.
@@ -1981,11 +1989,10 @@
         // the current camera state. Re-projecting a graph point after
         // setState read a matrix Sigma only refreshes on render, so the
         // correction was zero and the zoom pivoted on the graph centre.
-        graphState.cameraMovedByUser = true;
         camera.setState(renderer.getViewportZoomedState(cursor, ratio));
       };
       // Relation arcs live in their own SVG layer above the canvas: a wheel
-      // over an arc must zoom like a wheel over the empty stage.
+      // over an arc must zoom or pan like a wheel over the empty stage.
       const wheelSurfaces = [graphCanvas, nodeLabelOverlay, portPathOverlay].filter(Boolean);
       wheelSurfaces.forEach(surface => surface.addEventListener("wheel", handleGraphWheel, { passive: false, capture: true }));
       graphState.graphWheelCleanup = () => {

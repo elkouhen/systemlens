@@ -365,9 +365,19 @@
         graphCallTreeOverlay.addEventListener("wheel", event => {
           if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return;
           event.preventDefault();
+          const gesture = graphWheelGesture(event);
+          if (gesture.pan) {
+            const canvas = graphCallTreeOverlay.querySelector(".graph-call-tree-canvas");
+            if (!canvas) return;
+            graphState.callTreeMovedByUser = true;
+            canvas.style.left = `${(Number.parseFloat(canvas.style.left) || 0) - gesture.pan.x}px`;
+            canvas.style.top = `${(Number.parseFloat(canvas.style.top) || 0) - gesture.pan.y}px`;
+            scheduleGraphMinimapRender();
+            return;
+          }
           const bounds = graphCallTreeOverlay.getBoundingClientRect();
           // The same step as the Architecture graph (UX-UI "Selected call tree").
-          zoomCallTree(graphWheelZoomScale(event), event.clientX - bounds.left, event.clientY - bounds.top);
+          zoomCallTree(gesture.zoom, event.clientX - bounds.left, event.clientY - bounds.top);
         }, { passive: false });
       }
       const active = Boolean(codeFlowSelection.flowId)

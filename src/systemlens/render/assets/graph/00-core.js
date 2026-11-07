@@ -239,13 +239,22 @@
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
     };
-    // One wheel notch (deltaY 100 pixels, or a few lines) scales both graph
-    // surfaces, the Architecture graph and the selected call tree, by the
-    // same step of about 1.2 around the pointer.
+    // One wheel notch (100 pixels, three lines, or one page) scales both
+    // graph surfaces, the Architecture graph and the selected call tree, by
+    // the same step of about 1.2 around the pointer.
     const GRAPH_WHEEL_ZOOM_RATE = .0018;
     function graphWheelZoomScale(event) {
-      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+      const unit = event.deltaMode === 1 ? 100 / 3 : event.deltaMode === 2 ? 100 : 1;
+      const delta = event.deltaY * unit;
       return Math.exp(-Math.max(-120, Math.min(120, delta)) * GRAPH_WHEEL_ZOOM_RATE);
+    }
+    // PDR-14: a pinch (a wheel event with ctrlKey) or a whole-line or page
+    // delta (a classic mouse wheel) zooms; any other pixel delta, such as a
+    // two-finger trackpad scroll, pans by its deltaX and deltaY. A pixel
+    // mouse wheel cannot be told apart from a trackpad, so it pans too.
+    function graphWheelGesture(event) {
+      if (event.ctrlKey || event.deltaMode !== 0) return { zoom: graphWheelZoomScale(event) };
+      return { pan: { x: event.deltaX, y: event.deltaY } };
     }
     function updateGraphState(patch) {
       Object.assign(graphState, patch);

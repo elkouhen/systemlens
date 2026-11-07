@@ -23,6 +23,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-11](#pdr-11-spring-conventions-add-possible-call-edges) | Proposed: Spring conventions add possible call edges | Yes, product owner; not validated |
 | [PDR-12](#pdr-12-a-spring-data-rest-default-path-is-an-unverified-route) | A Spring Data REST default path is an unverified route | Yes, product owner |
 | [PDR-13](#pdr-13-init-chooses-the-engine-and-the-strategy-separately) | `init` chooses the engine and the strategy separately | Yes, product owner |
+| [PDR-14](#pdr-14-a-two-finger-scroll-pans-and-a-pinch-zooms) | A two-finger scroll pans and a pinch zooms | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -370,3 +371,27 @@ product has a single user, so no compatibility path is kept.
 **Consequences:** the defaults keep ADR-5/5a (Strategy1 is opt-in) and
 ADR-66 (`source` needs no external tool). Engine declarations lose their
 `init` profile flag: every declared engine can be chosen (ADR-85).
+
+## PDR-14: A two-finger scroll pans and a pinch zooms
+
+**Status:** Accepted on 2026-11-07 by the product owner (BL-18).
+
+**Problem:** on both graph surfaces every vertical wheel delta zoomed and
+a horizontal delta did nothing. On a Mac trackpad the graph could not be
+panned without a click and drag.
+
+**Decision:** on the Architecture graph and on the selected call tree:
+
+1. A pinch, a wheel event with `ctrlKey`, zooms around the pointer.
+2. A whole-line or page delta (`deltaMode` line or page, a classic mouse
+   wheel) zooms around the pointer.
+3. Any other pixel delta, such as a two-finger trackpad scroll,
+   horizontal or vertical, pans the graph by that delta.
+
+Both zooms use the one step of BL-16: about 1.2 times per notch.
+
+**Known limit:** a browser cannot tell a fine-grained pixel mouse wheel
+from a trackpad, so that wheel pans. `Ctrl` + wheel zooms with any mouse.
+
+**Consequences:** the zoom controls and the minimap are unchanged. A
+pinch zooms at the same rate per wheel delta as a notch.

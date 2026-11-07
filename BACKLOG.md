@@ -340,7 +340,12 @@ lab.
   pinch or a whole-line delta zooms, any other pixel delta pans. It must
   name the fallback when mouse and trackpad cannot be told apart.
 - **Origin:** `docs/plans/graph-viewport-navigation.md`: V3.
-- **Status:** `open`.
+- **Status:** `blocked: no trackpad check`.
+- **Delivery:** PDR-14 and `docs/UX-UI.md` record the rule; both graph
+  surfaces apply it. `test_trackpad_scroll_pans_and_pinch_or_line_wheel_zooms`
+  in `tests/test_browser_export.py` asserts pan, pan, zoom, zoom for a
+  horizontal pixel wheel, a vertical pixel wheel, a line wheel and a pinch;
+  the manual Mac trackpad check is pending; commit: pending.
 - **Why P1:** the product owner reported that viewport navigation does
   not work; last of P1 because it needs a decision and hardware.
 
