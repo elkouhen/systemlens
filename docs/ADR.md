@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class); proposed: [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1654,10 +1654,13 @@ task C6 of the dispatch-scope plan.
 
 ## ADR-72: Keep dispatch possible when an implicit implementation exists
 
-**Status:** Proposed on 2026-11-03 for task K3 of the call-graph
-coverage plan (backlog item BL-19). Not validated; the product owner
-dropped the item from the backlog on 2026-11-07.
-Amends ADR-70.
+**Status:** Reopened and accepted on 2026-11-07 under the product owner's
+mandate to process the alignment backlog autonomously; to be confirmed by
+the product owner. Backlog item BL-30. Amends ADR-70 and ADR-86.
+
+History: proposed on 2026-11-03 for task K3 of the call-graph coverage
+plan (backlog item BL-19); not validated, and dropped by the product
+owner on 2026-11-07. Reopened the same day for the alignment on CodeQL.
 
 **Context:** ADR-70 keeps a call on an external interface `possible` when
 an anonymous class or a lambda can implement it. A call on a source type
@@ -1669,17 +1672,39 @@ edges claim a proof the sources do not give: ADR-62 attributes anonymous
 and lambda bodies to the creating method, so no indexed method stands for
 the runtime body.
 
-**Decision:** A call whose receiver type is a source type stays
-`possible` when the sources contain an anonymous class extending or
-implementing that type, or its ancestors, or a lambda or method reference
-whose target type is that type. The lambda's target type is known only
-when it is assigned, returned or passed to a declared source type;
-otherwise it does not count. The named implementations stay the targets:
-no edge is added to the creating method.
+CodeQL, measured after the ADR-62 join, resolves both calls to the
+anonymous or lambda body, which the join drops. It keeps the declared
+interface row `Fn.apply` beside the lambda, and nothing for `Base.hook`.
+
+**Decision:** Two rules, in the closed world of the `source` engine.
+
+1. Whole-project rule. A call stays `possible` when the sources hold an
+   implicit implementation of its runtime type or of a subtype: an
+   anonymous class whose body declares the called name and arity, or a
+   lambda or method reference when the call names an abstract method.
+   The lambda's target type counts only when the code writes it: the
+   variable it initializes or is assigned to, a cast, its method's return
+   type, or a source parameter type of the name and arity it is passed
+   to. The named implementations stay the targets: no edge is added to
+   the creating method.
+2. Created-once rule. A receiver that the ADR-86 conditions prove to hold
+   one value, when that value is a lambda, a method reference or an
+   anonymous class, reaches no named body of a method the value
+   implements. It reaches the declared row of ADR-70, as amended for
+   BL-28, only when that row's dispatch reaches no named body. A method
+   the value inherits, such as a `default` body, is its supertype's body,
+   `exact` unless an external supertype may declare the name.
 
 **Consequences:** Some exact edges become `possible`, and some flows lose
-their exact confidence. No edge disappears. The measured change on
-train-ticket would be recorded before delivery.
+their exact confidence. A variable holding a lambda or an anonymous class
+loses the named targets of the method it implements.
+
+One difference with CodeQL remains, parity case B2-lambda. With a named
+`FnImpl` in the sources, `Fn fn = () -> {}; fn.apply()` gives no row, where
+CodeQL gives `Fn.apply` `possible`. A rebuild from persisted edges would
+dispatch that row to `FnImpl.apply`, a route the variable never takes;
+the row is left out for the reason ADR-70 leaves out a declared row that
+opens a route. Without a named implementation, the row is emitted.
 
 ## ADR-73: Scope every dispatch to the caller's visible modules
 
@@ -1716,10 +1741,13 @@ application loaded the library.
 
 ## ADR-74: Dispatch calls on external classes to source overrides
 
-**Status:** Proposed on 2026-11-03 for task K6 of the call-graph
-coverage plan (backlog item BL-13). Not validated; the product owner
-dropped the item from the backlog on 2026-11-07.
-Extends ADR-70 and ADR-71.
+**Status:** Reopened and accepted on 2026-11-07 under the product owner's
+mandate to process the alignment backlog autonomously; to be confirmed by
+the product owner. Backlog item BL-31. Extends ADR-70, ADR-71 and ADR-86.
+
+History: proposed on 2026-11-03 for task K6 of the call-graph coverage
+plan (backlog item BL-13); not validated, and dropped by the product
+owner on 2026-11-07. Reopened the same day for the alignment on CodeQL.
 
 **Context:** ADR-70 dispatches a call on an external interface to its
 source implementations. A call on an external class does not dispatch:
@@ -1733,9 +1761,18 @@ subtype, in the caller's visible modules. The edge is always `possible`,
 because the external class has its own body and other library
 subclasses. Overloads the arguments cannot separate stay unresolved.
 
+A variable created once as a source subclass, under the ADR-86
+conditions, dispatches on that subclass, and the call is `exact` only
+under the ADR-81 rules. This narrowing applies to any external declared
+type, class or interface, the external type being named directly by the
+subclass or one of its source ancestors.
+
 **Consequences:** Framework subclasses, such as threads, filters or
 output streams, become reachable through their library supertype.
-Edges are added, never made exact.
+Edges are added; only a created-once variable makes one exact.
+A subclass of a library subclass, such as `TSOStr` under
+`ServletOutputStream` for a call on `OutputStream`, stays unreachable:
+the sources do not contain the library hierarchy.
 
 ## ADR-75: Make constructors and initializers part of the call graph
 
@@ -2247,7 +2284,7 @@ without `final`, a blank `final` field, an inherited field, and any
 other assignment keep the declared type. Other assignments include `=`, a
 compound assignment, `++` and `--`, in the variable's block, an inner
 class or a lambda. An anonymous class body and a lambda are not a named
-`T`: BL-30 owns them.
+`T`: ADR-72 owns them.
 
 The call is then `exact` only under the ADR-81 rules, checked on `T`:
 every concrete source subtype of `T` has a known body and one body
