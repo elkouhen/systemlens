@@ -245,8 +245,9 @@ method. The rules below that name CodeQL describe that engine's rows.
 
 When no external engine runs or it is unavailable, a local Java symbol pass may also
 connect an entry to an output through a uniquely resolved receiver type and
-method signature. These source-declared calls remain `potential` with low
-confidence. Ambiguous receivers and overloads remain unresolved.
+method signature. A flow through such calls is `potential`: its confidence
+is medium when every call is `exact`, and low when one is `possible`
+(ADR-61). Ambiguous receivers and overloads remain unresolved.
 An inherited `final` method can be a possible target when its source body is
 unique, even if a generic parameter type cannot be resolved. This covers a
 Kafka handler delegating through a final generic method on its base class.

@@ -355,7 +355,8 @@ without starting a JVM.
 
 On train-ticket, Joern builds its graph in 42 s and answers in 3.7 s from
 the cache (CodeQL: 207 s, then 6.6 s; `source`: 0.6 s). The three engines
-find the same 406 flows and the same 1524 edges between indexed methods.
+find the same 406 flows and, since ADR-75, the same 1712 edges between
+indexed methods.
 Seven `ContactsService` calls keep an unresolved signature: Joern reaches
 the interface declaration as `possible` and the join's dispatch reaches
 the implementation as `possible`, so 11 flows stay `low` (ADR-85). Joern
@@ -836,7 +837,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H13 | A superclass method wins over an interface `default` | `covered` | |
 | G1 | Generic interface implemented with a concrete type | `covered` | |
 | G2 | Generic superclass extended with a concrete type | `covered` | |
-| G3 | Generic implementation `class Generic<T> implements Handler<T>` | `missing` | not planned |
+| G3 | Generic implementation `class Generic<T> implements Handler<T>` | `defect`: reached `possible`, not `exact` | BL-26 |
 | G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `missing` | not planned |
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
 | T2 | Pattern variable of `instanceof Circle c` | `missing` | not planned |

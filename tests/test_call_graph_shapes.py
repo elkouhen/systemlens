@@ -766,7 +766,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Generic.handle": "exact", "Handler.handle": "possible"},
-        pending="not planned: a body whose parameter is a type variable is not indexed for dispatch"),
+        pending="BL-26: a body whose parameter is a type variable is reached possible, not exact"),
     Shape("G4", """
         abstract class Shape {
           abstract double area(); //@Shape.area
