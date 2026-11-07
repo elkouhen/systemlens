@@ -22,6 +22,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-10](#pdr-10-inspecter-opens-one-surface-per-kind-of-fact) | `Inspecter` opens one surface per kind of fact | Yes, product owner; refines ADR-68 and PDR-9 |
 | [PDR-11](#pdr-11-spring-conventions-add-possible-call-edges) | Proposed: Spring conventions add possible call edges | Yes, product owner; not validated |
 | [PDR-12](#pdr-12-a-spring-data-rest-default-path-is-an-unverified-route) | A Spring Data REST default path is an unverified route | Yes, product owner |
+| [PDR-13](#pdr-13-init-chooses-the-engine-and-the-strategy-separately) | `init` chooses the engine and the strategy separately | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -339,3 +340,32 @@ SystemLens adds no irregular-plural table.
 **Why:** a table would always miss a word, and the route would look
 certain again. A dynamic route still links to its callers, so the common
 regular case keeps its edges, with a visible warning.
+
+## PDR-13: `init` chooses the engine and the strategy separately
+
+**Status:** Accepted on 2026-11-07 by the product owner.
+
+**Problem:** `systemlens init --profile NAME` chose only the call-graph
+engine, under a name that suggested more. A project that wanted Strategy1
+had to edit `config.yml` by hand after `init`.
+
+**Decision:** `systemlens init` takes two independent options:
+
+1. `--engine source|codeql|joern`, default `source`. The values are the
+   engines of the registry, without `none`. `codeql` or `joern` writes
+   that engine's `analysis.engines.NAME` defaults and warns when its
+   prerequisite is missing.
+2. `--strategy default|strategy1`, default `default`. It writes
+   `analysis.strategy`.
+
+`--profile` is removed, with no alias and no deprecation path. An unknown
+value exits with code 2 and writes nothing; `init` never overwrites an
+existing configuration. The `config.yml` format is unchanged.
+
+**Why:** the six combinations of three engines and two strategies each
+deserve a ready configuration, and two options name what they set. The
+product has a single user, so no compatibility path is kept.
+
+**Consequences:** the defaults keep ADR-5/5a (Strategy1 is opt-in) and
+ADR-66 (`source` needs no external tool). Engine declarations lose their
+`init` profile flag: every declared engine can be chosen (ADR-85).
