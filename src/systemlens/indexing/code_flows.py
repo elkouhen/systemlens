@@ -41,7 +41,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v49-one-flow-set"
+CODE_FLOW_SIGNATURE = "code-flow-v50-sibling-effect-edges"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -2023,6 +2023,10 @@ def reconcile_code_flows(
                         next_id = endpoint_steps[index + 1].endpoint_id
                         if next_id is not None:
                             next_endpoint = endpoint_by_id[next_id]
+                    if next_endpoint is not None and next_endpoint.role not in {"serve", "consume"}:
+                        # A following effect is a sibling, not this effect's
+                        # target: the effect needs its own edge (review F2).
+                        next_endpoint = None
                     if next_endpoint is not None and next_endpoint.module == flow.module:
                         # The effect continues in the same service: no
                         # inter-service edge is expected for it.

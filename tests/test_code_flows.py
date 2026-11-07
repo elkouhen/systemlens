@@ -915,6 +915,45 @@ def test_reconcile_code_flows_accepts_a_same_service_continuation() -> None:
     assert reconcile_code_flows([flow], [entry, output, local], [])[0].reconciliation == "complete"
 
 
+def test_reconcile_code_flows_checks_an_effect_followed_by_another_effect() -> None:
+    """Review F2 (BL-12): an OUT followed by an OUT of the same module.
+
+    Only an input of the same service continues an effect locally; the next
+    OUT does not, so the first OUT still needs its own topology edge.
+    """
+    entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
+    first = _endpoint("first", "produce", "kafka", "orders.created", "orders/Orders.java", 2)
+    second = _endpoint("second", "produce", "kafka", "orders.audit", "orders/Orders.java", 3)
+    consumer = replace(
+        _endpoint("consumer", "consume", "kafka", "orders.audit", "audit/In.java", 1),
+        module="audit",
+    )
+    first_consumer = replace(
+        _endpoint("first-consumer", "consume", "kafka", "orders.created", "billing/In.java", 1),
+        module="billing",
+    )
+    flow = CodeFlow(
+        id="flow", module="orders", method="Orders.place", path="orders/Orders.java",
+        start_line=1, end_line=3, status="potential", confidence="medium", reason="test",
+        steps=(
+            CodeFlowStep(1, "http_entry", entry.topic, entry.path, 1, 1, entry.id),
+            CodeFlowStep(2, "message_publish", first.topic, first.path, 2, 2, first.id),
+            CodeFlowStep(3, "message_publish", second.topic, second.path, 3, 3, second.id),
+        ),
+    )
+    endpoints = [entry, first, second, consumer, first_consumer]
+    second_edge = GraphEdge("kafka", "orders", "audit", second, consumer)
+    first_edge = GraphEdge("kafka", "orders", "billing", first, first_consumer)
+
+    # OUT1 has no consumer: the flow is partial, as for any unmatched effect.
+    assert reconcile_code_flows(
+        [flow], endpoints, [second_edge]
+    )[0].reconciliation == "partial"
+    assert reconcile_code_flows(
+        [flow], endpoints, [first_edge, second_edge]
+    )[0].reconciliation == "complete"
+
+
 def test_reconcile_code_flows_requires_the_matching_topology_endpoints() -> None:
     entry = _endpoint("entry", "serve", "rest", "POST /orders", "orders/Orders.java", 1)
     output = replace(

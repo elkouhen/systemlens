@@ -243,7 +243,14 @@ lab.
   defines for an unmatched OUT.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-review-2026-11-03.md`: F2.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `test_reconcile_code_flows_checks_an_effect_followed_by_another_effect`
+  in `tests/test_code_flows.py`: the flow is `partial`, the status
+  `data-model.md` gives an effect without a matching edge, and `complete`
+  once OUT1 has its edge. Only a following input of the same service
+  continues an effect locally. `CODE_FLOW_SIGNATURE` moves to v50, so old
+  indexes reconcile again. Train-ticket (319 complete, 87 partial) and the
+  lab (23 complete), source engine: no status changes. Commit: pending.
 - **Why P1:** a false `complete` status.
 
 <a id="bl-14"></a>

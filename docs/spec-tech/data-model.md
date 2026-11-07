@@ -729,7 +729,8 @@ the code evidence remains valid but at least one endpoint or topology edge is
 missing, unresolved, dynamic, or ambiguous. An effect whose next flow step is
 an input of the same service is a same-service continuation and is complete
 without an inter-service edge. Every other effect requires an edge, including
-an effect located in the flow's own module. The status is derived during
+an effect located in the flow's own module and an effect followed by another
+effect of that module (BL-12). The status is derived during
 indexing from endpoint identifiers and never from route-label matching.
 
 An HTTP call matched by several distinct topology edges, or any effect matched
