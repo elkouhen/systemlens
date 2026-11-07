@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -2222,3 +2222,46 @@ else the argument's own type. The `source` engine has no data flow beyond
 the scanner's AST rule (ADR-76) and reports no evidence. The stage applies
 ADR-76 to every engine's evidence: a type that names no DTO stays unknown.
 
+## ADR-86: Dispatch a variable created once on its created class
+
+**Status:** Accepted on 2026-11-07 under the product owner's mandate to
+process the alignment backlog autonomously; to be confirmed by the product
+owner. Amends ADR-70 and ADR-81. Backlog item BL-29.
+
+**Context:** The source pass types a receiver by the written type of its
+variable. CodeQL narrows that type by the value that flows into it. With
+`Shape s = new Circle(); s.area()` and two implementations of `Shape`,
+the source engine reaches `Circle.area` and `Square.area` as `possible`.
+CodeQL reaches `Circle.area` `exact`, with `Shape.area` as a witness. The
+`Square` candidate opens a route the code cannot take.
+
+**Decision:** A variable that always holds an instance of one named source
+class dispatches on that class:
+
+1. A local assigned exactly once, at its declaration, with `new T(...)`.
+2. A `final` field that the enclosing class declares with the initializer
+   `new T(...)`, static or not.
+
+`T` must be a source subtype of the declared type. A parameter, a field
+without `final`, a blank `final` field, an inherited field, and any
+other assignment keep the declared type. Other assignments include `=`, a
+compound assignment, `++` and `--`, in the variable's block, an inner
+class or a lambda. An anonymous class body and a lambda are not a named
+`T`: BL-30 owns them.
+
+The call is then `exact` only under the ADR-81 rules, checked on `T`:
+every concrete source subtype of `T` has a known body and one body
+applies. A subclass of `T` that overrides the method keeps the call
+`possible`. The declaration the call names stays the declared type's, so
+an interface receiver keeps its ADR-70 witness. When `T` has no indexed
+body for the call, such as a record accessor, the declared type's
+dispatch stands. The rule applies in the closed world of the `source`
+engine; a typed engine narrows on its own.
+
+**Consequences:** The narrowed call drops candidates no runtime type can
+reach, and a flow through it may gain confidence. The witness of such a
+call targets an interface with other implementations. A rebuild from
+persisted edges therefore dispatches a witness only to the exact target
+of its site, as the fresh join does, so it opens no route there either.
+Measured on 2026-11-07, train-ticket has no such variable and keeps 406
+flows and 1712 edges between indexed methods.
