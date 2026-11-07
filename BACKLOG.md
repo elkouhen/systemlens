@@ -5,7 +5,7 @@ against CodeQL, and validated the same day by the product owner, who
 asked for every item to be processed autonomously, with the decisions
 taken on their behalf listed at the end of the run. The lot order
 stands. Owner: SystemLens implementer. Reviewer: product owner.
-Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22.
+Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22, BL-23, BL-27.
 Each delivered item's Delivery line names its commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
@@ -45,11 +45,11 @@ unresolved or `possible`.
 |---|---|---|---|
 | [BL-21](#bl-21) | Make every alignment gap a visible engine-parity test | P1 | `delivered` |
 | [BL-22](#bl-22) | Fix three documentation drifts on engine confidence and counts | P2 | `delivered` |
-| [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `open` |
+| [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `delivered` |
 | [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `open` |
 | [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `open` |
 | [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `open` |
-| [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `open` |
+| [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `delivered` |
 | [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `open` |
 | [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `open` |
 | [BL-30](#bl-30) | Keep a dispatch open when a lambda or an anonymous class implements the type | P3 | `open` |
@@ -141,7 +141,16 @@ dropped on 2026-11-07, and waits for a decision record.
   iterable's written type argument gives, through the BL-14 container
   view, and nothing otherwise.
 - **Depends on:** BL-21.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** parity cases A3, A4, A5-instanceof, A5-switch and A6
+  pass in `tests/test_engine_parity.py`, and in its `slow` CodeQL test.
+  `tests/test_call_graph_shapes.py` covers T2 and T3 and adds T9 to T11,
+  with negative cases: a raw, wildcard or `map`-changed iterable
+  (T9-unwritten), branches of different types (T10-mixed), and a pattern
+  variable out of scope (T2-scope). The JLS 6.3.1 scope rules of the
+  Kafka payload pass moved to `discovery/java/patterns.py`, shared by
+  both passes. Train-ticket stays at 406 flows and 1712 edges, the lab
+  at 23 flows, `compare-engines` at zero differences. Commit: `f9625dd`.
 - **Why P1:** patterns and `var` are the everyday shapes of Java 17 code;
   pure typing, no confidence rule changes.
 
@@ -247,7 +256,15 @@ dropped on 2026-11-07, and waits for a decision record.
   type-changing call such as `map`, gives nothing. The table in
   `indexing.md` lists the accessors.
 - **Depends on:** BL-21.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the four A2 cases pass in `tests/test_engine_parity.py`,
+  and in its `slow` CodeQL test. Call shape T12 covers every listed
+  accessor, also through `iterator()`, a written `Iterator` and a written
+  `Map.Entry`; T12-unwritten checks that a raw or wildcard container and
+  a chain through `map` give nothing. Train-ticket stays at 406 flows and
+  1712 edges: its 88 chains end on Lombok accessors, which are no nodes.
+  The lab stays at 23 flows, `compare-engines` at zero differences.
+  Commit: `b020545`.
 - **Why P1:** the most frequent lost shape on train-ticket and the idiom
   of every `Optional`-based service method.
 
