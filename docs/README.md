@@ -29,9 +29,7 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 |---|---|
 | [README.md](../README.md) | Installing SystemLens or finding the first CLI workflow. |
 | [AGENTS.md](../AGENTS.md) | Applying repository rules, documentation ownership, or validation gates. |
-| [BACKLOG.md](../BACKLOG.md) | Fixing a defect of the 2026-11-06 indexing and Joern review, picking up a carried-over runtime or review-aid item, or finding archived plans. |
-| [BACKLOG.consistency-diagnostics.md](../BACKLOG.consistency-diagnostics.md) | Consulting the archived diagnostic rendering tasks and their linked plans. |
-| [BACKLOG.previous.md](../BACKLOG.previous.md) | Consulting the historical root backlog preserved from Git; use its linked plans for current status. |
+| [BACKLOG.md](../BACKLOG.md) | Picking up an open item by priority, or tracing a former plan, now in Git at `4a12ad5`. |
 
 ### Documentation owners and guides
 
@@ -79,20 +77,10 @@ Grok, and Kiro harnesses live under `.claude/skills/`, `.grok/skills/`, and
 | [docs/spec-tech/runtime-observations.md](spec-tech/runtime-observations.md) | Changing a runtime source (Elastic APM, Prometheus), percentiles, hotspots, or reconciliation. |
 | [docs/spec-tech/verification.md](spec-tech/verification.md) | Selecting tests, quality checks, or external test prerequisites. |
 
-### Plans, procedures, examples, and fixtures
+### Procedures, examples, and fixtures
 
 | File | Read when |
 |---|---|
-| [docs/plans/data-operations-in-internal-flows.md](plans/data-operations-in-internal-flows.md) | Working on the scoped data-operation plan and its acceptance criteria. |
-| [docs/plans/async-write-read-consistency.md](plans/async-write-read-consistency.md) | Working on stale-read detection, visibility ordering, or key matching. |
-| [docs/plans/runtime-observations-in-export.md](plans/runtime-observations-in-export.md) | Elastic APM overlay in the HTML export: decisions, scope, and validation. |
-| [docs/plans/call-graph-review-2026-11-04.md](plans/call-graph-review-2026-11-04.md) | Proposed findings of the 2026-11-04 call-graph review, by root cause and lot. |
-| [docs/plans/indexing-review-2026-11-03.md](plans/indexing-review-2026-11-03.md) | Proposed findings of the 2026-11-03 indexing review, by root cause and lot. |
-| [docs/plans/indexing-case-analysis.md](plans/indexing-case-analysis.md) | Proposed list of indexing cases by fact and axis, with their measured status. |
-| [docs/plans/call-graph-coverage.md](plans/call-graph-coverage.md) | Proposed list of call-graph dependency shapes, their status, and the plan to cover them. |
-| [docs/plans/call-graph-external-dispatch-scope.md](plans/call-graph-external-dispatch-scope.md) | Proposed plan to scope external-interface dispatch in the source engine by module dependencies. |
-| [docs/plans/graph-viewport-navigation.md](plans/graph-viewport-navigation.md) | Proposed viewport navigation fixes V1 to V6; V7 and V8 delivered. |
-| [docs/plans/resource-inspector-uniformisation.md](plans/resource-inspector-uniformisation.md) | Delivered plan (PDR-10) for one `Inspecter` behaviour across catalogue resource kinds. |
 | [docs/prompts/full-index-codeql-flow-descriptions.md](prompts/full-index-codeql-flow-descriptions.md) | Asking an agent to index with CodeQL and describe every flow. |
 | [docs/archive/layered-view.md](archive/layered-view.md) | Investigating historical layer and module rendering rules. |
 | [examples/README.md](../examples/README.md) | Importing or regenerating synthetic diagnostic examples. |

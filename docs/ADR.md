@@ -1599,8 +1599,8 @@ CodeQL parity: the `codeql` engine on train-ticket reports 408 flows and
 8264 edges, 16 of them outside the caller's dependencies. Both engines
 report the same 406 `potential` flows; CodeQL adds two `cycle` flows,
 `queryInfoInparallel` and `imageCode`, which C6 of the plan addresses. The
-[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md) records
-the measurement.
+dispatch-scope plan (`docs/plans/call-graph-external-dispatch-scope.md`,
+in Git at `4a12ad5`) records the measurement.
 
 Amendment of 2026-11-06 (J2, C6): a typed engine (`codeql`, `joern`)
 resolves dispatch over every projected type, without the module
@@ -1623,8 +1623,9 @@ task C6 of the dispatch-scope plan.
 
 ## ADR-72: Keep dispatch possible when an implicit implementation exists
 
-**Status:** Proposed on 2026-11-03 for task K3 of the
-[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+**Status:** Proposed on 2026-11-03 for task K3 of the call-graph
+coverage plan (backlog item BL-19). Not validated; the product owner
+dropped the item from the backlog on 2026-11-07.
 Amends ADR-70.
 
 **Context:** ADR-70 keeps a call on an external interface `possible` when
@@ -1647,14 +1648,16 @@ no edge is added to the creating method.
 
 **Consequences:** Some exact edges become `possible`, and some flows lose
 their exact confidence. No edge disappears. The measured change on
-train-ticket is recorded in the plan before delivery.
+train-ticket would be recorded before delivery.
 
 ## ADR-73: Scope every dispatch to the caller's visible modules
 
-**Status:** Proposed on 2026-11-03 for task K4 of the
-[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
-Amends ADR-71; would also deliver task C6 of the
-[dispatch-scope plan](plans/call-graph-external-dispatch-scope.md).
+**Status:** Proposed on 2026-11-03 for task K4 of the call-graph
+coverage plan (backlog item BL-20). Not validated; the product owner
+dropped the item from the backlog on 2026-11-07.
+Amends ADR-71. Its typed-engine part (task C6 of the dispatch-scope plan)
+was delivered by the 2026-11-06 amendment of ADR-71, which keeps the
+modules that depend on the caller's; the two would need reconciling.
 
 **Context:** ADR-71 limits dispatch on external interfaces to the
 caller's module and its transitive dependencies. Dispatch on a source
@@ -1682,8 +1685,9 @@ application loaded the library.
 
 ## ADR-74: Dispatch calls on external classes to source overrides
 
-**Status:** Proposed on 2026-11-03 for task K6 of the
-[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+**Status:** Proposed on 2026-11-03 for task K6 of the call-graph
+coverage plan (backlog item BL-13). Not validated; the product owner
+dropped the item from the backlog on 2026-11-07.
 Extends ADR-70 and ADR-71.
 
 **Context:** ADR-70 dispatches a call on an external interface to its
@@ -1705,8 +1709,8 @@ Edges are added, never made exact.
 ## ADR-75: Make constructors and initializers part of the call graph
 
 **Status:** Accepted on 2026-11-07 by the product owner. Proposed on
-2026-11-03 for task K7 of the
-[call-graph coverage plan](plans/call-graph-coverage.md); delivered with
+2026-11-03 for task K7 of the call-graph coverage plan
+(`docs/plans/call-graph-coverage.md`, in Git at `4a12ad5`); delivered with
 lot 6 of the review backlog (finding J5) for the `source`, `codeql` and
 `joern` engines.
 
@@ -1847,7 +1851,8 @@ value might hit.
 ## ADR-78: Hold a CodeQL reachability flow to the join's rules
 
 **Status:** Accepted on 2026-11-03 with lot 2 of the
-[indexing review](plans/indexing-review-2026-11-03.md) (finding F1).
+indexing review (`docs/plans/indexing-review-2026-11-03.md`,
+in Git at `4a12ad5`, finding F1).
 Amends ADR-29 and ADR-30.
 
 **Context:** ADR-29 turns each CodeQL reachability row into a flow, with a
@@ -1910,8 +1915,8 @@ mismatch.
 ## ADR-80: Follow the build tool's project model for module ownership
 
 **Status:** Accepted on 2026-11-04 at the product owner's request (lot 3)
-of the [indexing review](plans/indexing-review-2026-11-03.md) (findings I2,
-I3, I4, I6, I7, I9). Applies ADR-11's `racine` segment to Gradle too.
+of the indexing review (`docs/plans/indexing-review-2026-11-03.md`,
+in Git at `4a12ad5`; findings I2, I3, I4, I6, I7, I9). Applies ADR-11's `racine` segment to Gradle too.
 
 **Context:** Module inventory, file ownership and module dependencies each
 had their own rules. Gradle files belonged to the enclosing Spring Boot
@@ -1958,7 +1963,8 @@ test is replaced by a regression test for deep modules.
 ## ADR-81: Keep a dispatch exact only when its implementor set is complete
 
 **Status:** Proposed on 2026-11-04 for lot 3 of the
-[call-graph review](plans/call-graph-review-2026-11-04.md). Not validated.
+call-graph review, now backlog item [BL-01](../BACKLOG.md#bl-01).
+Not validated.
 Amends ADR-66 and ADR-70.
 
 **Context:** In a closed world, the `source` engine marks a call `exact`
@@ -1993,8 +1999,8 @@ change is recorded before delivery; a flow lost entirely must be explained.
 ## ADR-83: Check a supplied CodeQL database against the indexed sources
 
 **Status:** Accepted on 2026-11-04 with lot 1 of the
-[call-graph review](plans/call-graph-review-2026-11-04.md) (findings Q1
-and Q5), whose fixes the product owner validated.
+call-graph review (`docs/plans/call-graph-review-2026-11-04.md`,
+in Git at `4a12ad5`; findings Q1 and Q5), whose fixes the product owner validated.
 
 **Context:** `--codeql-database` trusted its database. One built from an
 older revision placed old call lines in other methods as `exact` edges,
@@ -2020,7 +2026,8 @@ Java files.
 ## ADR-84: Reuse the automatic CodeQL database and drop reachability from the index
 
 **Status:** Accepted on 2026-11-04 with lot 6 of the
-[call-graph review](plans/call-graph-review-2026-11-04.md) (finding Q12),
+call-graph review (`docs/plans/call-graph-review-2026-11-04.md`,
+in Git at `4a12ad5`; finding Q12),
 whose fix the product owner validated. Amends ADR-29.
 
 **Context:** The automatic database lived in a temporary directory and

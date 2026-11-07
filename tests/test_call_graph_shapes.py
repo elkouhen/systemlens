@@ -1,14 +1,14 @@
 """Call shapes of the ``source`` engine: one fixture per row of the shape list.
 
-Each case is a row of section 2 of ``docs/plans/call-graph-coverage.md``. A
+Each case is a row of the call-shape table of ``docs/spec-tech/indexing.md``. A
 fixture tags the lines it refers to with a trailing ``//@Tag`` comment: the
 caller's declaration line and the declaration line of every target. The
 symbol pass runs in a closed world, as the ``source`` engine does, and the
 case compares the targets reached from the caller with their confidence.
 
 A row whose shape is not delivered is a strict expected failure that names
-the task owning it. When a decision record has yet to fix a confidence or a
-name, the case states only what any delivery must show: ``expected`` with a
+the backlog item owning it. When a decision record has yet to fix a
+confidence or a name, the case states only what any delivery must show: ``expected`` with a
 ``None`` confidence, and ``absent`` targets.
 """
 
@@ -706,7 +706,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.go", {"MyRunner.run": "possible"},
-        pending="K6: no dispatch from an external class to a source override"),
+        pending="not planned: no dispatch from an external class to a source override"),
     # 2.3 Generics
     Shape("G1", """
         class Order {}
@@ -766,7 +766,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Generic.handle": "exact", "Handler.handle": "possible"},
-        pending="K5: a body whose parameter is a type variable is not indexed for dispatch"),
+        pending="not planned: a body whose parameter is a type variable is not indexed for dispatch"),
     Shape("G4", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -783,7 +783,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Circle.area": "possible", "Square.area": "possible"},
-        pending="K5: a receiver typed by a type variable is not typed by its bound"),
+        pending="not planned: a receiver typed by a type variable is not typed by its bound"),
     Shape("G4-field", """
         class Repo {
           void save() {} //@Repo.save
@@ -795,7 +795,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Svc.run", {"Repo.save": "exact"},
-        pending="K5: a field typed by a type variable is not typed by its bound"),
+        pending="not planned: a field typed by a type variable is not typed by its bound"),
     # 2.4 Receiver typing
     Shape("T1", """
         abstract class Shape {
@@ -832,7 +832,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Circle.area": "exact"},
-        pending="K5: the variable of an instanceof pattern has no type"),
+        pending="not planned: the variable of an instanceof pattern has no type"),
     Shape("T3", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -852,7 +852,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Circle.area": "exact"},
-        pending="K5: the variable of a switch pattern has no type"),
+        pending="not planned: the variable of a switch pattern has no type"),
     Shape("T4", """
         class Service {
           void go() {} //@Service.go
@@ -1157,7 +1157,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"FnImpl.apply": "possible"}, partial=True,
-        pending="K3: a lambda implementation keeps the named body exact"),
+        pending="not planned: a lambda implementation keeps the named body exact"),
     Shape("F3", """
         class Base {
           void hook() {} //@Base.hook
@@ -1169,7 +1169,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Base.hook": "possible"}, partial=True,
-        pending="K3: an anonymous subclass keeps the base body exact"),
+        pending="not planned: an anonymous subclass keeps the base body exact"),
     Shape("F4", """
         class Task implements Runnable {
           public void run() {} //@Task.run
@@ -1233,7 +1233,7 @@ SHAPES: list[Shape] = [
             """,
     }, "Use.run", {"Base.foo": None}, partial=True, absent=("Sub.foo",),
         deps=(("app", "lib"),),
-        pending="K4: source-type dispatch leaves the caller's visible modules"),
+        pending="not planned: source-type dispatch leaves the caller's visible modules"),
     Shape("M3", {
         "lib1/src/main/java/l/Base.java": """
             package l;
@@ -1259,7 +1259,7 @@ SHAPES: list[Shape] = [
             }
             """,
     }, "Use.run", {"lib1.Base.go": "exact"}, deps=(("app", "lib1"),),
-        pending="K4: dependencies do not choose between two declarations of one type"),
+        pending="not planned: dependencies do not choose between two declarations of one type"),
     Shape("M4", {
         "app/src/main/java/p/Use.java": """
             package p;
@@ -1326,7 +1326,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"First.send": None}, partial=True, absent=("Second.send",),
-        pending="K8: @Qualifier does not narrow the candidates"),
+        pending="not planned: @Qualifier does not narrow the candidates"),
     Shape("W3", """
         import org.springframework.context.ApplicationEventPublisher;
         import org.springframework.context.event.EventListener;
@@ -1341,7 +1341,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Listener.on": None}, partial=True,
-        pending="K8: publishEvent reaches no @EventListener"),
+        pending="not planned: publishEvent reaches no @EventListener"),
     Shape("W4", """
         import org.springframework.scheduling.annotation.Async;
         class Mailer {
@@ -1385,7 +1385,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Boot.run", {"Service.warm": "exact"},
-        note="the calls are edges; making these methods flow roots is K8"),
+        note="the calls are edges; making these methods flow roots is not planned"),
     Shape("W7", """
         import org.springframework.data.jpa.repository.JpaRepository;
         class Order {}
@@ -1443,7 +1443,9 @@ def test_call_shape(tmp_path: Path, shape: Shape) -> None:
 
 
 def test_every_shape_row_has_a_case() -> None:
-    plan = Path(__file__).resolve().parents[1] / "docs/plans/call-graph-coverage.md"
-    rows = set(re.findall(r"^\| ([SHGTFMW]\d+) \|", plan.read_text(encoding="utf-8"), re.MULTILINE))
+    spec = Path(__file__).resolve().parents[1] / "docs/spec-tech/indexing.md"
+    text = spec.read_text(encoding="utf-8")
+    section = text[text.index("## Call shapes"):text.index("## Build layout")]
+    rows = set(re.findall(r"^\| ([SHGTFMW]\d+) \|", section, re.MULTILINE))
     cases = {shape.row.split("-", 1)[0] for shape in SHAPES}
     assert rows == cases, f"rows without a case: {sorted(rows - cases)}; cases without a row: {sorted(cases - rows)}"

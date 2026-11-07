@@ -1,7 +1,7 @@
 """The CLI side of the engine seam (ADR-85).
 
 Regressions of findings C2 to C5 and J6 of the 2026-11-06 review
-(``BACKLOG.md``, section 3.4).
+(``BACKLOG.md`` in Git at ``4a12ad5``, section 3.4).
 """
 
 import shutil

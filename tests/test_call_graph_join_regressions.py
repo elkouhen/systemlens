@@ -1,7 +1,7 @@
 """Regressions of the call-graph join and the flow materialisation.
 
-Each test reproduces a finding of the 2026-11-06 review (``BACKLOG.md``,
-section 3.3) through ``index_repo`` with a recorded engine.
+Each test reproduces a finding of the 2026-11-06 review (``BACKLOG.md`` in Git at
+``4a12ad5``, section 3.3) through ``index_repo`` with a recorded engine.
 """
 
 from collections.abc import Iterator, Sequence

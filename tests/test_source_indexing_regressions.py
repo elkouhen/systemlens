@@ -1,7 +1,7 @@
 """Regressions of the source extraction and the inventory.
 
-Each test reproduces a finding of the 2026-11-06 review (``BACKLOG.md``,
-section 3.2) on a minimal fixture and names the rule it protects.
+Each test reproduces a finding of the 2026-11-06 review (``BACKLOG.md`` in Git at
+``4a12ad5``, section 3.2) on a minimal fixture and names the rule it protects.
 """
 
 from pathlib import Path

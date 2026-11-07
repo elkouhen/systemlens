@@ -758,17 +758,73 @@ leave the previous successful snapshot intact.
 
 `tests/test_call_graph_shapes.py` runs one Java fixture per dependency
 shape through the symbol pass in a closed world, as the `source` engine
-does, and checks each target and its confidence. The
-[call-graph coverage plan](../plans/call-graph-coverage.md#2-dependency-shapes)
-defines the rows, their frequency on the reference projects, and the task
-that owns each gap. A shape not delivered is a strict expected failure.
+does, and checks each target and its confidence. The table below lists
+the shapes; the test fails when a row has no case or a case has no row.
+A shape not delivered is a strict expected failure naming the
+[backlog](../../BACKLOG.md) item that owns it.
 
-| Status | Shapes |
-|---|---|
-| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol table; CodeQL join), S7 constructors, S8 constructor and initializer bodies, S9 varargs of any arity, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, H13 class wins over a `default`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, M4 one type in `src/main` and `src/test`, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
-| `defect` | F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
-| `missing` | H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
-| out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |
+Status values: `covered`, `defect` (wrong edge or wrong confidence),
+`missing` (no edge), `out of scope` (kept unresolved on purpose).
+`scripts/count_call_shapes.py` counts each shape in a Java tree.
+
+| # | Shape | Status | Backlog |
+|---|---|---|---|
+| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | |
+| S2 | Static call and static import | `covered` | |
+| S3 | Unqualified call to an outer type, from an inner or anonymous class | `covered` | |
+| S4 | Private method | `covered` | |
+| S5 | Overload by argument type: subtype, widening before boxing, literal suffixes | `covered` | |
+| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
+| S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
+| S8 | Calls inside a constructor, an initializer or a field initializer | `covered` (ADR-75) | |
+| S9 | Varargs call with any arity from the fixed parameter count up | `covered` | |
+| H1 | Inherited method called on a subclass receiver | `covered` | |
+| H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | |
+| H3 | Template method: `step()` or `this.step()` from the base class | `covered` | |
+| H4 | `super.m()` declared by the direct parent | `covered` | |
+| H5 | `super.m()` declared by a grandparent | `covered` | |
+| H6 | `super.m()` with same-arity overloads | `covered` | |
+| H7 | Interfaces: chains, abstract intermediate class, inherited body, `default` and `static` methods | `covered` | |
+| H8 | Records implementing an interface | `covered` | |
+| H9 | Enum constant bodies | `covered` | |
+| H10 | External interface implemented in the sources | `covered` (ADR-71) | |
+| H11 | External class extended in the sources (`Thread`, servlet filters) | `missing` | not planned |
+| H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | |
+| H13 | A superclass method wins over an interface `default` | `covered` | |
+| G1 | Generic interface implemented with a concrete type | `covered` | |
+| G2 | Generic superclass extended with a concrete type | `covered` | |
+| G3 | Generic implementation `class Generic<T> implements Handler<T>` | `missing` | not planned |
+| G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `missing` | not planned |
+| T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
+| T2 | Pattern variable of `instanceof Circle c` | `missing` | not planned |
+| T3 | Pattern variable of a `switch` pattern | `missing` | not planned |
+| T4 | `var` initializer typed where it is written | `covered` | |
+| T5 | Names in anonymous, local and inner classes, innermost scope first | `covered` | |
+| T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
+| T7 | A local class is visible only to the end of its block | `covered` | |
+| T8 | A type parameter hides a source type of the same simple name | `covered` | |
+| F1 | Lambda and method reference as call sites | `covered` | |
+| F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
+| F3 | Anonymous subclass overriding a source method | `defect` | not planned |
+| F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
+| M1 | External-interface dispatch limited to visible modules | `covered` (ADR-71) | |
+| M2 | Source-type dispatch from a library into a module that depends on it | `defect` | not planned |
+| M3 | Same qualified type in two modules, one visible | `defect` | not planned |
+| M4 | Same qualified type in `src/main` and `src/test` of one module | `covered` | |
+| W1 | Injected field typed by an interface | `covered` | |
+| W2 | `@Qualifier`, `@Primary`, `@Profile`, `@ConditionalOn*` narrowing | `missing` | not planned |
+| W3 | `ApplicationEventPublisher.publishEvent` to `@EventListener` | `missing` | not planned |
+| W4 | `@Async` method | `covered` as a plain call | |
+| W5 | Entry points: `@Scheduled` | `covered` | |
+| W6 | Entry points: `@PostConstruct`, `CommandLineRunner`, `ApplicationRunner` | `covered` as calls; no flow root | not planned |
+| W7 | Spring Data derived query | `covered` | |
+| W8 | Generated implementation (MapStruct, OpenAPI client) | `covered` | |
+| X1 | Reflection, `ServiceLoader`, `Class.forName` | `out of scope`: a dynamic target is never guessed | |
+| X2 | AOP advice and proxies (`@Transactional`, aspects) | `out of scope`: the advised method is already the target | |
+| X3 | HTTP and Kafka between services | `out of scope`: flow transitions built by the extractors | |
+
+The rows and their 2026-11-03 frequencies on train-ticket and the lab
+came from the call-graph coverage plan, in Git at `4a12ad5`.
 
 ## Build layout
 

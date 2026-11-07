@@ -227,7 +227,7 @@ endpoints, persistence classes, and entities.
 **Status:** Accepted on 2026-11-01 by the product owner, after a review of
 `Inspecter` on one catalogue row of each kind on the supermarket lab
 export (plan
-[resource-inspector-uniformisation](plans/resource-inspector-uniformisation.md)).
+`docs/plans/resource-inspector-uniformisation.md`, in Git at `4a12ad5`).
 Amended on 2026-11-01 by the product owner: the catalogue preview hides
 while an inspector opened from the catalogue is open. Amended again on
 2026-11-01 by the product owner: a DTO and a persistence class (Mongo
@@ -289,8 +289,8 @@ them changes. The JSON contract and persisted facts are unchanged.
 ## PDR-11: Spring conventions add possible call edges
 
 **Status:** Proposed on 2026-11-03 for task K8 of the
-[call-graph coverage plan](plans/call-graph-coverage.md). Not validated;
-the product owner decides.
+call-graph coverage plan (backlog item BL-22). Not validated; the
+product owner dropped the item from the backlog on 2026-11-07.
 
 **Problem:** Some calls happen through Spring, not through Java
 dispatch. A `publishEvent(event)` reaches the `@EventListener` methods
@@ -322,7 +322,7 @@ proves it.
 ## PDR-12: A Spring Data REST default path is an unverified route
 
 **Status:** Accepted on 2026-11-06 with lot 2 of the
-[review backlog](../BACKLOG.md) (finding P9), whose fix the product
+review backlog (`BACKLOG.md` in Git at `4a12ad5`, finding P9), whose fix the product
 owner validated.
 
 **Problem:** A Spring Data REST repository without an explicit `path`

@@ -110,17 +110,17 @@ commands, and options.
 |---|---|---|---|---|
 | S1 | Analyst (agent) | Import an agent fact manifest. | `import-facts --namespace NAME` stores the facts in their own namespace; they never replace source-derived evidence. | delivered |
 | S2 | Architect | Federate a workspace of independently indexed microservices. | `analyze audit --workspace DIR` reports risks across the workspace. | delivered |
-| S3 | Architect, developer | Compare the static topology with runtime observations. | `observe report` lists runtime integrations missing from the index and indexed ones without traffic; no static fact is described as observed. | delivered for Elastic APM counts; field validation of percentiles, the Prometheus source, and completeness facts is `blocked` ([backlog section 7](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)) |
-| S4 | Developer | Rank runtime hotspots for a selected window. | The export ranks latency and error hotspots with the completeness of the collection and links only to explicitly matched static evidence. | `blocked`: field validation and the live-model regeneration wait on the lab ([backlog section 7](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)) |
+| S3 | Architect, developer | Compare the static topology with runtime observations. | `observe report` lists runtime integrations missing from the index and indexed ones without traffic; no static fact is described as observed. | delivered for Elastic APM counts; field validation of percentiles, the Prometheus source, and completeness facts is `blocked` (dropped from the backlog on 2026-11-07) |
+| S4 | Developer | Rank runtime hotspots for a selected window. | The export ranks latency and error hotspots with the completeness of the collection and links only to explicitly matched static evidence. | `blocked`: field validation and the live-model regeneration wait on the lab (both dropped from the backlog on 2026-11-07) |
 | S5 | Architect | See Kubernetes resource dimensions of indexed projects. | `index --kubernetes` reads the active local `kubectl` context and keeps workload kind, namespace, and name on each matched fact. | delivered |
-| S6 | Analyst | Review data-consistency candidates. | `export microservices --review-aids` reports read-modify-write and dual-write candidates with the precision measured in section 6. | `blocked: no second Spring application in the workspace` |
+| S6 | Analyst | Review data-consistency candidates. | `export microservices --review-aids` reports read-modify-write and dual-write candidates with the precision measured in section 6. | `blocked: no second Spring application in the workspace` (dropped from the backlog on 2026-11-07) |
 
 ### Later
 
 | ID | Persona | Requirement | Acceptance | Status |
 |---|---|---|---|---|
-| L1 | Architect | See observed API, topic, data, and S3 activity beside the static architecture ([backlog item](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)). | The export shows the observed activity next to the static elements; an activity without a verified source mapping stays unmapped. | proposed |
-| L2 | Architect, developer | See the Kubernetes capacity behind a runtime hotspot ([backlog item](../BACKLOG.md#7-items-carried-over-from-earlier-backlogs)). | A hotspot shows Deployment or StatefulSet resources only for a verified workload-to-microservice match; an ambiguous match stays unresolved. | proposed |
+| L1 | Architect | See observed API, topic, data, and S3 activity beside the static architecture. | The export shows the observed activity next to the static elements; an activity without a verified source mapping stays unmapped. | dropped from the backlog on 2026-11-07 |
+| L2 | Architect, developer | See the Kubernetes capacity behind a runtime hotspot. | A hotspot shows Deployment or StatefulSet resources only for a verified workload-to-microservice match; an ambiguous match stays unresolved. | dropped from the backlog on 2026-11-07 |
 
 ## 5. Out of scope
 

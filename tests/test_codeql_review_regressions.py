@@ -1,7 +1,8 @@
 """Regressions of the CodeQL findings of the 2026-11-04 call-graph review.
 
 Each test builds a small CodeQL database with the real binary (slow) and
-names the finding it protects, from ``docs/plans/call-graph-review-2026-11-04.md``.
+names the finding it protects, from the call-graph review plan in Git at
+``4a12ad5`` (``docs/plans/call-graph-review-2026-11-04.md``).
 """
 import shutil
 import subprocess

@@ -1,4 +1,4 @@
-"""Count the call-graph shapes of docs/plans/call-graph-coverage.md in a Java tree.
+"""Count the call-graph shapes of docs/spec-tech/indexing.md in a Java tree.
 
 The counts come from the tree-sitter syntax tree, not from a text search. Types
 are matched by simple name, preferring a declaration in the same build module,

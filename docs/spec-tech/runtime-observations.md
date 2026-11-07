@@ -3,9 +3,9 @@
 This section owns the collection, persistence, and reconciliation of
 aggregated runtime metrics (ADR-60, ADR-65). The command contract lives in
 the [CLI reference](../spec-fonc/cli.md#runtime-observations).
-Section 5 covers the HTML export overlay; the
-[export plan](../plans/runtime-observations-in-export.md) records its
-delivery.
+Section 5 covers the HTML export overlay; the export plan
+(`docs/plans/runtime-observations-in-export.md`, in Git at `4a12ad5`)
+records its delivery.
 
 ## 1. Runtime sources
 
