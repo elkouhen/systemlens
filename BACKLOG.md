@@ -3,9 +3,10 @@
 Status: written on 2026-11-07 from the review of the `source` engine
 against CodeQL, and validated the same day by the product owner, who
 asked for every item to be processed autonomously, with the decisions
-taken on their behalf listed at the end of the run. All items are
-`open`; the lot order stands. Owner: SystemLens implementer.
-Reviewer: product owner. Baseline: `main` at `e5243ea`.
+taken on their behalf listed at the end of the run. The lot order
+stands. Owner: SystemLens implementer. Reviewer: product owner.
+Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22.
+Each delivered item's Delivery line names its commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
 so each item stands on its own. Item IDs continue the numbering of the
@@ -42,8 +43,8 @@ unresolved or `possible`.
 
 | ID | Title | Priority | Status |
 |---|---|---|---|
-| [BL-21](#bl-21) | Make every alignment gap a visible engine-parity test | P1 | `open` |
-| [BL-22](#bl-22) | Fix three documentation drifts on engine confidence and counts | P2 | `open` |
+| [BL-21](#bl-21) | Make every alignment gap a visible engine-parity test | P1 | `delivered` |
+| [BL-22](#bl-22) | Fix three documentation drifts on engine confidence and counts | P2 | `delivered` |
 | [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `open` |
 | [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `open` |
 | [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `open` |
@@ -82,7 +83,15 @@ dropped on 2026-11-07, and waits for a decision record.
   strict expected failure naming the item. The call-shapes table of
   `docs/spec-tech/indexing.md` gains the new rows with their status.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_engine_parity.py`: 25 cases over rows A1 to
+  B5, each with an `item` field; 24 strict expected failures and one
+  pass (A10 one arity) in the default suite, 25 passes in the `slow`
+  CodeQL test (CodeQL 2.27.3), whose rows match Appendix A.2 exactly.
+  B2's anonymous case expects no row: CodeQL reaches only the anonymous
+  `hook`, which the join drops. `test_every_parity_row_is_documented`
+  ties the cases to the engine-parity table of `indexing.md`. Commit:
+  `6851a77`.
 - **Why P1:** every other item is measured against this test.
 
 <a id="bl-22"></a>
@@ -101,7 +110,12 @@ dropped on 2026-11-07, and waits for a decision record.
 - **Acceptance:** the three sentences are corrected;
   `tests/test_spec_conformance.py` and the call-shapes test pass.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the three sentences are corrected, each checked against
+  the code: flow confidence in `code_flows.py`, the ADR-75 table, and
+  the G3 case, whose expected failure now names BL-26.
+  `tests/test_spec_conformance.py`, `tests/test_call_graph_shapes.py`
+  and `tests/test_engine_parity.py` pass. Commit: `e9e392f`.
 - **Why P2:** no wrong fact in the index, but a wrong contract in the
   specification.
 
