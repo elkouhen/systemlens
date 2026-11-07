@@ -8,7 +8,7 @@ functional or technical contract.
 | Topic | ADRs |
 |---|---|
 | Local, conservative extraction | [ADR-1](#adr-1-local-static-architecture-analysis), [ADR-3](#adr-3-conservative-static-resolution) |
-| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias), [ADR-81](#adr-81-keep-a-dispatch-exact-only-when-its-implementor-set-is-complete) (proposed), [ADR-80](#adr-80-follow-the-build-tools-project-model-for-module-ownership) |
+| Snapshot storage and compatibility | [ADR-2](#adr-2-sqlite-is-the-local-fact-store), [ADR-7](#adr-7-publish-each-index-as-an-atomic-sqlite-snapshot), [ADR-11](#adr-11-separate-module-identity-from-its-display-alias), [ADR-81](#adr-81-keep-a-dispatch-exact-only-when-its-implementor-set-is-complete), [ADR-80](#adr-80-follow-the-build-tools-project-model-for-module-ownership) |
 | Delivery and graph projection | [ADR-8](#adr-8-persisted-relations-are-the-canonical-architecture-projection), [ADR-9](#adr-9-exports-never-enrich-a-snapshot-from-live-source-files), [ADR-23](#adr-23-mcp-control-in-two-phases-with-a-graph-enrichment-layer) |
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
@@ -1962,9 +1962,9 @@ test is replaced by a regression test for deep modules.
 
 ## ADR-81: Keep a dispatch exact only when its implementor set is complete
 
-**Status:** Proposed on 2026-11-04 for lot 3 of the
-call-graph review, now backlog item [BL-01](../BACKLOG.md#bl-01).
-Not validated.
+**Status:** Accepted on 2026-11-07 by the product owner, as written
+(rules 1 to 4). Proposed on 2026-11-04 for lot 3 of the call-graph
+review, now backlog item [BL-01](../BACKLOG.md#bl-01).
 Amends ADR-66 and ADR-70.
 
 **Context:** In a closed world, the `source` engine marks a call `exact`
