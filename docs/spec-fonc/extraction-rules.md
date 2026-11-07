@@ -187,6 +187,16 @@ service whose module or `spring.application.name` equals that name. With
 `url`, only the URL host is target evidence and the name is ignored. An
 unresolved, dotted or unknown name leaves the call unresolved.
 
+A mapping declared on an interface or a base class belongs to the type that
+inherits it. A concrete `@RestController` or `@Controller` serves it, with
+its own type-level `@RequestMapping` or, without one, the first inherited
+one. A `@FeignClient` interface extending an API interface calls it, after
+its `url` or `path` and the API interface's type-level mapping. The
+inheritor's own mapping for the same method wins. The declaring type keeps
+its mappings only when no inheritor is indexed, so a route is never served
+twice. A route the inheritor does not override sits on its type
+declaration, so no code flow starts from it.
+
 Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
 active-profile selection.

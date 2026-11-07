@@ -91,6 +91,18 @@ matches only an exact alias. The scanner stamps `systemlens-api-domain:` only
 for a single-label hint (`url_service_hint`). The first `http://` or `lb://`
 URI of a snippet is the target evidence; a later one never overrides it.
 
+`scanner/rest_inheritance.py` indexes inherited mappings once per run. It
+reads every Java file, parses only those naming a controller or
+`FeignClient` and an `extends` or `implements` clause, and resolves their
+source supertypes with the ADR-76 type rule, at most eight levels deep. A
+supertype with a mapping method is a declaring type. The generic mapping
+extractor skips a declaring type that has an inheritor and is neither a
+concrete controller nor a Feign interface. It emits the inherited mapping
+in the inheritor's file, with the declaring method as snippet and a
+`systemlens-inherited-mapping:<declaring path>` marker. Incremental
+indexing reads that marker for the links before a change and the index for
+the links after it (`inherited_mapping_rescan_paths`).
+
 `_ast_feign_target` stamps the marker on every method of a `@FeignClient`.
 With `url`, the marker is the resolved URL's `url_service_hint`, never the
 client name. Without it, the `name`, `value` or positional attribute goes

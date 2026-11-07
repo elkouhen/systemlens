@@ -58,6 +58,11 @@ from systemlens.scanner import (
     infer_json_kafka_flow_graph_endpoints,
     infer_markdown_topic_manifest_endpoints,
 )
+from systemlens.scanner.rest_inheritance import (
+    INHERITED_MAPPING_MARKER,
+    inherited_mapping_rescan_paths,
+    previous_inherited_mapping_links,
+)
 from systemlens.storage.persisted_names import (
     META_CALL_GRAPH_STATUS,
     META_JOIN_COMPLETED_ENTRIES,
@@ -368,6 +373,23 @@ def _index_repo(
             unchanged = set()
         else:
             changed = sorted(set(changed) | dependent_paths)
+            unchanged = current_paths - set(changed)
+    # BL-04: a mapping inherited from an interface or a base class is a fact
+    # of the inheritor's file. Touching either side rescans the other, as
+    # linked before the change (persisted markers) or after it.
+    if not full:
+        inherited_paths = inherited_mapping_rescan_paths(
+            repo_root,
+            set(changed) | set(deleted),
+            current_paths,
+            previous_inherited_mapping_links([
+                (endpoint.path, endpoint.snippet)
+                for endpoint in store.all_endpoints(system="rest")
+                if INHERITED_MAPPING_MARKER in endpoint.snippet
+            ]) if any(path.endswith(".java") for path in [*changed, *deleted]) else set(),
+        )
+        if inherited_paths:
+            changed = sorted(set(changed) | inherited_paths)
             unchanged = current_paths - set(changed)
     # A module identity can change without any file below it changing: a
     # second module with the same name qualifies both identities, and a

@@ -117,7 +117,16 @@ lab.
   client.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-review-2026-11-03.md`: H8.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_rest_peer_regressions.py::test_bl04_*` (seven
+  tests: the three shapes, the inherited type-level prefix, a declaring
+  type without inheritor, and two incremental cases; all but the
+  no-inheritor case fail at `43c91f4`). New `scanner/rest_inheritance.py`
+  index; an inherited route without override sits on the inheritor's type
+  declaration, so no code flow starts from it. Neither the sample nor
+  train-ticket has the shape: their REST endpoints are unchanged (0
+  inheritance links; the index costs 0.16 s on train-ticket).
+  commit: pending.
 - **Why P1:** contract-first and shared-API interfaces are common.
 
 <a id="bl-06"></a>

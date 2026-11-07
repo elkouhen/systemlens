@@ -42,6 +42,16 @@ from systemlens.scanner.rest_client_config import (
     _rest_configuration_external_services,
     _trace_rest_client,
 )
+from systemlens.scanner.rest_inheritance import (
+    INHERITED_MAPPING_MARKER,
+    MAPPING_ANNOTATIONS,
+    RestInheritanceIndex,
+    declared_mapping_methods,
+    is_concrete_controller,
+    is_feign_interface,
+    rest_inheritance_index,
+    type_at,
+)
 from systemlens.scanner.rest_paths import join_paths, normalize_path, with_query_params
 
 _PROPERTY_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
@@ -457,11 +467,17 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
     une signature était répartie sur plusieurs lignes, ou qu'un commentaire
     imitait une annotation. Ici Tree-sitter associe directement l'annotation
     à sa ``method_declaration``.
+
+    BL-04: a mapping declared on an interface or a base class belongs to the
+    controller or Feign client that inherits it (see
+    :func:`_inherited_mapping_endpoints`). The declaring type itself keeps
+    its mappings only when no inheritor is indexed.
     """
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:
         return []
     source, root = parsed
+    inheritance = rest_inheritance_index(str(repo_root))
     endpoints: list[MessageEndpoint] = []
     for method in java_parser.walk(root):
         if method.type != "method_declaration":
@@ -470,6 +486,13 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
             method, "class_declaration", "interface_declaration", "record_declaration", "enum_declaration"
         )
         if owner is None:
+            continue
+        if (
+            (rel_path, owner.start_byte) in inheritance.inheritors
+            and not is_concrete_controller(owner, source)
+            and not is_feign_interface(owner, source)
+        ):
+            # Its inheritors serve or call these mappings.
             continue
         feign = next(
             (ann for ann in java_parser.annotations_of(owner)
@@ -499,7 +522,153 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
                         snippet, topic_dynamic=dynamic,
                     )
                 )
+    for declaration in java_parser.type_declarations(root):
+        if (rel_path, declaration.start_byte) in inheritance.declaring:
+            endpoints.extend(_inherited_mapping_endpoints(
+                repo_root, rel_path, source, declaration, inheritance,
+            ))
     return endpoints
+
+
+def _method_arity(method) -> int:
+    parameters = method.child_by_field_name("parameters")
+    if parameters is None:
+        return 0
+    return sum(
+        1 for child in parameters.named_children
+        if child.type in {"formal_parameter", "spread_parameter"}
+    )
+
+
+def _method_key(method, source: bytes) -> tuple[str | None, int]:
+    return java_parser.declaration_name(method, source), _method_arity(method)
+
+
+def _type_request_mapping(declaration, source: bytes):
+    return next(
+        (ann for ann in java_parser.annotations_of(declaration)
+         if java_parser.annotation_name(ann, source) == "RequestMapping"),
+        None,
+    )
+
+
+def _inherited_class_prefix(
+    repo_root: Path, rel_path: str, owner_key: tuple[str, int],
+    inheritance: RestInheritanceIndex,
+) -> tuple[str, bool]:
+    """Type-level ``@RequestMapping`` a controller inherits, if any.
+
+    Spring searches the interfaces, then the superclass, nearest first; the
+    first type-level mapping wins. Placeholders resolve in the inheritor's
+    module, where the application runs.
+    """
+    for super_key in inheritance.supertypes.get(owner_key, ()):
+        found = type_at(repo_root, super_key)
+        if found is None:
+            continue
+        super_source, super_node = found
+        mapping = _type_request_mapping(super_node, super_source)
+        if mapping is not None:
+            return _ast_mapping_value(mapping, super_source, repo_root, rel_path)
+    return "", False
+
+
+def _inherited_mapping_endpoints(
+    repo_root: Path, rel_path: str, source: bytes, declaration,
+    inheritance: RestInheritanceIndex,
+) -> list[MessageEndpoint]:
+    """Mappings a controller or Feign client inherits from its supertypes.
+
+    A method the inheritor declares with its own mapping is extracted as its
+    own; the nearest supertype declaring a name and arity wins over a farther
+    one. The endpoint sits in the inheritor's file, on its overriding method
+    when it has one, else on its type declaration's first line. The snippet
+    is the declaring method with an ``INHERITED_MAPPING_MARKER`` naming the
+    declaring file, which incremental indexing reads back.
+    """
+    owner_key = (rel_path, declaration.start_byte)
+    feign = next(
+        (ann for ann in java_parser.annotations_of(declaration)
+         if java_parser.annotation_name(ann, source) == "FeignClient"),
+        None,
+    )
+    body = declaration.child_by_field_name("body")
+    own_methods = {
+        _method_key(member, source): member
+        for member in (body.named_children if body is not None else [])
+        if member.type == "method_declaration"
+    }
+    seen = {
+        key for key, member in own_methods.items()
+        if any(
+            java_parser.annotation_name(annotation, source) in MAPPING_ANNOTATIONS
+            for annotation in java_parser.annotations_of(member)
+        )
+    }
+    feign_target = None
+    if feign is not None:
+        base, base_dynamic = _ast_feign_base(feign, source, repo_root, rel_path)
+        feign_target = _ast_feign_target(feign, source, repo_root, rel_path)
+    else:
+        own_mapping = _type_request_mapping(declaration, source)
+        base, base_dynamic = (
+            _ast_mapping_value(own_mapping, source, repo_root, rel_path)
+            if own_mapping is not None
+            else _inherited_class_prefix(repo_root, rel_path, owner_key, inheritance)
+        )
+    endpoints: list[MessageEndpoint] = []
+    for super_key in inheritance.declaring.get(owner_key, ()):
+        found = type_at(repo_root, super_key)
+        if found is None:
+            continue
+        super_source, super_node = found
+        prefix, prefix_dynamic = base, base_dynamic
+        super_mapping = _type_request_mapping(super_node, super_source)
+        if feign is not None and super_mapping is not None:
+            # Feign applies the API interface's own type-level mapping
+            # after the client's ``url`` or ``path``.
+            super_prefix, super_dynamic = _ast_mapping_value(
+                super_mapping, super_source, repo_root, rel_path,
+            )
+            prefix = join_paths(normalize_path(prefix), normalize_path(super_prefix))
+            prefix_dynamic = prefix_dynamic or super_dynamic
+        for method in declared_mapping_methods(super_node, super_source):
+            key = _method_key(method, super_source)
+            if key in seen:
+                continue
+            seen.add(key)
+            override = own_methods.get(key)
+            anchor = override if override is not None else declaration
+            snippet = (
+                f"{java_parser.node_text(super_source, method)}\n"
+                f"// {INHERITED_MAPPING_MARKER}{super_key[0]}"
+            )
+            if feign_target is not None:
+                snippet += f"\n// systemlens-api-domain:{feign_target}"
+            start_line = anchor.start_point.row + 1
+            end_line = anchor.end_point.row + 1 if override is not None else start_line
+            for annotation in java_parser.annotations_of(method):
+                http_methods = _ast_mapping_methods(annotation, super_source)
+                if not http_methods:
+                    continue
+                path, dynamic = _ast_mapping_value(annotation, super_source, repo_root, rel_path)
+                if dynamic or prefix_dynamic:
+                    route, dynamic = "<dynamic>", True
+                else:
+                    route = with_query_params(
+                        join_paths(normalize_path(prefix), normalize_path(path)),
+                        _ast_request_param_names(method, super_source),
+                    )
+                for http_method in http_methods:
+                    endpoints.append(_build_endpoint(
+                        repo_root, rel_path, start_line, end_line,
+                        "call" if feign is not None else "serve", "rest",
+                        f"{http_method} {route}", "feign" if feign is not None else "spring",
+                        snippet, topic_dynamic=dynamic,
+                    ))
+    return endpoints
+
+
 def _ast_mapping_value(
     annotation, source: bytes, repo_root: Path | None = None, rel_path: str | None = None,
     keys: tuple[str, ...] = ("path", "value"),
@@ -576,6 +745,13 @@ def _ast_mapping_route(
             prefix, prefix_dynamic = _ast_mapping_value(class_mapping, source, repo_root, rel_path)
         elif feign is not None:
             prefix, prefix_dynamic = _ast_feign_base(feign, source, repo_root, rel_path)
+        elif is_concrete_controller(owner, source):
+            # BL-04: a controller without its own type-level mapping
+            # inherits the one of its interfaces or superclass.
+            prefix, prefix_dynamic = _inherited_class_prefix(
+                repo_root, rel_path, (rel_path, owner.start_byte),
+                rest_inheritance_index(str(repo_root)),
+            )
     if dynamic or prefix_dynamic:
         return "<dynamic>", True
     route = join_paths(normalize_path(prefix), normalize_path(path))

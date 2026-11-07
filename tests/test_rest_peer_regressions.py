@@ -171,3 +171,208 @@ def test_bl02_dynamic_feign_route_is_not_projected_onto_host_routes(tmp_path):
     })
 
     assert _edge_view(_rest_edges(tmp_path)) == [("department", "employee-service", None)]
+
+
+# ------------------------------------- BL-04: inherited request mappings
+_EMPLOYEE_API = """
+package api;
+import org.springframework.web.bind.annotation.*;
+@RequestMapping("/employees")
+public interface EmployeeApi {
+  @GetMapping("/{id}") String findById(@PathVariable("id") Long id);
+  @PostMapping String create(@RequestBody String body);
+}
+"""
+
+
+def _rest(endpoints, role):
+    return sorted(
+        (e.path.rsplit("/", 1)[-1], e.topic, e.start_line, e.framework)
+        for e in endpoints if e.system == "rest" and e.role == role
+    )
+
+
+def test_bl04_controller_implementing_an_api_interface_serves_its_routes(tmp_path):
+    """BL-04: an interface's mappings belong to the controller implementing it."""
+    _module(tmp_path, "api", {"src/main/java/api/EmployeeApi.java": _EMPLOYEE_API})
+    _module(tmp_path, "employee-service", {"src/main/java/e/EmployeeController.java": """
+package e;
+import api.EmployeeApi;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class EmployeeController implements EmployeeApi {
+  @Override
+  public String findById(Long id) {
+    return "";
+  }
+  public String create(String body) { return ""; }
+}
+"""})
+
+    endpoints = _endpoints(tmp_path)
+
+    assert _rest(endpoints, "serve") == [
+        ("EmployeeController.java", "GET /employees/{id}", 7, "spring"),
+        ("EmployeeController.java", "POST /employees", 11, "spring"),
+    ]
+    assert {e.module for e in endpoints} == {"employee-service"}
+    [serve] = [e for e in endpoints if e.topic == "GET /employees/{id}"]
+    assert "systemlens-inherited-mapping:api/src/main/java/api/EmployeeApi.java" in serve.snippet
+
+
+def test_bl04_base_class_route_takes_the_subclass_prefix(tmp_path):
+    rel_base = _write(tmp_path, "src/main/java/c/CrudController.java", """
+package c;
+import org.springframework.web.bind.annotation.*;
+public abstract class CrudController {
+  @GetMapping("/{id}") public String get(@PathVariable Long id) { return ""; }
+  @GetMapping public String list(@RequestParam("page") int page) { return ""; }
+}
+""")
+    rel_sub = _write(tmp_path, "src/main/java/c/OrderController.java", """
+package c;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping("/orders")
+public class OrderController extends CrudController {
+  @GetMapping("/{id}") public String get(@PathVariable Long id) { return "own"; }
+  @GetMapping("/count") public String count() { return ""; }
+}
+""")
+
+    serves = _rest(_endpoints(tmp_path, [rel_base, rel_sub]), "serve")
+
+    assert serves == [
+        ("OrderController.java", "GET /orders/count", 8, "spring"),
+        ("OrderController.java", "GET /orders/{id}", 7, "spring"),
+        ("OrderController.java", "GET /orders?page", 4, "spring"),
+    ], serves
+
+
+def test_bl04_controller_without_own_prefix_inherits_the_interface_prefix(tmp_path):
+    rel_api = _write(tmp_path, "src/main/java/api/EmployeeApi.java", _EMPLOYEE_API)
+    rel_ctrl = _write(tmp_path, "src/main/java/e/EmployeeController.java", """
+package e;
+import api.EmployeeApi;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class EmployeeController implements EmployeeApi {
+  public String findById(Long id) { return ""; }
+  public String create(String body) { return ""; }
+  @GetMapping("/count") public String count() { return ""; }
+}
+""")
+
+    topics = sorted(e.topic for e in _endpoints(tmp_path, [rel_api, rel_ctrl]))
+
+    assert topics == ["GET /employees/count", "GET /employees/{id}", "POST /employees"]
+
+
+def test_bl04_feign_client_extending_an_api_interface_calls_its_routes(tmp_path):
+    _module(tmp_path, "api", {"src/main/java/api/EmployeeApi.java": _EMPLOYEE_API})
+    _module(tmp_path, "employee-service", {"src/main/java/e/EmployeeController.java": """
+package e;
+import api.EmployeeApi;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class EmployeeController implements EmployeeApi {
+  public String findById(Long id) { return ""; }
+  public String create(String body) { return ""; }
+}
+"""})
+    _module(tmp_path, "department", {"src/main/java/d/EmployeeClient.java": """
+package d;
+import api.EmployeeApi;
+import org.springframework.cloud.openfeign.FeignClient;
+@FeignClient(name = "employee-service")
+public interface EmployeeClient extends EmployeeApi {
+}
+"""})
+
+    endpoints = _endpoints(tmp_path)
+
+    assert _rest(endpoints, "call") == [
+        ("EmployeeClient.java", "GET /employees/{id}", 5, "feign"),
+        ("EmployeeClient.java", "POST /employees", 5, "feign"),
+    ]
+    assert _edge_view(_rest_edges(tmp_path)) == [
+        ("department", "employee-service", "GET /employees/{id}"),
+        ("department", "employee-service", "POST /employees"),
+    ]
+
+
+def test_bl04_interface_without_inheritor_keeps_its_mappings(tmp_path):
+    rel = _write(tmp_path, "src/main/java/api/EmployeeApi.java", _EMPLOYEE_API)
+
+    assert _rest(_endpoints(tmp_path, [rel]), "serve") == [
+        ("EmployeeApi.java", "GET /employees/{id}", 6, "spring"),
+        ("EmployeeApi.java", "POST /employees", 7, "spring"),
+    ]
+
+
+_IMPLEMENTING_CONTROLLER = """
+package e;
+import api.EmployeeApi;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class EmployeeController implements EmployeeApi {
+  public String findById(Long id) { return ""; }
+  public String create(String body) { return ""; }
+}
+"""
+
+
+def _indexed_serves(repo: Path, store) -> list[tuple[str, str]]:
+    from systemlens.indexing.service import index_repo
+    from systemlens.infrastructure.config import Config
+
+    index_repo(repo, Config(), store)
+    return sorted(
+        (e.path.rsplit("/", 1)[-1], e.topic)
+        for e in store.all_endpoints(system="rest", role="serve")
+    )
+
+
+def test_bl04_incremental_change_of_the_interface_refreshes_its_implementor(tmp_path):
+    from systemlens.storage.sqlite import Store
+
+    _module(tmp_path, "api", {"src/main/java/api/EmployeeApi.java": _EMPLOYEE_API})
+    _module(tmp_path, "employee-service", {
+        "src/main/java/e/EmployeeController.java": _IMPLEMENTING_CONTROLLER,
+    })
+    api = tmp_path / "api/src/main/java/api/EmployeeApi.java"
+    with Store(tmp_path) as store:
+        assert _indexed_serves(tmp_path, store) == [
+            ("EmployeeController.java", "GET /employees/{id}"),
+            ("EmployeeController.java", "POST /employees"),
+        ]
+        api.write_text(api.read_text().replace('"/employees"', '"/staff"'))
+        assert _indexed_serves(tmp_path, store) == [
+            ("EmployeeController.java", "GET /staff/{id}"),
+            ("EmployeeController.java", "POST /staff"),
+        ]
+
+
+def test_bl04_incremental_link_changes_refresh_the_declaring_type(tmp_path):
+    from systemlens.storage.sqlite import Store
+
+    _module(tmp_path, "api", {"src/main/java/api/EmployeeApi.java": _EMPLOYEE_API})
+    controller = tmp_path / "employee-service/src/main/java/e/EmployeeController.java"
+    with Store(tmp_path) as store:
+        assert _indexed_serves(tmp_path, store) == [
+            ("EmployeeApi.java", "GET /employees/{id}"),
+            ("EmployeeApi.java", "POST /employees"),
+        ]
+        _module(tmp_path, "employee-service", {
+            "src/main/java/e/EmployeeController.java": _IMPLEMENTING_CONTROLLER,
+        })
+        assert _indexed_serves(tmp_path, store) == [
+            ("EmployeeController.java", "GET /employees/{id}"),
+            ("EmployeeController.java", "POST /employees"),
+        ]
+        controller.unlink()
+        assert _indexed_serves(tmp_path, store) == [
+            ("EmployeeApi.java", "GET /employees/{id}"),
+            ("EmployeeApi.java", "POST /employees"),
+        ]
+

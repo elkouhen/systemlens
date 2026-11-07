@@ -41,6 +41,7 @@ from systemlens.scanner._spring_properties import (
 )
 from systemlens.scanner.kafka_ast import infer_kafka_endpoints as _infer_kafka_endpoints
 from systemlens.scanner.kafka_payload_types import clear_payload_type_caches
+from systemlens.scanner.rest_inheritance import clear_rest_inheritance_cache
 from systemlens.scanner.kafka_conventions import (
     apply_kafka_topic_strategy1,
     infer_json_kafka_flow_graph_endpoints,
@@ -121,6 +122,7 @@ def clear_analysis_caches() -> None:
     _local_static_string_initializer.cache_clear()
     _module_has_spring_data_rest.cache_clear()
     clear_payload_type_caches()
+    clear_rest_inheritance_cache()
     java_parser.clear_caches()
     maven_module.clear_caches()
     gradle_module.clear_caches()
