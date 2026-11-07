@@ -869,6 +869,41 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 The rows and their 2026-11-03 frequencies on train-ticket and the lab
 came from the call-graph coverage plan, in Git at `4a12ad5`.
 
+### Engine parity
+
+`tests/test_engine_parity.py` measures the `source` engine against
+CodeQL on one fixture that holds every shape below. A case lists the
+`(call line, callee, confidence)` rows CodeQL gives from one caller, once
+the join has attributed anonymous and lambda callers to their creating
+method (ADR-62) and dropped callees that are not indexed methods.
+
+The default test runs the symbol pass in a closed world and expects those
+rows. A case whose gap an open backlog item owns is a strict expected
+failure that names the item; the delivery of the item turns it into a
+pass. A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
+`CallGraphSession.calls()` and expects the same rows from CodeQL.
+
+The table uses the status values of the call shapes above; the item
+column names the owner of each case not yet aligned.
+
+| # | Shape | Status | Item |
+|---|---|---|---|
+| A1 | Type-variable return or field: `box.get()`, `repo.find()` through `extends Repo<Circle>`, inherited `T value`, `<T> T first(List<T>)` | `missing` | BL-26 |
+| A2 | Element of a JDK container accessor: `List.get`, `Optional.get`, `Map.get`, `stream().findFirst().get()` | `missing` | BL-27 |
+| A3 | `var` loop variable | `missing` | BL-23 |
+| A4 | Ternary receiver whose branches share a type | `missing` | BL-23 |
+| A5 | Pattern variable of `instanceof` (T2) and of a `switch` (T3) | `missing` | BL-23 |
+| A6 | `Outer.this.helper()` from an inner class | `missing` | BL-23 |
+| A7 | Receiver typed by a bounded type variable (G4) | `missing` | BL-26 |
+| A8 | Unqualified call inside an anonymous `Thread` | `missing` | BL-25 |
+| A9 | Lambda passed to a source functional interface parameter | `missing` | BL-24 |
+| A10 | Method reference: one arity `covered`; overloaded name `missing` | `missing` | BL-24 |
+| B1 | Local or `final` field declared `Shape`, created as `Circle` | `defect` | BL-29 |
+| B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
+| B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
+| B4 | Declared interface row beside two possible implementations | `missing` | BL-28 |
+| B5 | Generic implementation of a generic interface (G3) | `defect` | BL-26 |
+
 ## Build layout
 
 The layout walks the repository once with `os.walk`, without a depth limit.
