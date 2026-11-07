@@ -18,7 +18,7 @@ import yaml
 from systemlens.discovery.java import parser as java_parser
 from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
 from systemlens.discovery.build import maven as maven_module
-from systemlens.domain.graph import url_service_hint
+from systemlens.domain.graph import service_hint_from_host, url_service_hint
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
 from systemlens.scanner._core import (
@@ -476,6 +476,9 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
              if java_parser.annotation_name(ann, source) == "FeignClient"),
             None,
         )
+        feign_target = (
+            _ast_feign_target(feign, source, repo_root, rel_path) if feign is not None else None
+        )
         for annotation in java_parser.annotations_of(method):
             methods = _ast_mapping_methods(annotation, source)
             if not methods:
@@ -483,6 +486,9 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
             route, dynamic = _ast_mapping_route(
                 annotation, method, source, repo_root, rel_path, feign
             )
+            snippet = java_parser.node_text(source, method)
+            if feign_target is not None:
+                snippet += f"\n// systemlens-api-domain:{feign_target}"
             for http_method in methods:
                 endpoints.append(
                     _build_endpoint(
@@ -490,7 +496,7 @@ def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> 
                         method.end_point.row + 1,
                         "call" if feign is not None else "serve", "rest",
                         f"{http_method} {route}", "feign" if feign is not None else "spring",
-                        java_parser.node_text(source, method), topic_dynamic=dynamic,
+                        snippet, topic_dynamic=dynamic,
                     )
                 )
     return endpoints
@@ -588,6 +594,40 @@ def _ast_feign_base(annotation, source: bytes, repo_root: Path, rel_path: str) -
     return _resolve_rest_path_expression(
         java_parser.node_text(source, value), repo_root, rel_path, preserve_dynamic_segments=True
     )
+def _ast_feign_target(annotation, source: bytes, repo_root: Path, rel_path: str) -> str | None:
+    """Service a ``@FeignClient`` names, or ``None`` (BL-02).
+
+    An explicit ``url`` is the only target evidence when present: its host
+    names the service when it is internal-shaped, and the client name is then
+    never used. Without ``url``, the ``name`` or ``value`` attribute is the
+    load-balanced service id. A literal, a constant or a resolvable property
+    placeholder qualifies; it must be one internal-shaped host name. Anything
+    unresolved or multi-label gives no target.
+    """
+    url = java_parser.annotation_argument(annotation, source, key="url")
+    if url is not None:
+        raw, dynamic = _resolve_rest_expression(
+            java_parser.node_text(source, url), repo_root, rel_path
+        )
+        return None if dynamic else url_service_hint(raw)
+    value = (
+        java_parser.annotation_argument(annotation, source, key="name")
+        or java_parser.annotation_argument(annotation, source, key="value")
+        or java_parser.annotation_argument(annotation, source)
+    )
+    if value is None:
+        return None
+    raw, dynamic = _resolve_rest_expression(
+        java_parser.node_text(source, value), repo_root, rel_path
+    )
+    if dynamic:
+        return None
+    if "://" in raw:
+        return url_service_hint(raw)
+    hint = service_hint_from_host(raw)
+    return hint if hint is not None and "." not in hint else None
+
+
 def _ast_request_param_names(method, source: bytes) -> list[str]:
     names: list[str] = []
     params = method.child_by_field_name("parameters")

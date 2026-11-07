@@ -91,8 +91,15 @@ matches only an exact alias. The scanner stamps `systemlens-api-domain:` only
 for a single-label hint (`url_service_hint`). The first `http://` or `lb://`
 URI of a snippet is the target evidence; a later one never overrides it.
 
-The marker on a RestTemplate, WebClient, RestClient or HTTP-interface call is
-host evidence only. `_resolved_configured_api_call` projects a dynamic call
+`_ast_feign_target` stamps the marker on every method of a `@FeignClient`.
+With `url`, the marker is the resolved URL's `url_service_hint`, never the
+client name. Without it, the `name`, `value` or positional attribute goes
+through `_resolve_rest_expression`; a non-dynamic result whose
+`service_hint_from_host` has no dot is the marker. Alias matching against
+`spring.application.name` then happens in `resolve_rest_target_service`.
+
+The marker on a RestTemplate, WebClient, RestClient, HTTP-interface or Feign
+call is host evidence only. `_resolved_configured_api_call` projects a dynamic call
 onto the host's routes only for other frameworks, in practice the
 `configured-api-client-factory` endpoint. An ordinary call that matches no
 route gets the service-level edge without `to_endpoint`.

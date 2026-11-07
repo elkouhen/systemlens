@@ -178,7 +178,16 @@ URL is normalized to its route and retains its HTTP host as target evidence. A
 private, uniquely named helper with a single unconditional String return and
 literal arguments may be evaluated transitively under the same rules. Spring HTTP
 interfaces retain `@ClientRegistrationId` as explicit service-target evidence when
-present. Spring application names are read from multi-document YAML files;
+present.
+
+A Feign client without `url` names its peer by its `name` or `value`
+attribute: a literal, a constant or a resolvable property placeholder that
+is one internal-shaped host name, such as `employee-service`. It reaches the
+service whose module or `spring.application.name` equals that name. With
+`url`, only the URL host is target evidence and the name is ignored. An
+unresolved, dotted or unknown name leaves the call unresolved.
+
+Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
 active-profile selection.
 
@@ -455,7 +464,7 @@ literal segment wins over a template, so `GET /items/count` reaches
 literal it does not match. A templated call such as `/items/{path}` keeps the
 route whose templates align with its own; without one, every candidate stays.
 
-A RestTemplate, WebClient, RestClient or HTTP-interface call whose route
+A RestTemplate, WebClient, RestClient, HTTP-interface or Feign call whose route
 matches no served route keeps one relation to the service, without a
 resource. It is never projected onto every route of the target; only a
 configured client factory without a route at its call site is.

@@ -285,7 +285,7 @@ def _rest_target_service_hint(
 # resolved HTTP host as ``systemlens-api-domain:`` evidence, but an unresolved
 # route never makes them configured clients (finding H1).
 _ROUTE_DECLARING_HTTP_CLIENTS = frozenset(
-    {"resttemplate", "webclient", "restclient", "http-interface"}
+    {"resttemplate", "webclient", "restclient", "http-interface", "feign"}
 )
 
 
@@ -295,7 +295,7 @@ def _is_configured_api_client_call(call: MessageEndpoint) -> bool:
     Son code d'appel ne porte pas nécessairement le chemin HTTP. Le domaine
     injecté par le scanner permet alors de le résoudre contre les ressources
     exposées par le microservice hôte pendant la fédération. Un appel
-    RestTemplate, WebClient, RestClient ou HTTP interface porte le même
+    RestTemplate, WebClient, RestClient, HTTP interface ou Feign porte le même
     marqueur pour son hôte, mais déclare sa propre route : il n'est jamais
     projeté sur les routes de l'hôte.
     """

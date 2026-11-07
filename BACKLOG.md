@@ -91,7 +91,16 @@ lab.
   unknown name stays external; the sample's chained flows join.
 - **Depends on:** none.
 - **Origin:** `docs/plans/indexing-case-analysis.md`: P3, F6.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_rest_peer_regressions.py::test_bl02_*` (six
+  tests; five fail at `43c91f4`). On the sample, Feign calls with a target
+  went from 0 to 4 of 4, `calls_service` relations from 2 to 6, rest graph
+  edges from 2 to 6, flows reconciled `complete` from 0 to 4 of 4, and
+  joined flow pairs from 0 to 1
+  (`OrganizationController.findByIdWithDepartmentsAndEmployees` to
+  `DepartmentController.findByOrganizationWithEmployees`). Feign joins the
+  route-declaring clients, so a dynamic Feign route is never projected onto
+  every host route. commit: pending.
 - **Why P1:** Feign is the most common inter-service client in Spring.
 
 <a id="bl-04"></a>
