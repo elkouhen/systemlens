@@ -16,7 +16,15 @@ from systemlens.discovery.java import parser
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.module_inventory import ModuleDependency
 from systemlens.indexing.file_inventory import is_test_source
-from systemlens.indexing.integration_methods import declared_parameter_types
+from systemlens.indexing.integration_methods import (
+    CONSTRUCTOR,
+    INITIALIZER_NAMES,
+    STATIC_INITIALIZER,
+    declared_parameter_types,
+    delegates_to_this,
+    initializer_declarations,
+    initializer_members,
+)
 from systemlens.callgraph.model import MethodCall
 
 
@@ -152,6 +160,43 @@ def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
 
 def _is_anonymous_body(node: Node) -> bool:
     return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
+
+
+_CALL_SITES = {"method_invocation", "method_reference"}
+_CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation"}
+_INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer"}
+
+
+def _call_context(node: Node) -> Node | None:
+    """The code a call site belongs to (ADR-62, ADR-75).
+
+    A named method or constructor, or an initializer member (a field
+    initializer, an initializer block) of a named type. The members of an
+    anonymous class and lambda bodies belong to the code creating them.
+    """
+    current = node.parent
+    while current is not None:
+        if current.type in {"method_declaration", "constructor_declaration"}:
+            if not parser.is_anonymous_member(current):
+                return current
+        elif (
+            current.type in _INITIALIZER_MEMBERS and current.parent is not None
+            and current.parent.type in {"class_body", "enum_body_declarations"}
+            and not _is_anonymous_body(current.parent)
+        ):
+            return current
+        current = current.parent
+    return None
+
+
+def _in_anonymous_body(node: Node, context: Node | None) -> bool:
+    """Whether ``node`` lies in an anonymous class body below ``context``."""
+    current = node.parent
+    while current is not None and current != context:
+        if _is_anonymous_body(current):
+            return True
+        current = current.parent
+    return False
 
 
 @dataclass
@@ -294,6 +339,12 @@ class JavaSymbols:
                 if node.type == "method_declaration" and not parser.is_anonymous_member(node):
                     key = (self.owner(path, node), parser.declaration_name(node, source) or "", node.start_point.row + 1)
                     declarations[path][key].append(node)
+            # Constructors and initializers (ADR-75); an implicit constructor
+            # and ``<clinit>`` are keyed on their type declaration.
+            for initializer in initializer_declarations(tree, source):
+                declarations[path][(
+                    self.owner(path, initializer.node), initializer.name, initializer.start_line,
+                )].append(initializer.node)
         for owner, locations in self.types.items():
             for path, node in locations:
                 for child in node.named_children:
@@ -347,13 +398,15 @@ class JavaSymbols:
                 if len(matching) != 1:
                     continue
                 node = matching[0]
-                owner_node = parser.enclosing(node, *_TYPES)
+                # An implicit constructor and ``<clinit>`` stand on their type.
+                owner_node = node if node.type in _TYPES else parser.enclosing(node, *_TYPES)
                 if owner_node is None:
                     continue
                 owner = self.owner(path, owner_node)
                 if len(self._type_candidates(owner, path)) != 1:
                     continue
-                parameters = node.child_by_field_name("parameters")
+                initializer_node = name in INITIALIZER_NAMES
+                parameters = None if node.type in _TYPES else node.child_by_field_name("parameters")
                 parameter_types = []
                 written: list[str] = []
                 for parameter in parameters.named_children if parameters is not None else []:
@@ -375,7 +428,8 @@ class JavaSymbols:
                 info = _Method(
                     method, method.module, owner, node, tuple(parameter_types),
                     node.child_by_field_name("body") is not None, tuple(written),
-                    bool(modifiers is not None and {"static", "private"} & set(
+                    # A constructor is not inherited and is never overridden.
+                    initializer_node or bool(modifiers is not None and {"static", "private"} & set(
                         parser.node_text(source, modifiers).split()
                     )),
                     varargs=bool(parameters is not None and parameters.named_children and (
@@ -487,6 +541,8 @@ class JavaSymbols:
                         for other in declarations
                     )]
                     for info in bodies:
+                        if info.binds_statically:
+                            continue
                         modifiers = next((child for child in info.node.children if child.type == "modifiers"), None)
                         words = set(parser.node_text(self.units[info.method.path].source, modifiers).split()) if modifiers else set()
                         if "public" not in words or words & {"static", "private"}:
@@ -1739,6 +1795,92 @@ class JavaSymbols:
             return None
         return declaration.method
 
+    def _call_sites(self, info: _Method) -> list[tuple[Node, Node]]:
+        """The call sites whose caller is ``info``, with their context.
+
+        A method or a constructor owns the sites of its own body. A type's
+        instance initializer code runs in each constructor that does not
+        delegate to ``this(...)``, or in the implicit constructor; its
+        static initializer code runs in ``<clinit>`` (ADR-75).
+        """
+        name = info.method.qualified_method.rsplit(".", 1)[-1]
+        if info.node.type in _TYPES:
+            contexts = initializer_members(
+                info.node, self.units[info.method.path].source,
+                static=name == STATIC_INITIALIZER,
+            )
+        else:
+            contexts = [info.node]
+            if name == CONSTRUCTOR and not delegates_to_this(info.node):
+                type_node = parser.enclosing(info.node, *_TYPES)
+                if type_node is not None:
+                    contexts.extend(initializer_members(
+                        type_node, self.units[info.method.path].source, static=False,
+                    ))
+        return [
+            (node, context)
+            for context in contexts
+            for node in parser.walk(context)
+            if node.type in _CALL_SITES | _CONSTRUCTOR_SITES and _call_context(node) == context
+        ]
+
+    def _constructor_targets(
+        self, info: _Method, invocation: Node,
+    ) -> tuple[list[IntegrationMethod], str]:
+        """The constructors ``new T(...)``, ``this(...)`` or ``super(...)`` runs.
+
+        The constructor the arguments select is ``exact``; overloads the
+        arguments cannot separate are all ``possible``. An anonymous class
+        creation, a qualified ``outer.new`` or ``outer.super(...)``, and an
+        external type reach nothing (ADR-62, ADR-75).
+        """
+        path = info.method.path
+        source = self.units[path].source
+        if invocation.type == "object_creation_expression":
+            type_node = invocation.child_by_field_name("type")
+            if (
+                type_node is None or parser.child_by_type(invocation, "class_body") is not None
+                or invocation.named_children[0] != type_node
+            ):
+                return [], ""
+            owner = self.resolve(path, parser.node_text(source, type_node), info.owner, at=type_node)
+            if owner is None or owner not in self.types:
+                return [], ""
+            modules = {
+                self.path_modules.get(location, "")
+                for location, _node in self._type_candidates(owner, path)
+            }
+        else:
+            keyword = invocation.child_by_field_name("constructor")
+            if keyword is None or invocation.child_by_field_name("object") is not None:
+                return [], ""
+            if keyword.type == "this":
+                owner, modules = info.owner, {info.module}
+            else:
+                parents = self.superclasses.get((info.owner, info.module), set())
+                if len(parents) != 1:
+                    return [], ""
+                owner, parent_module = next(iter(parents))
+                modules = {parent_module}
+        arguments = parser.argument_nodes(invocation)
+        arity = len(arguments)
+        contracts = [
+            candidate for module in sorted(modules)
+            for candidate in self.by_owner.get((owner, CONSTRUCTOR, arity, module), [])
+        ] or [
+            candidate for module in sorted(modules)
+            for candidate in self.varargs_by_owner.get((owner, CONSTRUCTOR, module), [])
+            if len(candidate.parameters) - 1 <= arity
+        ]
+        if not contracts:
+            return [], ""
+        selected = self._select_overload(contracts, tuple(
+            self.expression_type(info, argument, invocation) for argument in arguments
+        ))
+        return [candidate.method for candidate in selected], (
+            "exact" if len(selected) == 1 else "possible"
+        )
+
     def fallback_calls(
         self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
         exact_sites: set[tuple[str, int, str]] | None = None,
@@ -1767,14 +1909,24 @@ class JavaSymbols:
             if not info.concrete:
                 continue
             source = self.units[info.method.path].source
-            for invocation in parser.walk(info.node):
-                if (
-                    invocation.type not in {"method_invocation", "method_reference"}
-                    or parser.enclosing_method(invocation) != info.node
-                ):
-                    continue
+            for invocation, context in self._call_sites(info):
                 line = invocation.start_point.row + 1
-                in_anonymous_body = parser.enclosing(invocation, "method_declaration") != info.node
+                if invocation.type in _CONSTRUCTOR_SITES:
+                    targets, dispatch = self._constructor_targets(info, invocation)
+                    calls.extend(
+                        MethodCall(
+                            info.method.qualified_method, info.method.path, info.method.start_line,
+                            target.qualified_method, target.path, target.start_line, line, dispatch,
+                        )
+                        for target in targets
+                        if (info.method.id, line, target.id) not in resolved_sites
+                        and not (
+                            exact_sites and (info.method.id, line, target.id) in exact_sites
+                        )
+                    )
+                    continue
+                in_anonymous_body = _in_anonymous_body(invocation, context)
+                receiver: Node | None
                 argument_types: tuple[str | None, ...] | None
                 if invocation.type == "method_reference":
                     # ``receiver::method`` names a method without its arity:

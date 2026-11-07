@@ -291,26 +291,142 @@ SHAPES: list[Shape] = [
     Shape("S7", """
         class Service {
           Service() {} //@Service.new
+          Service(int size) {} //@Service.newInt
+          Service(String name) {} //@Service.newString
         }
         class Use {
           void run() { //@Use.run
             new Service();
+            new Service("n");
+            new java.util.ArrayList<String>();
+            new Runnable() { public void run() {} };
           }
         }
-        """, "Use.run", {"Service.new": None}, partial=True,
-        pending="K7: constructors are not methods of the graph"),
+        """, "Use.run", {"Service.new": "exact", "Service.newString": "exact"},
+        absent=("Service.newInt",),
+        note="ADR-75: the arguments select the constructor; an anonymous or external type reaches none"),
+    Shape("S7-this-super", """
+        class Base {
+          Base(int size) {} //@Base.newInt
+          Base(String name) {} //@Base.newString
+        }
+        class Sub extends Base {
+          Sub() { //@Sub.new
+            this(1);
+          }
+          Sub(int size) { //@Sub.newInt
+            super("s");
+          }
+        }
+        class Use {
+          void run() { //@Use.run
+            new Sub();
+          }
+        }
+        """, "Sub.new", {"Sub.newInt": "exact"},
+        note="ADR-75: this(...) is an exact call; a constructor is not inherited"),
+    Shape("S7-super", """
+        class Base {
+          Base(int size) {} //@Base.newInt
+          Base(String name) {} //@Base.newString
+        }
+        class Sub extends Base {
+          Sub(int size) { //@Sub.newInt
+            super("s");
+          }
+        }
+        """, "Sub.newInt", {"Base.newString": "exact"},
+        note="ADR-75: super(...) is an exact call to the parent's constructor"),
+    Shape("S7-overload", """
+        class Service {
+          Service(Long id) {} //@Service.newLong
+          Service(String name) {} //@Service.newString
+        }
+        class Use {
+          void run(Object unknown) { //@Use.run
+            new Service(unknown.toString().length() > 0 ? null : null);
+          }
+        }
+        """, "Use.run", {"Service.newLong": "possible", "Service.newString": "possible"},
+        note="ADR-75: overloads the arguments cannot separate stay possible"),
     Shape("S8", """
+        class Service {
+          void init() {} //@Service.init
+          void seed() {} //@Service.seed
+          void boot() {} //@Service.boot
+        }
+        class Use {
+          Service s = new Service();
+          Runnable r = () -> s.seed();
+          Use() { //@Use.new
+            s.init();
+          }
+          Use(int size) { //@Use.newInt
+            this();
+          }
+          {
+            s.boot();
+          }
+        }
+        """, "Use.new", {"Service.init": "exact", "Service.seed": "exact", "Service.boot": "exact"},
+        note="ADR-75: field and instance initializers run in every constructor"),
+    Shape("S8-delegating", """
         class Service {
           void init() {} //@Service.init
         }
         class Use {
           Service s = new Service();
-          Use() { //@Use.new
-            s.init();
+          { s.init(); }
+          Use() {} //@Use.new
+          Use(int size) { //@Use.newInt
+            this();
           }
         }
-        """, "Use.new", {"Service.init": None}, partial=True,
-        pending="K7: constructor and initializer bodies are never callers"),
+        """, "Use.newInt", {"Use.new": "exact"}, absent=("Service.init",),
+        note="ADR-75: a constructor that delegates to this(...) runs no initializer itself"),
+    Shape("S8-implicit", """
+        class Service {
+          void init() {} //@Service.init
+        }
+        class Use { //@Use.new
+          Service s = make();
+          static Service make() { return new Service(); } //@Use.make
+        }
+        class Caller {
+          void run() { //@Caller.run
+            new Use();
+          }
+        }
+        """, "Use.new", {"Use.make": "exact"},
+        note="ADR-75: a class without a constructor gets one when its initializers call"),
+    Shape("S8-implicit-target", """
+        class Service {
+          void init() {} //@Service.init
+        }
+        class Use { //@Use.new
+          Service s = new Service();
+          { s.init(); }
+        }
+        class Caller {
+          void run() { //@Caller.run
+            new Use();
+          }
+        }
+        """, "Caller.run", {"Use.new": "exact"},
+        note="ADR-75: new reaches the implicit constructor"),
+    Shape("S8-static", """
+        class Service {
+          static int count() { return 1; } //@Service.count
+          static void warm() {} //@Service.warm
+        }
+        class Use { //@Use.clinit
+          static final int TOTAL = Service.count();
+          static {
+            Service.warm();
+          }
+        }
+        """, "Use.clinit", {"Service.count": "exact", "Service.warm": "exact"},
+        note="ADR-75: static initializer code belongs to <clinit>"),
     Shape("S9", """
         class Service {
           void log(String fmt, Object... args) {} //@Service.log

@@ -1,7 +1,7 @@
 # Backlog: review of the source indexing and the Joern engine (2026-11-06)
 
 Status: lots 1 to 5 validated on 2026-11-06 by the product owner, in
-the proposed order; lot 6 waits for ADR-75. Owner:
+the proposed order; lot 6 validated on 2026-11-07 with ADR-75. Owner:
 SystemLens implementer. Reviewer: product owner. Baseline: commit
 `e21f8d0` (ADR-85 delivered), Joern 4.0.674, CodeQL 2.27.3, train-ticket
 at `~/examples/train-ticket` (411 Java files, 406 flows with every engine).
@@ -133,7 +133,7 @@ does for a supplied database; that is a decision record, not a fix.
 | 3 | J3, J2, J4, A4 | Typed-engine precision and the doubled search; J2 shares its fix with C6 of the dispatch-scope plan. |
 | 4 | P7, P8, A5, A6, C3, C4, C5, J6 | Consistency of inventory, freshness, persisted methods and messages. |
 | 5 | C1, C2 | Documentation and test debt of ADR-85. |
-| 6 | J5 | Waits for ADR-75. |
+| 6 | J5 | ADR-75, accepted on 2026-11-07: constructors become nodes for every engine. |
 
 Every fix leaves a regression test in the same commit, built from its
 probe or fixture. J1's acceptance: on train-ticket, no Joern method line
@@ -173,7 +173,7 @@ subject until the next lot records its hash. Test files are under
 | J6 | `delivered` | `e424c6c` | `test_engine_seam_cli.py::test_a_missing_greadlink_names_the_link_step` | None. |
 | C1 | `delivered` | Lot 5; `systemlens-skill` `329ef31` | `test_spec_conformance.py::test_documentation_site_commands_use_existing_flags`, `::test_documentation_site_links_name_existing_specification_headings` | The skill page is checked when the sibling checkout is present. |
 | C2 | `delivered` | Lot 5 | `test_engine_seam_cli.py::test_index_refuses_an_engine_option_the_selected_engine_does_not_declare` (six cases), `::test_index_accepts_a_declared_engine_option`, `::test_init_with_the_joern_profile_selects_joern_and_warns_without_it` | None. |
-| Lot 6 (J5) | `proposed` | | | Waits for ADR-75. |
+| J5 | `delivered` | Lot 6 | `test_constructor_nodes.py::test_every_engine_routes_a_flow_through_a_constructor` (`source`; `codeql` and `joern` slow), `::test_constructors_and_initializers_are_nodes_without_ports`; `test_call_graph_join_regressions.py::test_an_engine_constructor_joins_its_node_and_a_default_one_is_no_placeholder`; `test_joern_engine.py::test_joern_calls_keep_only_resolved_source_targets` updated; `test_call_graph_shapes.py` S7 and S8 cases | ADR-75 delivered for all three engines (task K7 of the coverage plan): the index gains constructor and `<clinit>` nodes, the symbol pass resolves `new`, `this(...)` and `super(...)`, the CodeQL query reports constructor calls and folds `<obinit>` into its constructors, Joern keeps `<init>` callers and callees. Joern omits initializer blocks; the symbol pass adds their calls. Train-ticket: 133 `<init>` and 96 `<clinit>` nodes; 1524 to 1712 edges between indexed methods for every engine (188 constructor edges, all `exact`), keyed edges identical across engines; 406 flows unchanged, none through a constructor; engine calls `codeql` 6279 to 6932, `joern` 1541 to 1753. |
 
 ## 6. Items carried over from earlier backlogs
 

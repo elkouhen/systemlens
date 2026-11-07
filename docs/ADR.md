@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph); proposed: [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -1704,8 +1704,11 @@ Edges are added, never made exact.
 
 ## ADR-75: Make constructors and initializers part of the call graph
 
-**Status:** Proposed on 2026-11-03 for task K7 of the
-[call-graph coverage plan](plans/call-graph-coverage.md). Not validated.
+**Status:** Accepted on 2026-11-07 by the product owner. Proposed on
+2026-11-03 for task K7 of the
+[call-graph coverage plan](plans/call-graph-coverage.md); delivered with
+lot 6 of the review backlog (finding J5) for the `source`, `codeql` and
+`joern` engines.
 
 **Context:** The call graph has one node per method declaration.
 Constructors, instance and static initializers, and field initializers
@@ -1726,6 +1729,45 @@ cannot collide with Java method names, so existing identifiers and the
 schema keep their shape. Existing indexes need a reindex to show the new
 nodes; the code-flow signature changes to trigger it. The export and the
 UX contract need a rule for constructor nodes, decided with this record.
+
+Delivery notes of 2026-11-07, within the decision:
+
+- Every written constructor is a node. An implicit constructor gets a node
+  only when the type's instance initializer code makes a call, and
+  `<clinit>` only when its static initializer code does: other implicit
+  bodies would be nodes without an outgoing edge. Both implicit nodes span
+  the type's header, from its first annotation to its opening brace, where
+  the typed engines locate them. A record's implicit canonical constructor
+  and its compact constructor are not nodes.
+- Instance initializer code is attributed to every constructor that does
+  not start with `this(...)`, as Java runs it (JLS 12.5): a delegating
+  constructor reaches it through its `this(...)` edge. The engines agree:
+  CodeQL calls `<obinit>` from those constructors, Joern inlines the
+  field initializers there.
+- The implicit `super()` call is not an edge, nor is the creation of an
+  anonymous class or a lambda (ADR-62). An engine's constructor that the
+  index has no node for, such as a default constructor, joins nothing and
+  is no placeholder.
+- Joern leaves initializer blocks out of its graph; the symbol pass adds
+  their calls beside it, as it fills the other gaps of a typed engine.
+- Export and UX rule: a constructor or initializer node is a node of the
+  exported call graph (`codeql_call_graph`), spelled `Owner.<init>` or
+  `Owner.<clinit>`, and a step of the flows that pass through it. It owns
+  no port, so no service occurrence or flow entry shows it as its method.
+
+Measured on 2026-11-07 on train-ticket, before and after, with
+`analyze compare-engines` on fresh copies (CodeQL 2.27.3, Joern 4.0.674):
+
+| Engine | Engine calls | Flows | Edges (indexed methods) | Run time |
+|---|---|---|---|---|
+| `source` | 0 | 406 (all medium) | 1524 to 1712 | 0.8 s |
+| `codeql` | 6279 to 6932 | 406 (all medium) | 1524 to 1712 | 90 s, database built |
+| `joern` | 1541 to 1753 | 406 (395 medium, 11 low) | 1524 to 1712 | 37 s, graph built |
+
+The index gains 133 `<init>` and 96 `<clinit>` nodes. The 188 new edges
+are all `exact`: 160 reach a constructor, 32 leave one; no `<clinit>`
+calls a source method. The three engines share every keyed edge, and no
+flow passes through a constructor, so the flows do not change.
 
 ## ADR-76: Type Kafka payloads with one shared scanner rule
 

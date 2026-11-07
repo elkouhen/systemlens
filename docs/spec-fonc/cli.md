@@ -329,6 +329,13 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   payload type, and caches its graph in `.systemlens/joern/`.
 - `none` builds no interprocedural path: only same-method flows remain.
 
+Every engine makes constructors part of the call graph (ADR-75). A
+constructor is the node `Owner.<init>`, and a type's static initializer
+code `Owner.<clinit>`. `new T(...)`, `this(...)` and `super(...)` reach
+the constructor their arguments select, `exact` when one is left. Field
+initializers and initializer blocks run in every constructor that does
+not start with `this(...)`. These nodes own no port and start no flow.
+
 When the selected engine is unavailable, indexing says so and uses `source`.
 
 | Option | Requirement |

@@ -340,3 +340,50 @@ def test_an_anonymous_class_method_of_an_engine_is_not_persisted(tmp_path: Path)
 
     assert "example.Generator.generate" in names
     assert not any(name.startswith("<anonymous") for name in names)
+
+
+def test_an_engine_constructor_joins_its_node_and_a_default_one_is_no_placeholder(
+    tmp_path: Path,
+) -> None:
+    """Review J5, ADR-75: engines report constructors as ``Owner.<init>``.
+
+    A typed engine locates a constructor on its name line and an implicit
+    one on the class line; both join the index's nodes. A default
+    constructor that runs no code is no node of the index, and the join
+    adds no placeholder for it.
+    """
+    repo = _write(tmp_path / "repo", {
+        "pom.xml": POM,
+        CONTROLLER: """package example;
+import org.springframework.web.bind.annotation.*;
+@RestController
+@RequestMapping("/orders")
+class OrderController {
+  @PostMapping("/generate") public void create() { new Job(); }
+}
+""",
+        "src/main/java/example/Job.java": """package example;
+class Job {
+  @Deprecated
+  Job() { new Plain(); }
+}
+""",
+        "src/main/java/example/Plain.java": "package example;\nclass Plain {\n}\n",
+    })
+    job = "src/main/java/example/Job.java"
+    engine = _RecordedEngine([
+        MethodCall("example.OrderController.create", CONTROLLER, 6,
+                   "example.Job.<init>", job, 4, 6, "exact", (), ()),
+        MethodCall("example.Job.<init>", job, 4,
+                   "example.Plain.<init>", "src/main/java/example/Plain.java", 2, 4, "exact", (), ()),
+    ])
+
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True, call_graph_engine=engine)
+        names = {method.id: method.qualified_method for method in store.all_call_graph_methods()}
+        for method in store.all_integration_methods():
+            names.setdefault(method.id, method.qualified_method)
+        edges = {(names[edge.caller_id], names[edge.callee_id]) for edge in store.all_call_edges()}
+
+    assert edges == {("example.OrderController.create", "example.Job.<init>")}
+    assert "example.Plain.<init>" not in names.values()

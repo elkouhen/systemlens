@@ -27,7 +27,11 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.callgraph.model import MethodCall, MethodReachability
-from systemlens.indexing.integration_methods import SCHEDULER_TRIGGER, path_module_resolver
+from systemlens.indexing.integration_methods import (
+    SCHEDULER_TRIGGER,
+    is_initializer,
+    path_module_resolver,
+)
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
 from systemlens.storage.persisted_names import (
@@ -36,7 +40,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v47-checked-reachability"
+CODE_FLOW_SIGNATURE = "code-flow-v48-constructor-nodes"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -705,6 +709,11 @@ def _build_call_graph(
             ):
                 continue
             key = (normalized_method_name(name), normalized_path_value(path), line)
+            if is_initializer(key[0]):
+                # The index holds every written constructor and every
+                # initializer that makes a call (ADR-75); an engine's other
+                # ones, such as a default constructor, would be dead ends.
+                continue
             has_enclosing_indexed_method = any(
                 item.start_line <= line <= item.end_line
                 for item in methods_by_path_and_name.get((key[1], key[0]), ())

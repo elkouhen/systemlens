@@ -49,7 +49,8 @@ separate collected test case.
 | CLI and indexed catalogs | `test_cli_catalog.py`, `test_ast_only.py`, `test_modules.py` | Commands load and render the persisted repository snapshot. |
 | Call-edge diagnosis | `test_call_edge_diagnostic.py` | The CLI locates an expected call loss in method inventory, CodeQL joining, snapshot state, or flow reconstruction. |
 | Potential code flows | `test_code_flows.py`, `test_flow_diagnostic.py` | Indexed IN-to-OUT paths preserve ordered evidence, confidence, reconciliation, and module filtering. |
-| Joern export decoding and engine | `test_joern_engine.py` | Unresolved, library and constructor targets give no edge; dispatch confidences follow ADR-70. |
+| Joern export decoding and engine | `test_joern_engine.py` | Unresolved, library and anonymous-class constructor targets give no edge; dispatch confidences follow ADR-70. |
+| Constructor and initializer nodes | `test_constructor_nodes.py`, `test_call_graph_shapes.py` (S7, S8) | Every engine routes a flow through `Owner.<init>` with the same edges (ADR-75). |
 | Review regressions (2026-11-06) | `test_call_graph_join_regressions.py`, `test_source_indexing_regressions.py`, `test_engine_seam_cli.py`, `test_spec_conformance.py` | Each finding of `BACKLOG.md` keeps its fix: join checkpoints, witness edges, persisted facts and paths. |
 | CodeQL and fallback dispatch | `test_codeql.py`, `test_codeql_inheritance.py` | Call extraction, timeout cleanup, confidence, inheritance, ambiguity, and AST fallback remain conservative. |
 | REST, Kafka, DTO, and data extraction | `test_rest_detection.py`, `test_rest_string_resolution.py`, `test_dto_inventory.py`, `test_relations.py` | Source-backed endpoints and relations retain paths, types, and unresolved values. |

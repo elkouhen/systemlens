@@ -39,6 +39,9 @@ def test_joern_calls_keep_only_resolved_source_targets() -> None:
 
     assert _edges(calls) == {
         ("example.OrderController.<init>", "example.OrderController.init", 11, "exact"),
+        # ADR-75: Joern inlines the field initializer ``new RepoImpl()``
+        # into the constructor; the default constructor is the target.
+        ("example.OrderController.<init>", "example.RepoImpl.<init>", 7, "exact"),
         # Two implementations: every target stays possible, the interface
         # declaration included.
         ("example.OrderController.create", "example.OrderService.place", 17, "possible"),
@@ -54,10 +57,10 @@ def test_joern_calls_keep_only_resolved_source_targets() -> None:
         ("example.OrderController.helper", "example.Util.log", 25, "exact"),
         ("example.OrderServiceImpl.place", "example.Util.log", 2, "exact"),
     }
-    # The unresolved ``unknown.Thing.call()``, library calls and
-    # constructor targets produce no edge.
+    # The unresolved ``unknown.Thing.call()``, library calls and the
+    # anonymous class's constructor produce no edge.
     assert not any("unresolved" in call.callee or call.callee.startswith("java.") for call in calls)
-    assert not any(call.callee.endswith("<init>") for call in calls)
+    assert not any("$" in call.callee and call.callee.endswith("<init>") for call in calls)
     create = next(call for call in calls if call.callee == "example.RepoImpl.save")
     assert (create.caller_path, create.caller_line, create.callee_line) == (CONTROLLER, 16, 2)
     assert create.caller_parameter_types == ("java.lang.String",)
@@ -205,6 +208,8 @@ def test_a_local_class_method_takes_the_index_spelling() -> None:
     assert _edges(parse_calls(document)) == {
         ("example.App.create", "example.App.Local.go", 10, "exact"),
         ("example.App.Local.go", "example.Util.log", 8, "exact"),
+        # The local class's constructor takes the same spelling (ADR-75).
+        ("example.App.create", "example.App.Local.<init>", 10, "exact"),
     }
     assert [method.qualified_method for method in parse_methods(document)] == [
         "example.App.create", "example.App.Local.go",

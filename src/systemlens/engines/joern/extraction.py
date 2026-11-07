@@ -9,9 +9,14 @@ source-to-source calls and never guesses a target (ADR-61, ADR-85):
   (``Owner.name:<unresolvedSignature>(n)``) is kept only when ``Owner`` is
   a source type that declares exactly one method ``name`` with ``n``
   parameters, without a body; that method is a ``possible`` target;
-- a callee without a source file, a constructor or initializer, a lambda
-  or a method of an anonymous class is dropped, as the CodeQL query
-  reports only named source methods;
+- a callee without a source file, a static initializer, a lambda or a
+  method of an anonymous class is dropped, as the CodeQL query reports only
+  named source methods and constructors. A constructor is the node
+  ``Owner.<init>`` (ADR-75): Joern inlines field initializers into each
+  constructor that does not delegate to ``this(...)``, and puts static
+  field initializers in ``Owner.<clinit>``; both callers are kept. Joern
+  leaves initializer blocks out of its graph, so their calls are left to
+  the symbol pass;
 - one linked body is ``exact``; an abstract declaration alone is a
   ``possible`` target, like a Spring Data query method;
 - several linked methods follow ADR-70: a unique concrete body is
@@ -46,6 +51,7 @@ _SIGNATURE = re.compile(r":[^:()]*\([^()]*\)")
 _UNRESOLVED_ARITY = re.compile(r":<unresolvedSignature>\((\d+)\)$")
 _UNRESOLVED_SIGNATURE = re.compile(r"^(?P<method>[^:]+):<unresolvedSignature>\((?P<arity>\d+)\)$")
 _INITIALIZERS = ("<init>", "<clinit>")
+_STATIC_INITIALIZER = "<clinit>"
 
 
 class JoernError(CallGraphError):
@@ -296,7 +302,8 @@ def _calls_of(
     linked = [_method(item) for item in _callee_rows(row)]
     callees = [
         method for method in linked
-        if _is_source(method, indexed) and not method.anonymous and not method.initializer
+        if _is_source(method, indexed) and not method.anonymous
+        and method.simple_name != _STATIC_INITIALIZER
         # An abstract declaration is a witness only when the call names it:
         # Joern also links a call on a concrete receiver to the interface
         # method its target overrides (ADR-70).

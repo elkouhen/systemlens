@@ -3,10 +3,12 @@
 import hashlib
 import json
 from collections import defaultdict
+from dataclasses import dataclass
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import yaml
+from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import IntegrationMethod
@@ -17,6 +19,144 @@ from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 SCHEDULER_TRIGGER = ("scheduler", "trigger")
 _INPUT_ROLES = {("rest", "serve"), ("kafka", "consume"), SCHEDULER_TRIGGER}
 _OUTPUT_ROLES = {("rest", "call"), ("kafka", "produce")}
+
+# ADR-75: a constructor is ``Owner.<init>``, a type's static initializer
+# code is ``Owner.<clinit>``. Neither can collide with a Java method name.
+CONSTRUCTOR = "<init>"
+STATIC_INITIALIZER = "<clinit>"
+INITIALIZER_NAMES = frozenset({CONSTRUCTOR, STATIC_INITIALIZER})
+# Types that run initializer code. An interface's fields are constants and a
+# record's canonical constructor is implicit; neither gets an implicit node.
+_INITIALIZED_TYPES = {"class_declaration", "enum_declaration", "record_declaration"}
+_CALL_NODES = {
+    "method_invocation", "method_reference", "object_creation_expression",
+    "explicit_constructor_invocation",
+}
+
+
+def is_initializer(qualified_method: str) -> bool:
+    """Whether a qualified name is a constructor or static initializer node."""
+    return qualified_method.rsplit(".", 1)[-1] in INITIALIZER_NAMES
+
+
+@dataclass(frozen=True)
+class InitializerDeclaration:
+    """One constructor or static initializer node of a named type (ADR-75).
+
+    ``node`` is the ``constructor_declaration``, or the type declaration for
+    an implicit constructor and for ``<clinit>``. These two have no
+    declaration of their own: their lines are the type's header, from its
+    first annotation to the opening brace, where the typed engines locate
+    them.
+    """
+
+    name: str
+    node: Node
+    type_node: Node
+    start_line: int
+    end_line: int
+
+
+def type_members(type_node: Node) -> list[Node]:
+    """The member declarations of a type body, enum members included."""
+    body = type_node.child_by_field_name("body")
+    members: list[Node] = []
+    for child in body.named_children if body is not None else []:
+        if child.type == "enum_body_declarations":
+            members.extend(child.named_children)
+        else:
+            members.append(child)
+    return members
+
+
+def initializer_members(type_node: Node, source: bytes, *, static: bool) -> list[Node]:
+    """Field initializers and initializer blocks of one kind, in order.
+
+    Instance members run in every constructor that does not delegate to
+    ``this(...)``; static members run once, in ``<clinit>``.
+    """
+    members: list[Node] = []
+    for member in type_members(type_node):
+        if member.type == "static_initializer":
+            member_static = True
+        elif member.type == "block":
+            member_static = False
+        elif member.type == "field_declaration":
+            if not any(
+                declarator.type == "variable_declarator"
+                and declarator.child_by_field_name("value") is not None
+                for declarator in member.named_children
+            ):
+                continue
+            modifiers = java_parser.modifiers_node(member)
+            member_static = modifiers is not None and "static" in java_parser.node_text(
+                source, modifiers
+            ).split()
+        else:
+            continue
+        if member_static == static:
+            members.append(member)
+    return members
+
+
+def _contains_call(nodes: Sequence[Node]) -> bool:
+    return any(
+        descendant.type in _CALL_NODES
+        for node in nodes for descendant in java_parser.walk(node)
+    )
+
+
+def delegates_to_this(constructor: Node) -> bool:
+    """Whether a constructor starts with ``this(...)``.
+
+    Such a constructor runs no initializer code itself: the constructor it
+    delegates to does (JLS 12.5).
+    """
+    body = constructor.child_by_field_name("body")
+    first = next((
+        child for child in body.named_children
+        if child.type not in {"line_comment", "block_comment"}
+    ), None) if body is not None else None
+    keyword = first.child_by_field_name("constructor") if (
+        first is not None and first.type == "explicit_constructor_invocation"
+    ) else None
+    return keyword is not None and keyword.type == "this"
+
+
+def initializer_declarations(root: Node, source: bytes) -> list[InitializerDeclaration]:
+    """Constructor and static initializer nodes of a compilation unit.
+
+    Every written constructor is a node. A class or enum without one gets
+    an implicit ``<init>`` node when its instance initializer code makes a
+    call; a type gets ``<clinit>`` when its static initializer code does.
+    Code that calls nothing would be a node without an edge.
+    """
+    found: list[InitializerDeclaration] = []
+    for node in java_parser.walk(root):
+        if node.type == "constructor_declaration":
+            type_node = java_parser.enclosing(node, *_INITIALIZED_TYPES)
+            if type_node is not None:
+                found.append(InitializerDeclaration(
+                    CONSTRUCTOR, node, type_node,
+                    node.start_point.row + 1, node.end_point.row + 1,
+                ))
+            continue
+        if node.type not in _INITIALIZED_TYPES:
+            continue
+        body = node.child_by_field_name("body")
+        if body is None:
+            continue
+        header = (node.start_point.row + 1, body.start_point.row + 1)
+        members = type_members(node)
+        if (
+            node.type != "record_declaration"
+            and not any(member.type == "constructor_declaration" for member in members)
+            and _contains_call(initializer_members(node, source, static=False))
+        ):
+            found.append(InitializerDeclaration(CONSTRUCTOR, node, node, *header))
+        if _contains_call(initializer_members(node, source, static=True)):
+            found.append(InitializerDeclaration(STATIC_INITIALIZER, node, node, *header))
+    return found
 
 
 def _openapi_operation_id(repo_root: Path, endpoint: MessageEndpoint) -> str | None:
@@ -307,6 +447,34 @@ def materialize_integration_methods(
     methods: list[IntegrationMethod] = []
     method_ids: set[str] = set()
     overridden_rest_controller_method_ids: set[str] = set()
+
+    def allocate_id(
+        module: str, path: str, qualified_method: str, parameter_signature: str,
+        start_line: int, end_line: int,
+    ) -> str:
+        method_id = _method_id(module, path, qualified_method, parameter_signature)
+        if method_id in method_ids:
+            # Invalid or generated Java can contain two declarations with
+            # the same lexical signature. Keep the historical stable ID
+            # for the first declaration and disambiguate later ones with
+            # their source coordinates instead of failing the transaction.
+            method_id = _method_id(
+                module,
+                path,
+                qualified_method,
+                f"{parameter_signature}|lines={start_line}:{end_line}",
+            )
+            collision = 2
+            while method_id in method_ids:
+                method_id = _method_id(
+                    module,
+                    path,
+                    qualified_method,
+                    f"{parameter_signature}|lines={start_line}:{end_line}|collision={collision}",
+                )
+                collision += 1
+        method_ids.add(method_id)
+        return method_id
     for path in sorted(set(java_paths) | set(by_path)):
         if not path.endswith(".java"):
             continue
@@ -368,28 +536,9 @@ def materialize_integration_methods(
                 else "()"
             )
             parameter_types = declared_parameter_types(declaration, source)
-            method_id = _method_id(module, path, qualified_method, parameter_signature)
-            if method_id in method_ids:
-                # Invalid or generated Java can contain two declarations with
-                # the same lexical signature. Keep the historical stable ID
-                # for the first declaration and disambiguate later ones with
-                # their source coordinates instead of failing the transaction.
-                method_id = _method_id(
-                    module,
-                    path,
-                    qualified_method,
-                    f"{parameter_signature}|lines={start_line}:{end_line}",
-                )
-                collision = 2
-                while method_id in method_ids:
-                    method_id = _method_id(
-                        module,
-                        path,
-                        qualified_method,
-                        f"{parameter_signature}|lines={start_line}:{end_line}|collision={collision}",
-                    )
-                    collision += 1
-            method_ids.add(method_id)
+            method_id = allocate_id(
+                module, path, qualified_method, parameter_signature, start_line, end_line,
+            )
             methods.append(IntegrationMethod(
                 id=method_id,
                 module=module,
@@ -409,6 +558,46 @@ def materialize_integration_methods(
                 )
             ):
                 overridden_rest_controller_method_ids.add(method_id)
+        # Constructors and initializers are call-graph nodes, never ports:
+        # an endpoint in their code stays without a method (ADR-75).
+        for initializer in initializer_declarations(root, source):
+            module = (
+                next((endpoint.module for endpoint in path_endpoints if endpoint.module), None)
+                or _path_module(repo_root, path, modules)
+            )
+            anchor = (
+                initializer.node if initializer.node.type == "constructor_declaration"
+                else initializer.type_node.child_by_field_name("body")
+            )
+            owner = _qualified_method_owner(anchor, root, source) if anchor is not None else None
+            if module is None or owner is None:
+                continue
+            qualified_method = f"{owner}.{initializer.name}"
+            parameter_node = (
+                initializer.node.child_by_field_name("parameters")
+                if initializer.node.type == "constructor_declaration" else None
+            )
+            parameter_signature = (
+                source[parameter_node.start_byte:parameter_node.end_byte].decode("utf-8")
+                if parameter_node is not None else "()"
+            )
+            methods.append(IntegrationMethod(
+                id=allocate_id(
+                    module, path, qualified_method, parameter_signature,
+                    initializer.start_line, initializer.end_line,
+                ),
+                module=module,
+                qualified_method=qualified_method,
+                path=path,
+                start_line=initializer.start_line,
+                end_line=initializer.end_line,
+                input_endpoint_ids=(),
+                output_endpoint_ids=(),
+                parameter_types=(
+                    declared_parameter_types(initializer.node, source)
+                    if initializer.node.type == "constructor_declaration" else ()
+                ),
+            ))
 
     endpoint_ids_with_method = {
         endpoint_id

@@ -179,6 +179,16 @@ type has other same-name overloads with the call's arity that agree with
 it on every typed argument, the call reaches each of them as `possible`
 and none as `exact`.
 
+Constructor calls follow ADR-75. A `new T(...)`, `this(...)` or
+`super(...)` row names the constructor `T.<init>`, `exact` unless an
+untyped argument leaves same-arity overloads open, as above. The implicit
+`super()` CodeQL adds, which has its constructor's own location, and the
+constructors of anonymous classes and lambdas give no row. A call in
+instance initializer code (`<obinit>`) is reported once per constructor
+that calls `<obinit>`, so its caller is that constructor; `<obinit>`
+itself is never a target. Static initializer code keeps the caller
+`T.<clinit>`. The method query leaves both initializer methods out.
+
 The join reads the witness as it reads the source pass's witness. At a site
 (caller, call line) where an exact row reaches a concrete implementation of
 the interface method, the witness expands only to that implementation, and
@@ -294,9 +304,13 @@ method has a source file among the indexed files.
 | Any of the above, and a linked body in an anonymous class, a lambda or a library | every source method `possible` |
 | No resolved signature (`Owner.name:<unresolvedSignature>(n)`), one source method `name` with `n` parameters on `Owner`, without a body | that method `possible`; a concrete body is left to the symbol pass |
 
-Constructors, initializers, lambdas and anonymous-class methods are never
+Static initializers, lambdas and anonymous-class methods are never
 targets, but a body among them still keeps the call `possible` (ADR-70,
-ADR-81). A local class method, spelled
+ADR-81). A constructor is the target `Owner.<init>` (ADR-75). Joern
+inlines field initializers into every constructor that does not start
+with `this(...)`, and static field initializers into `Owner.<clinit>`,
+which callers keep; it leaves initializer blocks out of its graph, so the
+symbol pass adds their calls. A local class method, spelled
 `pkg.App.create:void().Local.go:void()` by Joern, is mapped to the index's
 name `pkg.App.Local.go`. A call inside a lambda or an anonymous class keeps an
 `<anonymous>` caller, which the join attributes to the enclosing indexed
@@ -506,6 +520,27 @@ call on `this`, `super`, `this.field` or without receiver stays unresolved.
 A method of a local named class is indexed as its own method: a port in its
 body belongs only to that innermost declaring method, never to the enclosing
 method that declares the class.
+
+Constructors and initializers are nodes too (ADR-75), built by
+`initializer_declarations` in `integration_methods.py`. Each written
+constructor is `Owner.<init>` with its parameter types. A class or enum
+without one gets an implicit `Owner.<init>` when its field initializers or
+instance initializer blocks make a call; a type gets `Owner.<clinit>` when
+its static code does. Both implicit nodes span the type's header, from the
+first annotation to the opening brace, where the typed engines locate
+them. These nodes own no port, so they never start or end a flow.
+
+The symbol pass attributes a call site to its context: a named method, a
+constructor, or an initializer member of a named type. Instance
+initializer code belongs to each constructor that does not start with
+`this(...)`, or to the implicit constructor; static code belongs to
+`<clinit>`. `new T(...)` resolves `T` like a declared type and selects the
+constructor by arity and argument types (`exact` when one is left, every
+candidate `possible` otherwise). `this(...)` targets the caller's type and
+`super(...)` its source superclass. A constructor binds statically: it is
+neither inherited nor a dispatch target of a subtype. The join creates no
+placeholder for an engine's constructor or initializer that has no node,
+such as a default constructor.
 Symbol collection scans source bytes and syntax nodes once per flow rebuild.
 `JavaSymbols.resolve` accepts explicit imports and qualified type names as
 signature identities even when dependency sources are absent. Callees still
@@ -720,9 +755,9 @@ that owns each gap. A shape not delivered is a strict expected failure.
 
 | Status | Shapes |
 |---|---|
-| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol table; CodeQL join), S9 varargs of any arity, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, H13 class wins over a `default`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, M4 one type in `src/main` and `src/test`, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
+| `covered` | S1 declared receivers, S2 static calls, S3 outer-type calls, S4 private methods, S5 overloads by argument type, S6 methods sharing a line (symbol table; CodeQL join), S7 constructors, S8 constructor and initializer bodies, S9 varargs of any arity, H1 inherited methods, H2 overrides and virtual dispatch, H3 template methods, H4, H5 and H6 `super.m()`, H7 interfaces, H8 records, H9 enum constant bodies, H10 external interfaces, H12 `X.super.m()`, H13 class wins over a `default`, G1 and G2 generic supertypes with a concrete type, T1 casts and array elements, T4 `var` initializers at their position, T5 names in anonymous, local and inner classes, T6 field hiding, T7 local class scope, T8 type parameters, F1 lambdas and method references as call sites, F4 JDK callbacks, M1 external dispatch scope, M4 one type in `src/main` and `src/test`, W1 injected fields, W4 `@Async` as a plain call, W5 `@Scheduled`, W6 runners as calls, W7 derived queries, W8 generated implementations |
 | `defect` | F2 lambda implementations, F3 anonymous subclasses, M2 dispatch out of the visible modules, M3 one type in two modules |
-| `missing` | S7 constructors, S8 constructor and initializer bodies, H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
+| `missing` | H11 external superclasses, G3 generic implementations, G4 bounded type variables, T2 and T3 pattern variables, W2 bean narrowing, W3 application events |
 | out of scope | X1 reflection, X2 AOP advice, X3 HTTP and Kafka transitions |
 
 ## Build layout

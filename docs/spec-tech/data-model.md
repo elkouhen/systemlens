@@ -825,6 +825,12 @@ Schema version 38 adds nullable declared parameter types to `integration_methods
 Existing indexes migrate with unknown signatures, while a fresh index records the
 types from Java declarations.
 
+Since ADR-75, `integration_methods` also holds constructor rows
+(`Owner.<init>`) and static initializer rows (`Owner.<clinit>`), with no
+input or output endpoint. The schema does not change; an existing index
+recomputes its methods and flows at the next index, because the code-flow
+signature changed.
+
 Schema version 28 adds the `integration_methods` table for AST method evidence and
 input/output endpoint identifiers. Schema version 27 added the `code_flows` table
 and its module/path indexes. The migration is additive and occurs when the

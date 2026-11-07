@@ -296,6 +296,11 @@ method when available. Hovering the block shows the qualified signature. Missing
 method evidence omits the block; missing signature evidence omits the parameter
 line. Long names and types may be clipped to the card width.
 
+A constructor or initializer node (`Owner.<init>`, `Owner.<clinit>`,
+ADR-75) is part of the exported call graph and of the flows that pass
+through it. It owns no port and starts no flow, so no occurrence shows it
+as its method block.
+
 For a Strategy1 Kafka reception, the call-tree card shows the signature of a
 unique `consume` method in the listener's class when its parameter types are
 indexed. If the class has overloaded `consume` methods, a unique indexed call

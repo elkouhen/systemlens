@@ -130,6 +130,77 @@ predicate callerInScope(Callable enclosing) {
 }
 
 /**
+ * A constructor call written in the sources (ADR-75): `new T(...)`,
+ * `this(...)` or `super(...)`. The implicit `super()` CodeQL adds to a
+ * constructor has that constructor's own location and is left out, as are
+ * the constructors of anonymous classes and lambdas (ADR-62).
+ */
+predicate sourceConstructorCall(ConstructorCall call) {
+  call.getEnclosingCallable().fromSource() and
+  not call.getConstructor().getDeclaringType() instanceof AnonymousClass and
+  not exists(Callable enclosing | enclosing = call.getEnclosingCallable() |
+    call.getLocation().getStartLine() = enclosing.getLocation().getStartLine() and
+    call.getLocation().getStartColumn() = enclosing.getLocation().getStartColumn()
+  )
+}
+
+/** A same-arity constructor overload a call with an untyped argument may select. */
+predicate unresolvedConstructorOverload(ConstructorCall call, Constructor candidate) {
+  exists(Constructor declared |
+    declared = call.getConstructor().getSourceDeclaration() and
+    exists(int i | call.getArgument(i).getType() instanceof ErrorType) and
+    candidate.getDeclaringType() = declared.getDeclaringType() and
+    candidate != declared and
+    candidate.fromSource() and
+    candidate.getNumberOfParameters() = call.getNumArgument() and
+    declared.getNumberOfParameters() = call.getNumArgument() and
+    forall(int j |
+      j in [0 .. call.getNumArgument() - 1] and
+      not call.getArgument(j).getType() instanceof ErrorType
+    |
+      candidate.getParameterType(j).getErasure() = declared.getParameterType(j).getErasure()
+    )
+  )
+}
+
+/** The constructor a call selects is exact unless an untyped argument leaves overloads open. */
+predicate constructorTarget(ConstructorCall call, Constructor target, string confidence) {
+  target = call.getConstructor().getSourceDeclaration() and target.fromSource() and
+  if exists(Constructor other | unresolvedConstructorOverload(call, other))
+  then confidence = "possible"
+  else confidence = "exact"
+  or
+  unresolvedConstructorOverload(call, target) and confidence = "possible"
+}
+
+/**
+ * The node a call belongs to (ADR-75). Instance initializer code
+ * (`<obinit>`) runs in each constructor that calls it, which CodeQL
+ * models with a call from every constructor not delegating to `this(...)`.
+ */
+predicate callerOf(Call call, Callable caller) {
+  exists(Callable enclosing | enclosing = call.getEnclosingCallable() |
+    not enclosing instanceof InstanceInitializer and caller = enclosing
+    or
+    enclosing instanceof InstanceInitializer and
+    exists(MethodCall init | init.getMethod() = enclosing and init.getEnclosingCallable() = caller)
+  )
+}
+
+/** A constructor is `Owner.<init>`, the name the index gives it. */
+string nodeName(Callable callable) {
+  if callable instanceof Constructor
+  then result = callable.getDeclaringType().getQualifiedName() + ".<init>"
+  else result = callable.getQualifiedName()
+}
+
+predicate callTarget(Call call, Callable target, string confidence) {
+  resolvedTarget(call, target, confidence) and not target instanceof InitializerMethod
+  or
+  constructorTarget(call, target, confidence)
+}
+
+/**
  * The declared parameter types, separated by `;`. Two same-name overloads
  * declared on one line share a name, a file and a start line; the join
  * tells them apart with these types.
@@ -142,16 +213,17 @@ string parameterTypes(Callable callable) {
   )
 }
 
-from SourceMethodCall call, Callable enclosing, Method invoked, string dispatch_confidence
-where callerInScope(enclosing) and
-  enclosing = call.getEnclosingCallable() and
-  resolvedTarget(call, invoked, dispatch_confidence)
+from Call call, Callable enclosing, Callable invoked, string dispatch_confidence
+where (call instanceof SourceMethodCall or sourceConstructorCall(call)) and
+  callerOf(call, enclosing) and
+  callerInScope(enclosing) and
+  callTarget(call, invoked, dispatch_confidence)
 // Return source locations rather than database-internal IDs.  SystemLens uses
 // these locations to join CodeQL rows to its indexed IntegrationMethod facts.
-select enclosing.getQualifiedName() as caller,
+select nodeName(enclosing) as caller,
   enclosing.getFile().getRelativePath() as caller_path,
   enclosing.getLocation().getStartLine() as caller_line,
-  invoked.getQualifiedName() as callee,
+  nodeName(invoked) as callee,
   invoked.getFile().getRelativePath() as callee_path,
   invoked.getLocation().getStartLine() as callee_line,
   call.getLocation().getStartLine() as call_line,
@@ -163,7 +235,7 @@ select enclosing.getQualifiedName() as caller,
 _METHODS_QUERY = """import java
 
 from Method method
-where method.fromSource()__METHOD_SCOPE__
+where method.fromSource() and not method instanceof InitializerMethod__METHOD_SCOPE__
 select method.getQualifiedName() as qualified_method,
   method.getFile().getRelativePath() as path,
   method.getLocation().getStartLine() as start_line
