@@ -1971,13 +1971,12 @@
           x: event.clientX - viewport.left,
           y: event.clientY - viewport.top,
         };
-        const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
         // About 1.2 times per mouse notch (deltaY 100), whatever the target.
-        const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * .0018);
+        const scale = graphWheelZoomScale(event);
         const maximumRatio = 100;
         // A larger Sigma ratio is a zoom-out. Bound manual wheel changes so
         // one trackpad burst cannot jump across the safe camera state.
-        const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio * factor));
+        const ratio = Math.max(.01, Math.min(maximumRatio, state.ratio / scale));
         // Zoom around the cursor with Sigma's own conversion, computed from
         // the current camera state. Re-projecting a graph point after
         // setState read a matrix Sigma only refreshes on render, so the

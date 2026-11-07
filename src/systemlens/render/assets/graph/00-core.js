@@ -239,6 +239,14 @@
       callTreeVisibleNodeCount: 0,
       callTreeVisibleEdgeCount: 0,
     };
+    // One wheel notch (deltaY 100 pixels, or a few lines) scales both graph
+    // surfaces, the Architecture graph and the selected call tree, by the
+    // same step of about 1.2 around the pointer.
+    const GRAPH_WHEEL_ZOOM_RATE = .0018;
+    function graphWheelZoomScale(event) {
+      const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
+      return Math.exp(-Math.max(-120, Math.min(120, delta)) * GRAPH_WHEEL_ZOOM_RATE);
+    }
     function updateGraphState(patch) {
       Object.assign(graphState, patch);
       return graphState;

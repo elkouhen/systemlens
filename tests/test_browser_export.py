@@ -1366,6 +1366,76 @@ def test_graph_viewport_pan_and_zoom_follow_the_pointer() -> None:
         browser.close()
 
 
+def _tree_centers(page) -> dict:
+    return page.evaluate(
+        "() => Object.fromEntries([...document.querySelectorAll('#graph-call-tree .graph-call-tree-node')]"
+        ".map(node => { const box = node.getBoundingClientRect();"
+        " return [node.dataset.pathKey, [box.left + box.width / 2, box.top + box.height / 2]]; }))"
+    )
+
+
+def _wheel_notch(page, point: tuple[float, float], delta_y: int = -100) -> None:
+    """Send one mouse wheel notch at a point."""
+    page.mouse.move(*point)
+    page.mouse.wheel(0, delta_y)
+    page.wait_for_timeout(150)
+
+
+def _measure_wheel_zoom(page, centers, point: tuple[float, float], delta_y: int = -100) -> float:
+    """Scale of one notch; the motion is a uniform zoom around the pointer."""
+    before = centers(page)
+    _wheel_notch(page, point, delta_y)
+    scale, fixed, residual = _fit_uniform_zoom(before, centers(page))
+    assert residual < 1 and fixed is not None
+    assert fixed[0] == pytest.approx(point[0], abs=1)
+    assert fixed[1] == pytest.approx(point[1], abs=1)
+    return scale
+
+
+@pytest.mark.slow
+def test_one_wheel_notch_zooms_both_graph_surfaces_by_the_same_step() -> None:
+    """BL-16: the Architecture graph and the call tree share one zoom step.
+
+    Regression: one notch zoomed the call tree by 1.06 and the Architecture
+    graph by 1.2.
+    """
+    document = _large_call_tree_document()
+    with sync_playwright() as playwright:
+        try:
+            browser = _launch_visual_browser(playwright)
+        except PlaywrightError as error:
+            pytest.skip(f"No Chromium browser is available: {error}")
+        page = browser.new_page(viewport={"width": 1440, "height": 900})
+        page.set_default_timeout(5_000)
+        page.set_content(document, wait_until="load")
+        page.wait_for_function(
+            "() => Number(document.querySelector('#graph')?.dataset.visibleNodeCount || 0) > 1"
+        )
+        _wait_for_settled_layout(page)
+        stage = _graph_background_point(page)
+        graph_in = _measure_wheel_zoom(page, _card_centers, (stage["x"], stage["y"]))
+        graph_out = _measure_wheel_zoom(page, _card_centers, (stage["x"], stage["y"]), 100)
+
+        page.locator("#flows-tab").click()
+        page.locator("#code-flows .code-flow-item").first.click()
+        page.locator("#flow-mode-expand-all").click()
+        page.wait_for_function(
+            "() => document.querySelectorAll('#graph-call-tree .graph-call-tree-node').length === 9"
+        )
+        page.wait_for_timeout(200)
+        tree = page.locator("#graph-call-tree").bounding_box()
+        assert tree
+        point = (tree["x"] + tree["width"] * .4, tree["y"] + tree["height"] * .55)
+        tree_in = _measure_wheel_zoom(page, _tree_centers, point)
+        tree_out = _measure_wheel_zoom(page, _tree_centers, point, 100)
+
+        assert 1.1 < graph_in < 1.3
+        assert tree_in == pytest.approx(graph_in, rel=0.002)
+        assert tree_out == pytest.approx(graph_out, rel=0.002)
+        assert tree_out == pytest.approx(1 / tree_in, rel=0.002)
+        browser.close()
+
+
 @pytest.mark.slow
 def test_minimap_stays_visible_once_the_user_navigates() -> None:
     """PDR-6: after a pan or zoom the minimap stays until the next fit.

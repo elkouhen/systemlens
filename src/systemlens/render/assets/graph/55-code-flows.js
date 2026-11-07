@@ -366,9 +366,8 @@
           if (!codeFlowSelection.flowId || graphState.callGraphDisplayMode !== "tree") return;
           event.preventDefault();
           const bounds = graphCallTreeOverlay.getBoundingClientRect();
-          const delta = event.deltaMode === 1 ? event.deltaY * 16 : event.deltaY;
-          const factor = Math.exp(Math.max(-120, Math.min(120, delta)) * -.0006);
-          zoomCallTree(factor, event.clientX - bounds.left, event.clientY - bounds.top);
+          // The same step as the Architecture graph (UX-UI "Selected call tree").
+          zoomCallTree(graphWheelZoomScale(event), event.clientX - bounds.left, event.clientY - bounds.top);
         }, { passive: false });
       }
       const active = Boolean(codeFlowSelection.flowId)

@@ -578,6 +578,8 @@ rather than greyed. The tree area reserves the band under the widget and
 the band above the docked key, so a fit never places a card under them.
 
 The tree workspace supports drag-to-pan and bounded zoom from 0.5x to 64x.
+One wheel notch zooms the tree by the same step as the Architecture graph,
+about 1.2 times, and keeps the tree point under the pointer fixed.
 The initial fit keeps a minimum canvas scale of 0.66 so deep trees do not shrink
 cards without bound. At a total scale below 0.82, method parameters and operation
 badges become visually quiet while service names and diagnostic borders remain

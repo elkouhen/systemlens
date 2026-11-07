@@ -286,7 +286,11 @@ lab.
   tree") states it.
 - **Depends on:** none.
 - **Origin:** `docs/plans/graph-viewport-navigation.md`: V4.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `test_one_wheel_notch_zooms_both_graph_surfaces_by_the_same_step`
+  in `tests/test_browser_export.py` measures 1.197 per notch on both
+  surfaces, around the pointer (the call tree gave 1.062 before); commit:
+  pending.
 - **Why P1:** a reported navigation defect; no contract change.
 
 <a id="bl-17"></a>
