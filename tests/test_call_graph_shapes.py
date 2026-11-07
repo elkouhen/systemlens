@@ -1929,20 +1929,140 @@ SHAPES: list[Shape] = [
             f.apply();
           }
         }
-        """, "Use.run", {"FnImpl.apply": "possible"}, partial=True,
-        pending="not planned: a lambda implementation keeps the named body exact"),
-    Shape("F3", """
-        class Base {
-          void hook() {} //@Base.hook
+        """, "Use.run", {"FnImpl.apply": "possible", "Fn.apply": "possible"},
+        note="BL-30: a lambda somewhere implements Fn, so the named body is possible and the "
+             "declared row of BL-28 joins it; no edge goes to the creating method"),
+    Shape("F2-target", """
+        interface Fn {
+          void apply(); //@Fn.apply
+        }
+        interface SubFn extends Fn {}
+        interface Gn {
+          void apply(); //@Gn.apply
+        }
+        class GnImpl implements Gn {
+          public void apply() {} //@GnImpl.apply
+        }
+        class FnImpl implements Fn {
+          public void apply() {} //@FnImpl.apply
+        }
+        class Registry {
+          void register(SubFn fn) {} //@Registry.register
+        }
+        class Use {
+          Fn f;
+          Gn g;
+          Registry registry;
+          void run() { //@Use.run
+            registry.register(this::noop);
+            f.apply();
+            g.apply();
+          }
+          void noop() {} //@Use.noop
+        }
+        """, "Use.run",
+        {"Registry.register": "exact", "Use.noop": "exact", "FnImpl.apply": "possible", "Fn.apply": "possible", "GnImpl.apply": "exact", "Gn.apply": "possible"},
+        note="BL-30: a method reference passed to a SubFn parameter implements Fn too; Gn, which "
+             "no lambda implements, keeps its exact body and ADR-70 witness"),
+    Shape("F2-contexts", """
+        interface Fn {
+          void apply(); //@Fn.apply
+        }
+        interface Gn {
+          void apply(); //@Gn.apply
+        }
+        interface Hn {
+          void apply(); //@Hn.apply
+        }
+        class FnImpl implements Fn {
+          public void apply() {} //@FnImpl.apply
+        }
+        class GnImpl implements Gn {
+          public void apply() {} //@GnImpl.apply
+        }
+        class HnImpl implements Hn {
+          public void apply() {} //@HnImpl.apply
+        }
+        class Use {
+          Fn f;
+          Gn g;
+          Hn h;
+          Fn make() { return () -> {}; }
+          void assign() { h = () -> {}; }
+          void run() { //@Use.run
+            Object cast = (Gn) () -> {};
+            f.apply();
+            g.apply();
+            h.apply();
+          }
+        }
+        """, "Use.run", {
+            "FnImpl.apply": "possible", "Fn.apply": "possible",
+            "GnImpl.apply": "possible", "Gn.apply": "possible",
+            "HnImpl.apply": "possible", "Hn.apply": "possible",
+        },
+        note="BL-30: a returned lambda, a cast and an assignment write the target type"),
+    Shape("F2-created", """
+        interface Fn {
+          void apply(); //@Fn.apply
+          default void log() {} //@Fn.log
+        }
+        interface Gn {
+          void apply(); //@Gn.apply
+        }
+        class FnImpl implements Fn {
+          public void apply() {} //@FnImpl.apply
+          public void log() {} //@FnImpl.log
         }
         class Use {
           void run() { //@Use.run
-            Base b = new Base() { void hook() {} };
-            b.hook();
+            Fn fn = () -> {};
+            fn.apply();
+            fn.log();
+            Gn gn = () -> {};
+            gn.apply();
           }
         }
-        """, "Use.run", {"Base.hook": "possible"}, partial=True,
-        pending="not planned: an anonymous subclass keeps the base body exact"),
+        """, "Use.run", {"Fn.log": "exact", "Gn.apply": "possible"},
+        absent=("FnImpl.apply", "Fn.apply", "FnImpl.log"),
+        note="BL-30: a variable holding a lambda reaches no named body of the method the lambda "
+             "implements, and the declared row only when no named body could be reached from it; "
+             "it inherits a default body exactly"),
+    Shape("F3", """
+        class Base {
+          void hook() {} //@Base.hook
+          void other() {} //@Base.other
+        }
+        class Use {
+          void run(Base param) { //@Use.run
+            Base b = new Base() { void hook() {} };
+            b.hook();
+            b.other();
+            param.hook();
+            param.other();
+          }
+        }
+        """, "Use.run", {"Base.hook": "possible", "Base.other": "exact"},
+        note="BL-30: the variable holding the anonymous instance reaches no named hook body and "
+             "inherits other exactly; elsewhere, hook stays possible since the anonymous class "
+             "overrides it, and other stays exact"),
+    Shape("F3-kept", """
+        class Base {
+          void hook() {} //@Base.hook
+        }
+        class Sub extends Base {
+          void hook() {} //@Sub.hook
+        }
+        class Use {
+          void run() { //@Use.run
+            Base b = new Base() { void other() {} };
+            b.hook();
+            Sub s = new Sub();
+            s.hook();
+          }
+        }
+        """, "Use.run", {"Base.hook": "exact", "Sub.hook": "exact"},
+        note="BL-30: an anonymous class that does not override hook leaves the named bodies exact"),
     Shape("F4", """
         class Task implements Runnable {
           public void run() {} //@Task.run

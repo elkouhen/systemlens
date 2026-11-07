@@ -613,14 +613,34 @@ dispatch on `T` when `T` is a source subtype of the declared type (ADR-86,
 BL-29). The declaration the call names, and so the witness, stay the
 declared type's. Any other assignment in the variable's block or class
 body, compound and `++` included, keeps the declared type. So do a
-parameter, a non-final, blank or inherited field, an anonymous class and
-a lambda.
+parameter and a non-final, blank or inherited field.
 
 The narrowed call is `exact` only under ADR-81, checked on `T`: an
 override in a subclass of `T` keeps it `possible`. When `T` has no
 indexed body for the call, such as a record accessor, the declared
 type's dispatch stands. The check walks the variable's block once per
 narrowed call site. Method references are not narrowed.
+
+A lambda, a method reference or an anonymous class is a body no indexed
+method stands for (ADR-62). Two rules keep it from making a named body
+`exact` (ADR-72, BL-30). First, a call stays `possible` when its runtime
+type, or a subtype, has an anonymous class whose body declares the name
+and arity, or is the target type of a lambda or method reference while
+the call names an abstract method.
+
+The target type counts only when the code writes it: the variable a
+lambda initializes or is assigned to, a cast, the enclosing method's
+return type, or a source parameter type of the name and arity it is
+passed to. The last one is read by name and arity, a superset of the
+real target. The types are collected once, on the first call that needs
+them.
+
+Second, a variable that the ADR-86 conditions prove to hold a lambda, a
+method reference or an anonymous class reaches no named body of a method
+the value implements. Its call keeps only the BL-28 declared row, when
+that row's dispatch reaches no named body. A method the value inherits,
+such as a `default` body, is its supertype's body, `exact` unless an
+external supertype may declare the name.
 
 A receiver typed by an external interface, one that a source type lists in
 `implements` or `extends` (and `Thread` as a `Runnable`), dispatches to the
@@ -965,10 +985,10 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T10 | Ternary receiver whose branches share a type | `covered` (BL-23) | |
 | T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
 | T12 | Element of a JDK container accessor chain | `covered` (BL-27) | |
-| T13 | Local or `final` field created once as a named class; reassigned, inherited, anonymous and lambda values keep the declared type | `covered` (BL-29) | |
+| T13 | Local or `final` field created once as a named class; reassigned and inherited values keep the declared type | `covered` (BL-29) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
-| F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
-| F3 | Anonymous subclass overriding a source method | `defect` | not planned |
+| F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
+| F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
 | F5 | Lambda parameter typed by a source functional interface; method reference overload picked by its target | `covered` (BL-24) | |
 | M1 | External-interface dispatch limited to visible modules | `covered` (ADR-71) | |
@@ -1001,7 +1021,8 @@ method (ADR-62) and dropped callees that are not indexed methods.
 The default test runs the symbol pass in a closed world and expects those
 rows. A case whose gap an open backlog item owns is a strict expected
 failure that names the item; the delivery of the item turns it into a
-pass. A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
+pass. A case whose difference a decision record keeps lists the rows the
+`source` engine gives instead, and its item column names the case. A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
 `CallGraphSession.calls()` and expects the same rows from CodeQL.
 
 The table uses the status values of the call shapes above; the item
@@ -1021,7 +1042,7 @@ aligned it.
 | A9 | Lambda passed to a source functional interface parameter | `covered` | BL-24 |
 | A10 | Method reference, one arity or an overloaded name | `covered` | BL-24 |
 | B1 | Local or `final` field declared `Shape`, created as `Circle` | `covered` | BL-29 |
-| B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
+| B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `covered` | BL-30; B2-lambda omits the declared row (ADR-72) |
 | B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |

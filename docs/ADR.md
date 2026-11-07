@@ -1706,6 +1706,11 @@ dispatch that row to `FnImpl.apply`, a route the variable never takes;
 the row is left out for the reason ADR-70 leaves out a declared row that
 opens a route. Without a named implementation, the row is emitted.
 
+Measured on 2026-11-07 with fresh indexes of copies, the reference
+projects hold no such call: train-ticket keeps 406 flows and 1712 edges
+between indexed methods with both engines, the lab 23 flows and 102
+`source` edges. The persisted `source` edges are identical.
+
 ## ADR-73: Scope every dispatch to the caller's visible modules
 
 **Status:** Proposed on 2026-11-03 for task K4 of the call-graph

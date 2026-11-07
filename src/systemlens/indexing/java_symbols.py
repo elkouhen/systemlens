@@ -315,6 +315,32 @@ def _assigned(source: bytes, scope: Node, name: str) -> bool:
     return False
 
 
+def _declared_members(source: bytes, body: Node | None) -> set[tuple[str, int]]:
+    """The ``(name, arity)`` of each method a class body declares."""
+    members: set[tuple[str, int]] = set()
+    for member in body.named_children if body is not None else []:
+        if member.type != "method_declaration":
+            continue
+        formals = member.child_by_field_name("parameters")
+        members.add((parser.declaration_name(member, source) or "", len([
+            formal for formal in (formals.named_children if formals is not None else [])
+            if formal.type in {"formal_parameter", "spread_parameter"}
+        ])))
+    return members
+
+
+def _implicit_value(value: Node | None) -> bool:
+    """Whether ``value`` creates an instance no indexed method stands for:
+    a lambda, a method reference or an anonymous class (ADR-62, ADR-72)."""
+    while value is not None and value.type == "parenthesized_expression" and value.named_children:
+        value = value.named_children[0]
+    return value is not None and (
+        value.type in {"lambda_expression", "method_reference"}
+        or value.type == "object_creation_expression"
+        and any(child.type == "class_body" for child in value.children)
+    )
+
+
 def _is_anonymous_body(node: Node) -> bool:
     return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
 
@@ -444,6 +470,14 @@ class JavaSymbols:
         self._levels: dict[tuple[str, str], list[list[tuple[str, str]]]] = {}
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
+        # The ``(name, arity)`` each anonymous class body declares, by the
+        # type it extends or implements (BL-30, ADR-72).
+        self.anonymous_members: dict[str, set[tuple[str, int]]] = defaultdict(set)
+        # Lambdas and method references, typed on demand by their target.
+        self._functional_values: list[tuple[str, Node]] = []
+        self._implicit: tuple[dict[str, set[tuple[str, int]]], set[str]] | None = None
+        self._context_methods: dict[tuple[str, int, int], _Method] | None = None
+        self._by_name_arity: dict[tuple[str, int], list[_Method]] | None = None
         # Build dependencies between module identities (ADR-71), and the
         # modules each caller module sees, computed on demand.
         self.module_dependencies: dict[str, set[str]] = defaultdict(set)
@@ -510,6 +544,11 @@ class JavaSymbols:
                         )
                         if anonymous is not None:
                             self.anonymous_supertypes.add(anonymous)
+                            self.anonymous_members[anonymous].update(
+                                _declared_members(source, parser.child_by_type(node, "class_body"))
+                            )
+                elif node.type in {"lambda_expression", "method_reference"}:
+                    self._functional_values.append((path, node))
                 elif node.type == "annotation_type_declaration":
                     # An annotation type names parameters (``NewSpan``) but
                     # declares no method or supertype of its own.
@@ -1692,6 +1731,14 @@ class JavaSymbols:
         (compound or ``++``/``--`` included), an anonymous class body and a
         lambda keep the declared type: this returns ``None``.
         """
+        created = self.created_value(info, receiver, invocation)
+        return self._creation(info.method.path, *created) if created is not None else None
+
+    def created_value(self, info: _Method, receiver: Node, invocation: Node) -> tuple[Node, str] | None:
+        """The one value a variable holds at ``invocation``, and the type
+        whose scope it is written in: the initializer of a local assigned
+        only at its declaration, or of a ``final`` field the enclosing class
+        declares and never assigns again (ADR-86)."""
         source = self.units[info.method.path].source
         field_only = False
         if receiver.type == "identifier":
@@ -1721,7 +1768,7 @@ class JavaSymbols:
             scope = scope.parent
         return None
 
-    def _created_local(self, info: _Method, name: str, declarator: _Declarator) -> str | None:
+    def _created_local(self, info: _Method, name: str, declarator: _Declarator) -> tuple[Node, str] | None:
         value = declarator.value
         if (
             declarator.type_node is None or value is None
@@ -1735,9 +1782,9 @@ class JavaSymbols:
         source = self.units[info.method.path].source
         if _assigned(source, declaration.parent, name):
             return None
-        return self._creation(info.method.path, value, info.owner)
+        return value, info.owner
 
-    def _created_field(self, info: _Method, scope: Node, name: str) -> str | None:
+    def _created_field(self, info: _Method, scope: Node, name: str) -> tuple[Node, str] | None:
         path = info.method.path
         source = self.units[path].source
         body = scope.child_by_field_name("body")
@@ -1759,11 +1806,12 @@ class JavaSymbols:
             return None
         if _assigned(source, body, name):
             return None
-        return self._creation(path, variable.child_by_field_name("value"), self.owner(path, scope))
+        value = variable.child_by_field_name("value")
+        return (value, self.owner(path, scope)) if value is not None else None
 
     def _creation(self, path: str, value: Node | None, owner: str) -> str | None:
         """The named source class ``new T(...)`` creates; an anonymous class
-        body is no named type (BL-30 owns it)."""
+        body is no named type (see ``_implicit_targets``)."""
         if value is None or value.type != "object_creation_expression" or any(
             child.type == "class_body" for child in value.children
         ):
@@ -1795,6 +1843,205 @@ class JavaSymbols:
         if not narrowed or any(target.id not in reached for target in narrowed):
             return None
         return created, narrowed, pruned
+
+    def _implicit_targets(
+        self, info: _Method, value: Node, value_owner: str, receiver_type: str, name: str, arity: int,
+        argument_types: tuple[str | None, ...] | None, declaration: _Method | None,
+    ) -> tuple[list[IntegrationMethod], bool]:
+        """The targets of a call on a variable that always holds a lambda, a
+        method reference or an anonymous class instance (BL-30, ADR-72), and
+        whether the one target is exact.
+
+        The instance's own body is no indexed method (ADR-62): when it
+        implements the called method, no named body is a target. A lambda
+        implements the abstract method its target type declares; an
+        anonymous class the methods its body declares. Otherwise the
+        instance inherits the body its supertype resolves to, which is
+        exact unless an external supertype may declare the name.
+        """
+        path = info.method.path
+        while value.type == "parenthesized_expression" and value.named_children:
+            value = value.named_children[0]
+        if value.type == "object_creation_expression":
+            body = parser.child_by_type(value, "class_body")
+            implements = (name, arity) in _declared_members(self.units[path].source, body)
+            type_node = value.child_by_field_name("type")
+            base = self.resolve(
+                path, parser.node_text(self.units[path].source, type_node), value_owner, at=type_node,
+            ) if type_node is not None else None
+        else:
+            implements = (name, arity) not in _OBJECT_DISPATCH and (
+                receiver_type not in self.types or declaration is None or not declaration.concrete
+            )
+            base = receiver_type
+        if implements or base is None or base not in self.types:
+            return [], False
+        module = self._receiver_module(base, info)
+        targets = self._super_target((base, module), name, arity, argument_types)
+        exact = len(targets) == 1 and (
+            self.methods[targets[0].id].owner == base or not self._may_inherit_unknown(base, module, name)
+        )
+        return targets, exact
+
+    def _implicit_implementations(self) -> tuple[dict[str, set[tuple[str, int]]], set[str]]:
+        """Where the sources hold a body no indexed method stands for
+        (BL-30, ADR-72): the ``(name, arity)`` anonymous class bodies
+        declare, by each type they extend or implement, ancestors included;
+        and the target types of lambdas and method references, with their
+        ancestors."""
+        if self._implicit is None:
+            overridden: dict[str, set[tuple[str, int]]] = defaultdict(set)
+            for supertype, members in self.anonymous_members.items():
+                for owner in self._ancestor_owners(supertype):
+                    overridden[owner].update(members)
+            functional: set[str] = set()
+            for path, node in self._functional_values:
+                for target in self._functional_targets(path, node):
+                    functional.update(self._ancestor_owners(target))
+            self._implicit = dict(overridden), functional
+        return self._implicit
+
+    def _ancestor_owners(self, owner: str) -> set[str]:
+        modules = {self.path_modules.get(path, "") for path, _node in self.types.get(owner, [])} or {""}
+        return {ancestor for module in modules for ancestor, _module in self.ancestors(owner, module)}
+
+    def _implicitly_implemented(
+        self, runtime_type: str, name: str, arity: int, declaration: _Method | None,
+    ) -> bool:
+        """Whether a lambda, a method reference or an anonymous class can be
+        the receiver of a call on ``runtime_type`` and implement it (ADR-72)."""
+        overridden, functional = self._implicit_implementations()
+        if (name, arity) in overridden.get(runtime_type, ()):
+            return True
+        return (
+            runtime_type in functional and (name, arity) not in _OBJECT_DISPATCH
+            and declaration is not None and not declaration.concrete
+        )
+
+    def _functional_targets(self, path: str, node: Node) -> set[str]:
+        """The source types a lambda or a method reference implements, when
+        the code writes them: the type of the variable it initializes or is
+        assigned to, a cast, the return type of its method, or a source
+        parameter type it is passed to. Any other target does not count."""
+        current, parent = node, node.parent
+        while parent is not None and (
+            parent.type == "parenthesized_expression"
+            or parent.type == "ternary_expression" and current != parent.child_by_field_name("condition")
+        ):
+            current, parent = parent, parent.parent
+        if parent is None:
+            return set()
+        owner = self.owner(path, node)
+        written: list[Node | None] = []
+        if parent.type == "variable_declarator" and parent.child_by_field_name("value") == current:
+            written = [parent.parent.child_by_field_name("type") if parent.parent is not None else None]
+        elif parent.type == "cast_expression":
+            written = [parent.child_by_field_name("type")]
+        elif parent.type == "return_statement":
+            scope = parent.parent
+            while scope is not None and scope.type not in {
+                "method_declaration", "lambda_expression", "class_body", "constructor_declaration",
+            }:
+                scope = scope.parent
+            if scope is not None and scope.type == "method_declaration":
+                written = [scope.child_by_field_name("type")]
+        elif parent.type == "assignment_expression" and parent.child_by_field_name("right") == current:
+            return self._assigned_target(path, parent)
+        elif parent.type == "argument_list" and parent.parent is not None:
+            return {
+                found for type_node, declared_path, declared_owner in self._parameter_type_nodes(
+                    path, parent.parent, current, owner,
+                )
+                if (found := self._written_target(declared_path, type_node, declared_owner)) is not None
+            }
+        return {
+            found for type_node in written
+            if (found := self._written_target(path, type_node, owner)) is not None
+        }
+
+    def _written_target(self, path: str, type_node: Node | None, owner: str) -> str | None:
+        if type_node is None:
+            return None
+        name_node = type_node.named_children[0] if type_node.type == "generic_type" else type_node
+        resolved = self.resolve(
+            path, parser.node_text(self.units[path].source, name_node), owner, allow_ambiguous=True, at=name_node,
+        )
+        return resolved if resolved in self.types else None
+
+    def _assigned_target(self, path: str, assignment: Node) -> set[str]:
+        """The source type of the variable an assignment writes, read from
+        the indexed method holding it."""
+        context = _call_context(assignment)
+        if context is None:
+            return set()
+        if self._context_methods is None:
+            self._context_methods = {
+                (info.method.path, info.node.start_byte, info.node.end_byte): info
+                for info in self.methods.values()
+            }
+        info = self._context_methods.get((path, context.start_byte, context.end_byte))
+        left = assignment.child_by_field_name("left")
+        if info is None or left is None:
+            return set()
+        source = self.units[path].source
+        if left.type == "identifier":
+            found = self.variable_type(info, parser.node_text(source, left), assignment)
+        elif left.type == "field_access" and (field := left.child_by_field_name("field")) is not None and (
+            (target := left.child_by_field_name("object")) is not None and target.type == "this"
+        ):
+            found = self.variable_type(info, parser.node_text(source, field), assignment, field_only=True)
+        else:
+            return set()
+        return {found} if found in self.types else set()
+
+    def _parameter_type_nodes(
+        self, path: str, call: Node, argument: Node, owner: str,
+    ) -> list[tuple[Node | None, str, str]]:
+        """The written parameter types an argument may bind to: those of every
+        source method of the call's name and arity, or of every constructor
+        of the created type. A superset of the true target, so a lambda
+        never escapes the rule."""
+        source = self.units[path].source
+        if call.type == "method_invocation":
+            _receiver, name, arguments = parser.invocation_parts(call, source)
+            declarations = self._methods_named(name, len(arguments))
+        elif call.type == "object_creation_expression":
+            arguments_node = call.child_by_field_name("arguments")
+            arguments = [
+                child for child in (arguments_node.named_children if arguments_node is not None else [])
+                if "comment" not in child.type
+            ]
+            created = self._written_target(path, call.child_by_field_name("type"), owner)
+            declarations = [
+                info for info in self._methods_named("<init>", len(arguments)) if info.owner == created
+            ] if created is not None else []
+        else:
+            return []
+        index = next((
+            number for number, candidate in enumerate(arguments)
+            if (candidate.start_byte, candidate.end_byte) == (argument.start_byte, argument.end_byte)
+        ), None)
+        if index is None:
+            return []
+        found: list[tuple[Node | None, str, str]] = []
+        for declaration in declarations:
+            formals = declaration.node.child_by_field_name("parameters")
+            typed = [
+                formal for formal in (formals.named_children if formals is not None else [])
+                if formal.type in {"formal_parameter", "spread_parameter"}
+            ]
+            if index < len(typed) and typed[index].type == "formal_parameter":
+                found.append((typed[index].child_by_field_name("type"), declaration.method.path, declaration.owner))
+        return found
+
+    def _methods_named(self, name: str, arity: int) -> list[_Method]:
+        if self._by_name_arity is None:
+            self._by_name_arity = defaultdict(list)
+            for info in self.methods.values():
+                self._by_name_arity[
+                    (info.method.qualified_method.rsplit(".", 1)[-1], len(info.parameters))
+                ].append(info)
+        return self._by_name_arity.get((name, arity), [])
 
     def _declarator(self, info: _Method, scope: Node, name: str, invocation: Node) -> _Declarator | None:
         """How ``scope`` declares ``name`` for ``invocation``: as a variable
@@ -3254,6 +3501,27 @@ class JavaSymbols:
                         )
                     if not targets:
                         targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
+                implicit = (
+                    self.created_value(info, receiver, invocation)
+                    if closed_world and virtual and receiver is not None
+                    and invocation.type != "method_reference" else None
+                )
+                implicit_exact: bool | None = None
+                if implicit is not None and _implicit_value(implicit[0]):
+                    # The variable always holds a lambda, a method reference
+                    # or an anonymous class instance (BL-30, ADR-72).
+                    targets, implicit_exact = self._implicit_targets(
+                        info, implicit[0], implicit[1], receiver_type, name, arguments_count,
+                        argument_types, declaration,
+                    )
+                    dispatch_type, pruned, external = None, False, False
+                    if (
+                        not targets and declaration is not None
+                        and self._declared_row_opens_no_route(declaration, [], info.module)
+                    ):
+                        # The declared row of ADR-70 as amended by BL-28,
+                        # when its dispatch reaches no named body.
+                        targets, implicit_exact = [declaration.method], False
                 if not targets:
                     continue
                 if exact_sites and any(
@@ -3261,9 +3529,21 @@ class JavaSymbols:
                 ):
                     continue
                 runtime_type = dispatch_type or receiver_type
-                incomplete = virtual and runtime_type in self.types and not any(
+                statically_bound = any(
                     self.methods[target.id].binds_statically for target in targets if target.id in self.methods
+                )
+                incomplete = implicit_exact is None and virtual and runtime_type in self.types and not (
+                    statically_bound
                 ) and self._incomplete_implementors(runtime_type, info, name, arguments_count, targets)
+                if (
+                    closed_world and implicit_exact is None and virtual and not statically_bound
+                    and runtime_type in self.types
+                    and self._implicitly_implemented(runtime_type, name, arguments_count, declaration)
+                ):
+                    # A lambda, a method reference or an anonymous class
+                    # can be the receiver: its body is no indexed method,
+                    # so no named body is exact (BL-30, ADR-72).
+                    pruned = True
                 if (
                     incomplete and declaration is not None and not declaration.concrete
                     and all(target.id != declaration.method.id for target in targets)
@@ -3289,7 +3569,7 @@ class JavaSymbols:
                         or closed_world and self._concrete(targets[0])
                     )
                     else "possible"
-                )
+                ) if implicit_exact is None else ("exact" if implicit_exact else "possible")
                 if (
                     closed_world and virtual and dispatch == "possible" and declaration is not None
                     and self._declared_row_opens_no_route(declaration, targets, info.module)

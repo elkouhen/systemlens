@@ -13,7 +13,9 @@ and dropped targets that are not indexed methods: ``(call line, callee,
 confidence)``. The default test runs the symbol pass in a closed world, as
 the ``source`` engine does, and expects the same rows. A case whose gap
 an undelivered backlog item owns is a strict expected failure naming that
-item; delivering the item removes its ``item`` value. The ``slow`` test
+item; delivering the item removes its ``item`` value. A case whose
+difference a decision record keeps lists the rows the ``source`` engine
+gives instead, as its ``deviation``. The ``slow`` test
 reads the raw rows of ``CallGraphSession.calls()`` and expects the same
 rows from CodeQL, so the expectations stay measured rather than assumed.
 """
@@ -302,10 +304,13 @@ class Case:
     rows: frozenset[Row]
     # The backlog item that owns the gap; ``None`` once the symbol pass agrees.
     item: str | None
+    # The rows the ``source`` engine gives instead, when a decision record
+    # keeps the difference; ``None`` when the engines agree.
+    deviation: frozenset[Row] | None = None
 
 
-def _case(id: str, caller: str, item: str | None, *rows: Row) -> Case:
-    return Case(id, caller, frozenset(rows), item)
+def _case(id: str, caller: str, item: str | None, *rows: Row, deviation: Iterable[Row] | None = None) -> Case:
+    return Case(id, caller, frozenset(rows), item, None if deviation is None else frozenset(deviation))
 
 
 CASES: list[Case] = [
@@ -350,9 +355,12 @@ CASES: list[Case] = [
           ("b1.local", "Circle.area", "exact"), ("b1.local", "Shape.area", "possible")),
     _case("B1-field", "Narrowing.field", None,
           ("b1.field", "Circle.area", "exact"), ("b1.field", "Shape.area", "possible")),
-    _case("B2-lambda", "Lambdas.lambda", "BL-30",
-          ("b2.lambda", "Fn.apply", "possible")),
-    _case("B2-anonymous", "Lambdas.anonymous", "BL-30"),
+    # ADR-72: a rebuild from persisted edges would dispatch the declared
+    # row to ``FnImpl.apply``, which the variable never holds; the row is
+    # left out, as ADR-70 leaves out a declared row that opens a route.
+    _case("B2-lambda", "Lambdas.lambda", None,
+          ("b2.lambda", "Fn.apply", "possible"), deviation=()),
+    _case("B2-anonymous", "Lambdas.anonymous", None),
     _case("B3", "Spawner.spawn", "BL-31",
           ("b3", "MyThread.run", "exact")),
     _case("B4", "Dispatch.run", None,
@@ -422,13 +430,14 @@ def _rows(project: _Project, calls: Iterable[MethodCall]) -> dict[str, set[Row]]
     return rows
 
 
-def _check(project: _Project, rows: dict[str, set[Row]], case: Case) -> None:
-    for site, callee, _ in case.rows:
+def _check(project: _Project, rows: dict[str, set[Row]], case: Case, expected: frozenset[Row] | None = None) -> None:
+    expected = case.rows if expected is None else expected
+    for site, callee, _ in case.rows | expected:
         assert site in project.lines and callee in project.lines, f"{case.id}: untagged row"
     assert case.caller in project.lines, f"{case.id}: no //@{case.caller} line"
     got = rows.get(case.caller, set())
-    assert got == set(case.rows), (
-        f"{case.id}: missing {sorted(set(case.rows) - got)}, extra {sorted(got - set(case.rows))}"
+    assert got == set(expected), (
+        f"{case.id}: missing {sorted(set(expected) - got)}, extra {sorted(got - set(expected))}"
     )
 
 
@@ -448,7 +457,7 @@ def _source_param(case: Case) -> object:
 def test_source_engine_matches_codeql(
     symbol_rows: tuple[_Project, dict[str, set[Row]]], case: Case,
 ) -> None:
-    _check(*symbol_rows, case)
+    _check(*symbol_rows, case, case.deviation)
 
 
 @pytest.fixture(scope="module")
@@ -481,5 +490,9 @@ def test_every_parity_row_is_documented() -> None:
         if case.item:
             assert case.item in documented[case.id.split("-", 1)[0]], (
                 f"{case.id}: {case.item} missing from the parity table"
+            )
+        if case.deviation is not None:
+            assert case.id in documented[case.id.split("-", 1)[0]], (
+                f"{case.id}: its deviation is missing from the parity table"
             )
 

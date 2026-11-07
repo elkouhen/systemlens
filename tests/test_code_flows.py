@@ -2815,18 +2815,22 @@ class OrderController {
     ]
 
 
-def _dispatch_flows(tmp_path: Path, receiver: str) -> tuple[list, list, list]:
+def _dispatch_flows(
+    tmp_path: Path, receiver: str, extra: str = "",
+    adapter: str = "class StockAdapter implements StockPort",
+) -> tuple[list, list, list]:
     """Flows of a call on ``StockPort`` with two adapters, one publishing,
     built fresh by the source engine and rebuilt from its persisted edges."""
     source = "orders/src/main/java/com/example/OrderController.java"
     text = f"""package com.example;
 interface StockPort {{ void publish(); }}
-class StockAdapter implements StockPort {{ public void publish() {{ kafka.send(); }} }}
+{adapter} {{ public void publish() {{ kafka.send(); }} }}
 class QuietAdapter implements StockPort {{ public void publish() {{ }} }}
 class OrderController {{
   {receiver}
   void receive() {{ port.publish(); }}
 }}
+{extra}
 """
     path = tmp_path / source
     path.parent.mkdir(parents=True)
@@ -2891,6 +2895,38 @@ def test_a_field_created_once_dispatches_exactly_in_fresh_and_rebuilt_flows(tmp_
         ("com.example.StockPort.publish", "possible", False),
     ]
     assert fresh == rebuilt == []
+
+
+def test_an_anonymous_override_keeps_the_created_class_possible_in_fresh_and_rebuilt_flows(
+    tmp_path: Path,
+) -> None:
+    edges, fresh, rebuilt = _dispatch_flows(
+        tmp_path, "private final StockPort port = new StockAdapter();",
+        extra="class Later { StockPort make() { return new StockAdapter() { public void publish() {} }; } }",
+    )
+
+    # BL-30: an anonymous subclass of StockAdapter overrides publish, so
+    # the created class's body is no longer the only one: possible, and
+    # the flow loses its exact confidence, the same way after a rebuild.
+    assert edges == [("com.example.StockAdapter.publish", "possible", True)]
+    assert fresh == rebuilt == [
+        ("low", ["POST /orders", "com.example.StockAdapter.publish", "orders.stock"]),
+    ]
+
+
+def test_a_field_holding_a_lambda_opens_no_route_in_fresh_and_rebuilt_flows(tmp_path: Path) -> None:
+    for receiver in (
+        "private final StockPort port = () -> {};",
+        "private final StockPort port = new QuietAdapter() { public void publish() {} };",
+    ):
+        root = tmp_path / str(len(receiver))
+        edges, fresh, rebuilt = _dispatch_flows(root, receiver)
+
+        # BL-30: the field always holds a body no indexed method stands for.
+        # No named body is a target, and the declared row is left out: a
+        # rebuild would dispatch it to StockAdapter (ADR-72).
+        assert edges == []
+        assert fresh == rebuilt == []
 
 
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
