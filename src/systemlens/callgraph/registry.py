@@ -54,11 +54,6 @@ def declaration(name: str) -> EngineDeclaration:
     )
 
 
-def init_profiles() -> tuple[str, ...]:
-    """``systemlens init`` profiles: ``default`` plus each engine that offers one."""
-    return ("default", *(item.name for item in declarations() if item.init_profile))
-
-
 def default_excludes() -> tuple[str, ...]:
     """Inventory exclusions that the declared engines contribute."""
     return tuple(pattern for item in declarations() for pattern in item.default_excludes)

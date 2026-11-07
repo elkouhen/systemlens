@@ -12,7 +12,6 @@ from systemlens.callgraph.registry import (
     declarations,
     default_excludes,
     engine_names,
-    init_profiles,
 )
 from systemlens.infrastructure.paths import config_path, state_dir
 
@@ -243,25 +242,32 @@ def load_config(repo_root: Path) -> Config:
     )
 
 
-# ``init`` profiles: ``default`` needs no external tool (ADR-66); every
-# engine that declares a profile can be selected for all indexes at once.
-INIT_PROFILES = init_profiles()
+def init_engines() -> tuple[str, ...]:
+    """Engines ``systemlens init --engine`` accepts: every declared one (PDR-13)."""
+    return tuple(item.name for item in declarations())
 
 
-def init_config(repo_root: Path, profile: str = "default") -> Path:
-    if profile not in INIT_PROFILES:
+def init_config(
+    repo_root: Path, engine: str = DEFAULT_ENGINE, strategy: str = "default"
+) -> Path:
+    """Write a new configuration for ``engine`` and ``strategy`` (PDR-13)."""
+    if engine not in init_engines():
         raise ConfigError(
-            f"Profil d'initialisation invalide : {profile!r}. Valeurs : {', '.join(INIT_PROFILES)}."
+            f"Moteur invalide : {engine!r}. Valeurs : {', '.join(init_engines())}."
+        )
+    if strategy not in VALID_TOPIC_STRATEGIES:
+        raise ConfigError(
+            f"Stratégie invalide : {strategy!r}. "
+            f"Valeurs : {', '.join(VALID_TOPIC_STRATEGIES)}."
         )
     path = config_path(repo_root)
     if path.exists():
         raise ConfigError(f"Une configuration existe déjà : {path}.")
 
     state_dir(repo_root).mkdir(parents=True, exist_ok=True)
-    engine = DEFAULT_ENGINE if profile == "default" else profile
     engine_section = declaration(engine).defaults()
     analysis: dict[str, object] = {
-        "strategy": "default",
+        "strategy": strategy,
         "call_graph_engine": engine,
         "engine_timeout_seconds": DEFAULT_ENGINE_TIMEOUT_SECONDS,
         "engine_threads": 0,

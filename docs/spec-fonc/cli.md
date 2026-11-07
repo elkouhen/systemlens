@@ -6,7 +6,7 @@ Parent: [Functional specification](../SPEC-FONC.md).
 
 | Command | Behaviour |
 |---|---|
-| `systemlens init [--profile NAME]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--profile default` (the default) selects the `source` call-graph engine and needs no external tool. Every engine that declares a profile (`codeql`, `joern`) can be named instead: the profile selects that engine, writes its `analysis.engines.NAME` defaults, and warns when the engine's prerequisite is missing. An unknown profile exits with code 2 and writes nothing. |
+| `systemlens init [--engine NAME] [--strategy NAME]` | Creates `.systemlens/config.yml`; it never overwrites an existing file. `--engine` (`source`, `codeql` or `joern`; default `source`) sets `analysis.call_graph_engine`; `source` needs no external tool. `codeql` or `joern` also writes that engine's `analysis.engines.NAME` defaults and warns when its prerequisite is missing. `--strategy` (`default` or `strategy1`; default `default`) sets `analysis.strategy`. The two options are independent. An unknown value exits with code 2 and writes nothing. |
 | `systemlens doctor [--json]` | Read-only check of configuration, of the configured call-graph engine, of local AST readiness and of the index state. An unavailable engine is a warning: indexing announces it and uses `source`. |
 | `systemlens version` | Prints the installed `systemlens` package version. |
 | `systemlens index` | Incrementally indexes architecture facts. See [indexing options and output](#indexing-options-and-output). |

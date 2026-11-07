@@ -45,7 +45,6 @@ DECLARATION = EngineDeclaration(
         ),
     ),
     database_option="database",
-    init_profile=True,
     default_excludes=(".codeql/**",),
     artifact_directory=_is_database,
 )

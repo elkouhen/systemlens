@@ -244,8 +244,9 @@ do not alter or invalidate persisted architecture facts.
 Every engine publishes an `EngineDeclaration` (ADR-85): `name`, `label`,
 `description`, a lazy `factory` (`"module:function"`), an
 `unavailable_reason()` check, `supports_module_refresh`, `resolves_types`,
-its `EngineOption`s, the option that holds a prebuilt database, an `init`
-profile flag, default exclusions, and an artifact-directory predicate.
+its `EngineOption`s, the option that holds a prebuilt database, default
+exclusions, and an artifact-directory predicate. `systemlens init --engine`
+accepts every declared engine (PDR-13).
 `callgraph/registry.py` lists the declaration modules
 (`engines.custom`, `engines.codeql`, `engines.joern`) and is the only core
 module that names them; importing a declaration never imports an adapter.

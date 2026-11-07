@@ -71,7 +71,13 @@ from systemlens.application.flow_diagnostic import diagnose_flows, render_flow_d
 from systemlens.application.indexing_audit import audit_indexing
 from systemlens.application.architecture_projection import project_architecture_graph
 from systemlens.application.audit import assess_architecture, render_audit_json, render_audit_text
-from systemlens.infrastructure.config import INIT_PROFILES, ConfigError, init_config, load_config
+from systemlens.infrastructure.config import (
+    VALID_TOPIC_STRATEGIES,
+    ConfigError,
+    init_config,
+    init_engines,
+    load_config,
+)
 from systemlens.application.flow import resolve_topic
 from systemlens.domain.graph import (
     GraphEdge,
@@ -87,7 +93,14 @@ from systemlens.application.engine_comparison import (
     render_engine_comparison_text,
 )
 from systemlens.callgraph.engine import EngineSettings
-from systemlens.callgraph.registry import NO_ENGINE, declaration, declarations, engine_names, load_engine
+from systemlens.callgraph.registry import (
+    DEFAULT_ENGINE,
+    NO_ENGINE,
+    declaration,
+    declarations,
+    engine_names,
+    load_engine,
+)
 from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.models import ExtractionDiagnostic
 from systemlens.domain.runtime import RuntimeCollection, RuntimeErrorGroup, RuntimeObservation
@@ -1497,26 +1510,35 @@ def doctor_cmd(json_output: bool = typer.Option(False, "--json")) -> None:
 
 @app.command()
 def init(
-    profile: str = typer.Option(
-        "default",
-        "--profile",
+    engine: str = typer.Option(
+        DEFAULT_ENGINE,
+        "--engine",
         help=(
-            "Profil de configuration : default (moteur source, aucun outil externe) "
-            "ou le nom d'un moteur qui propose un profil "
-            f"({', '.join(INIT_PROFILES[1:]) or 'aucun'})."
+            "Moteur de graphe d'appel : "
+            f"{', '.join(init_engines())} ({DEFAULT_ENGINE} par défaut, aucun outil externe)."
         ),
+    ),
+    strategy: str = typer.Option(
+        "default",
+        "--strategy",
+        help="Stratégie de conventions : default (par défaut) ou strategy1.",
     ),
 ) -> None:
     """Initialiser la configuration .systemlens/config.yml du projet.
 
     L'analyse des sources Java/Spring est entièrement locale et fondée sur AST.
-    Exemples : `systemlens init`, `systemlens init --profile NAME`.
+    Exemples : `systemlens init`, `systemlens init --engine NAME --strategy strategy1`.
     """
-    if profile not in INIT_PROFILES:
-        typer.echo(
-            f"Profil d'initialisation invalide : {profile!r}. Valeurs : {', '.join(INIT_PROFILES)}.",
-            err=True,
+    invalid = None
+    if engine not in init_engines():
+        invalid = f"Moteur invalide : {engine!r}. Valeurs : {', '.join(init_engines())}."
+    elif strategy not in VALID_TOPIC_STRATEGIES:
+        invalid = (
+            f"Stratégie invalide : {strategy!r}. "
+            f"Valeurs : {', '.join(VALID_TOPIC_STRATEGIES)}."
         )
+    if invalid is not None:
+        typer.echo(invalid, err=True)
         raise typer.Exit(code=2)
     repo_root = Path.cwd()
     if config_path(repo_root).exists():
@@ -1526,17 +1548,17 @@ def init(
         raise typer.Exit(code=1)
 
     try:
-        path = init_config(repo_root, profile)
+        path = init_config(repo_root, engine, strategy)
     except ConfigError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
 
-    typer.echo(f"Configuration créée : {path} (profil {profile}).")
-    reason = None if profile == "default" else declaration(profile).unavailable_reason()
+    typer.echo(f"Configuration créée : {path} (moteur {engine}, stratégie {strategy}).")
+    reason = declaration(engine).unavailable_reason()
     if reason is not None:
         typer.echo(
             f"{reason} Installez le prérequis avant `systemlens index`, "
-            "ou recréez la configuration avec `--profile default`.",
+            f"ou recréez la configuration avec `--engine {DEFAULT_ENGINE}`.",
             err=True,
         )
 

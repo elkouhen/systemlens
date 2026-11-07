@@ -41,9 +41,9 @@ named `source`. The symbol pass (`indexing/java_symbols.py`) and the join
 them.
 
 An engine package has a light `declaration.py` with its name, label,
-capabilities, availability check, options, `init` profile and artifact
-directories. The registry imports only these declarations and builds an
-engine through its `factory` on demand (ADR-85). The CLI, the
+capabilities, availability check, options and artifact directories. The
+registry imports only these declarations and builds an engine through its
+`factory` on demand (ADR-85). The CLI, the
 configuration and the indexing stage read declarations, never an engine
 name; `tests/test_architecture_boundaries.py` fails when an engine name
 appears outside `engines/`, `callgraph/registry.py` and

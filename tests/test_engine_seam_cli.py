@@ -184,16 +184,78 @@ def test_index_accepts_a_declared_engine_option(
     assert result.exit_code == 0, result.output
 
 
-def test_init_with_the_joern_profile_selects_joern_and_warns_without_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize("strategy", ["default", "strategy1"])
+@pytest.mark.parametrize("engine", ["source", "codeql", "joern"])
+def test_init_writes_the_chosen_engine_and_strategy(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, engine: str, strategy: str,
 ) -> None:
-    """Review C2: ``init --profile joern``."""
+    """PDR-13: every engine and strategy combination gets a ready config."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(shutil, "which", lambda _name: None)
 
-    result = CliRunner().invoke(cli.app, ["init", "--profile", "joern"])
+    result = CliRunner().invoke(
+        cli.app, ["init", "--engine", engine, "--strategy", strategy]
+    )
 
     assert result.exit_code == 0, result.output
-    assert "(profil joern)" in result.output
-    assert "Joern introuvable" in result.output
-    assert load_config(tmp_path).call_graph_engine == "joern"
+    assert f"(moteur {engine}, stratégie {strategy})" in result.output
+    text = (tmp_path / ".systemlens" / "config.yml").read_text(encoding="utf-8")
+    assert f"strategy: {strategy}\n" in text
+    assert f"call_graph_engine: {engine}\n" in text
+    config = load_config(tmp_path)
+    assert (config.call_graph_engine, config.strategy) == (engine, strategy)
+    expected = {
+        "source": ({}, None),
+        "codeql": ({"codeql": {"database": None, "verbosity": None}}, "CLI codeql introuvable"),
+        "joern": ({}, "Joern introuvable"),
+    }[engine]
+    assert config.engine_options == expected[0]
+    if expected[1] is None:
+        assert "introuvable" not in result.output
+    else:
+        assert expected[1] in result.output
+
+
+@pytest.mark.parametrize(
+    ("args", "message"),
+    [
+        (["--engine", "fast"], "Moteur invalide"),
+        (["--engine", "none"], "Moteur invalide"),
+        (["--strategy", "fast"], "Stratégie invalide"),
+    ],
+)
+def test_init_rejects_an_unknown_value_with_exit_code_2(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, args: list[str], message: str,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.app, ["init", *args])
+
+    assert result.exit_code == 2
+    assert message in result.output
+    assert not (tmp_path / ".systemlens" / "config.yml").exists()
+
+
+def test_init_no_longer_accepts_profile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """PDR-13 removes ``--profile`` with no alias."""
+    monkeypatch.chdir(tmp_path)
+
+    result = CliRunner().invoke(cli.app, ["init", "--profile", "codeql"])
+
+    assert result.exit_code == 2
+    assert "--profile" in result.output
+    assert not (tmp_path / ".systemlens" / "config.yml").exists()
+
+
+def test_init_never_overwrites_an_existing_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    _config(tmp_path, "analysis: {}\n")
+
+    result = CliRunner().invoke(cli.app, ["init", "--engine", "codeql"])
+
+    assert result.exit_code == 1
+    assert (tmp_path / ".systemlens" / "config.yml").read_text() == "analysis: {}\n"

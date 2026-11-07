@@ -24,10 +24,11 @@ analysis:
 The `.codeql/**` exclusion comes from the `codeql` engine's declaration:
 each declared engine may add the directories it writes.
 
-`systemlens init --profile NAME`, where `NAME` is an engine that declares a
-profile, writes the same file with `call_graph_engine: NAME` and the
-engine's own options under `analysis.engines.NAME`, so every index without
-a `--call-graph-engine` option uses that engine. With `--profile codeql`:
+`systemlens init --engine NAME`, where `NAME` is a declared engine
+(`source`, `codeql` or `joern`), writes the same file with
+`call_graph_engine: NAME` and the engine's own options under
+`analysis.engines.NAME`. Every index without a `--call-graph-engine` option
+then uses that engine. With `--engine codeql`:
 
 ```yaml
 analysis:
@@ -39,8 +40,9 @@ analysis:
       verbosity: null
 ```
 
-A profile only chooses the call-graph engine: the strategy and every other
-key keep their defaults, and the file stays editable afterwards.
+`systemlens init --strategy strategy1` writes `strategy: strategy1`. The
+two options are independent (PDR-13): every other key keeps its default,
+and the file stays editable afterwards.
 
 `analysis.strategy` (`default` or `strategy1`) is the strategy of every
 indexing pass that has no `--strategy` option, including incremental passes

@@ -102,7 +102,6 @@ class EngineDeclaration:
     resolves_types: bool = False
     options: tuple[EngineOption, ...] = ()
     database_option: str | None = None
-    init_profile: bool = False
     default_excludes: tuple[str, ...] = ()
     artifact_directory: Callable[[Path], bool] | None = None
 

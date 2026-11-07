@@ -18,7 +18,7 @@ from systemlens.callgraph.model import (
     PayloadTypeEvidence,
     SourceMethod,
 )
-from systemlens.callgraph.registry import declarations, engine_names, init_profiles, load_engine
+from systemlens.callgraph.registry import declarations, engine_names, load_engine
 from systemlens.engines.custom.engine import SourceEngine
 from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.engines import codeql
@@ -73,7 +73,6 @@ def test_each_declaration_matches_the_engine_it_builds() -> None:
         assert engine.resolves_types == item.resolves_types
         if item.database_option is not None:
             assert item.option(item.database_option).kind == "path"
-    assert init_profiles()[0] == "default"
 
 
 def test_configuration_defaults_to_the_source_engine(tmp_path: Path) -> None:

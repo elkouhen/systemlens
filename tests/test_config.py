@@ -93,59 +93,29 @@ def test_load_config_rejects_ambiguous_strategy_keys(tmp_path: Path) -> None:
         load_config(tmp_path)
 
 
-def test_init_default_profile_selects_the_source_engine(tmp_path: Path) -> None:
+def test_init_defaults_to_the_source_engine(tmp_path: Path) -> None:
     config = load_config(init_config(tmp_path).parent.parent)
 
     assert config.call_graph_engine == "source"
+    assert config.strategy == "default"
     assert config.engine_options == {}
 
 
-def test_init_codeql_profile_selects_the_codeql_engine(tmp_path: Path) -> None:
+def test_init_codeql_engine_writes_its_defaults(tmp_path: Path) -> None:
     path = init_config(tmp_path, "codeql")
     config = load_config(tmp_path)
 
     assert "call_graph_engine: codeql" in path.read_text()
     assert config.call_graph_engine == "codeql"
     assert config.engine_options == {"codeql": {"database": None, "verbosity": None}}
-    assert config.strategy == "default", "a profile only chooses the engine"
+    assert config.strategy == "default", "the engine does not choose the strategy"
 
 
-def test_init_rejects_an_unknown_profile_without_writing(tmp_path: Path) -> None:
-    with pytest.raises(ConfigError, match="Profil d'initialisation invalide"):
-        init_config(tmp_path, "fast")
-
-    assert not (tmp_path / ".systemlens" / "config.yml").exists()
-
-
-def test_init_command_takes_a_profile_and_warns_without_codeql(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+@pytest.mark.parametrize(("engine", "strategy"), [("fast", "default"), ("codeql", "fast")])
+def test_init_rejects_an_unknown_value_without_writing(
+    tmp_path: Path, engine: str, strategy: str,
 ) -> None:
-    from typer.testing import CliRunner
+    with pytest.raises(ConfigError, match="invalide"):
+        init_config(tmp_path, engine, strategy)
 
-    from systemlens.delivery import cli
-
-    monkeypatch.chdir(tmp_path)
-    import shutil
-
-    monkeypatch.setattr(shutil, "which", lambda _name: None)
-    result = CliRunner().invoke(cli.app, ["init", "--profile", "codeql"])
-
-    assert result.exit_code == 0, result.output
-    assert "(profil codeql)" in result.output
-    assert "CLI codeql introuvable" in result.output
-    assert load_config(tmp_path).call_graph_engine == "codeql"
-
-
-def test_init_command_rejects_an_unknown_profile(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from typer.testing import CliRunner
-
-    from systemlens.delivery import cli
-
-    monkeypatch.chdir(tmp_path)
-    result = CliRunner().invoke(cli.app, ["init", "--profile", "fast"])
-
-    assert result.exit_code == 2
-    assert "Profil d'initialisation invalide" in result.output
     assert not (tmp_path / ".systemlens" / "config.yml").exists()

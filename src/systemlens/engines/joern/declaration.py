@@ -29,5 +29,4 @@ DECLARATION = EngineDeclaration(
     factory="systemlens.engines.joern.engine:create_engine",
     unavailable_reason=unavailable_reason,
     resolves_types=True,
-    init_profile=True,
 )
