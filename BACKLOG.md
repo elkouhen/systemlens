@@ -5,7 +5,7 @@ against CodeQL, and validated the same day by the product owner, who
 asked for every item to be processed autonomously, with the decisions
 taken on their behalf listed at the end of the run. The lot order
 stands. Owner: SystemLens implementer. Reviewer: product owner.
-Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22, BL-23, BL-24, BL-25, BL-27.
+Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21 to BL-29.
 Each delivered item's Delivery line names its commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
@@ -48,10 +48,10 @@ unresolved or `possible`.
 | [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `delivered` |
 | [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `delivered` |
 | [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `delivered` |
-| [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `blocked: A7 needs BL-28` |
+| [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `delivered` |
 | [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `delivered` |
-| [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `open` |
-| [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `open` |
+| [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `delivered` |
+| [BL-29](#bl-29) | Narrow a declared type to the type created once | P3 | `delivered` |
 | [BL-30](#bl-30) | Keep a dispatch open when a lambda or an anonymous class implements the type | P3 | `open` |
 | [BL-31](#bl-31) | Dispatch a call on an external class to its source subclasses | P3 | `open` |
 | [BL-32](#bl-32) | Apply ADR-81 rule 1 in the CodeQL query and the Joern export | P3 | `open` |
@@ -252,8 +252,7 @@ dropped on 2026-11-07, and waits for a decision record.
   parameter is a type variable is indexed for dispatch by erasure and is
   `exact` under the ADR-81 rules when it is the one body.
 - **Depends on:** BL-21.
-- **Status:** `blocked: A7's declared Shape.area row is BL-28's rule,
-  which waits for the ADR-70 amendment`.
+- **Status:** `delivered`.
 - **Delivery:** parity cases A1-box, A1-repo, A1-field,
   A1-generic-method and B5 pass, in the default suite and in the `slow`
   CodeQL test. A7 now gives `Circle.area` and `Square.area` `possible`,
@@ -267,7 +266,8 @@ dropped on 2026-11-07, and waits for a decision record.
   406 flows and 1712 edges, the lab at 23 flows, `compare-engines` at
   zero differences; the lab's two CodeQL-only edges are a BL-28 shape
   (`processMessage`) and the external `JpaRepository.save`
-  (`toDomain`). Commit: `7cba323`.
+  (`toDomain`). Commit: `7cba323`. A7 landed with BL-28, whose declared
+  row gives CodeQL's third `Shape.area` row: commit `728b985`.
 - **Why P1:** generic repositories, handlers and mappers are the backbone
   of service code; every call through them is lost today.
 
@@ -324,7 +324,22 @@ dropped on 2026-11-07, and waits for a decision record.
   their confidence are unchanged, as the ADR-70 witness is. Train-ticket
   has no such site, so its counts hold.
 - **Depends on:** an amendment of ADR-70, validated first.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the ADR-70 amendment of 2026-11-07, accepted under the
+  product owner's mandate and to be confirmed (commit `e78a9cb`). Parity
+  cases A7 and B4 pass, in the default suite and in the `slow` CodeQL
+  test. Whenever no target is `exact`, the abstract declaration the call
+  names joins the targets as a declared, non-inferred `possible` row. It
+  is left out for a concrete declaration and when its own dispatch reaches
+  a body outside the targets, so a rebuild from persisted edges opens no
+  route. Call shape H14 covers the row and that wider-declaration case;
+  G4, G5-raw-bounded, G6-bound, H3, T8-dispatch and F1 now expect it.
+  `test_code_flows.py` checks that fresh and rebuilt flows are unchanged.
+  Train-ticket stays at 406 flows and 1712 edges with both engines,
+  `compare-engines` at zero differences. The lab keeps 23 flows; its
+  `source` edges go from 101 to 102, closing the `processMessage`
+  CodeQL-only edge. One CodeQL-only edge remains, the external
+  `JpaRepository.save` behind `toDomain`. Commit: `728b985`.
 - **Why P2:** export parity only; no flow changes.
 
 <a id="bl-29"></a>
@@ -345,7 +360,20 @@ dropped on 2026-11-07, and waits for a decision record.
   parameter, or a non-final field keeps the declared type. The call is
   then `exact` only under the ADR-81 rules.
 - **Depends on:** a new ADR, since it adds an `exact` rule.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-86, accepted under the product owner's mandate and to
+  be confirmed (commit `c1e3553`). Parity cases B1-local and B1-field
+  pass, in the default suite and in the `slow` CodeQL test. Call shapes
+  T13 (local, `final` and `static final` fields, `this.f`, a loop body),
+  T13-kept (parameter, non-final, blank, reassigned and inherited fields,
+  reassigned, compound, `++`, inner-class and lambda assignments,
+  anonymous class, lambda), T13-overridden (a subclass of `T` keeps the
+  call `possible`) and T13-record (no indexed body: the declared dispatch
+  stands). A rebuild from persisted edges now dispatches a witness only to
+  its site's exact target, as the fresh join does; a regression test in
+  `test_code_flows.py` covers it. Train-ticket, which has no such
+  variable, stays at 406 flows and 1712 edges with zero `compare-engines`
+  differences; the lab stays at 23 flows and 102 edges. Commit: `9a9527a`.
 - **Why P3:** a precision gain the reference projects never exercise; it
   changes what `exact` means.
 
