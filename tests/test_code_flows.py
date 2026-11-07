@@ -2878,6 +2878,21 @@ def test_the_declared_row_beside_possible_implementations_changes_no_flow(tmp_pa
     ]
 
 
+def test_a_field_created_once_dispatches_exactly_in_fresh_and_rebuilt_flows(tmp_path: Path) -> None:
+    edges, fresh, rebuilt = _dispatch_flows(
+        tmp_path, "private final StockPort port = new QuietAdapter();",
+    )
+
+    # BL-29: the field always holds a QuietAdapter; the interface method
+    # stays the ADR-70 witness. A rebuild from persisted edges must not
+    # dispatch the witness to StockAdapter, which the field never holds.
+    assert edges == [
+        ("com.example.QuietAdapter.publish", "exact", False),
+        ("com.example.StockPort.publish", "possible", False),
+    ]
+    assert fresh == rebuilt == []
+
+
 def test_ast_fallback_prefers_same_module_for_duplicate_qualified_types(tmp_path: Path) -> None:
     source_a = "orders/src/main/java/com/example/Shared.java"
     source_b = "billing/src/main/java/com/example/Shared.java"

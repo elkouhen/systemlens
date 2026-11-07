@@ -300,6 +300,21 @@ def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
     return receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this.")
 
 
+def _assigned(source: bytes, scope: Node, name: str) -> bool:
+    """Whether ``scope`` assigns ``name`` or ``this.name`` after its
+    declaration: ``=``, a compound assignment, ``++`` or ``--``."""
+    for node in parser.walk(scope):
+        if node.type == "assignment_expression":
+            target = node.child_by_field_name("left")
+        elif node.type == "update_expression":
+            target = node.named_children[0] if node.named_children else None
+        else:
+            continue
+        if target is not None and re.sub(r"\s+", "", parser.node_text(source, target)) in {name, f"this.{name}"}:
+            return True
+    return False
+
+
 def _is_anonymous_body(node: Node) -> bool:
     return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
 
@@ -1666,6 +1681,120 @@ class JavaSymbols:
                     return field_type
             scope = scope.parent
         return None
+
+    def created_type(self, info: _Method, receiver: Node, invocation: Node) -> str | None:
+        """The named source class a variable always holds at ``invocation``.
+
+        A local assigned exactly once, at its declaration, with ``new T(...)``,
+        and a ``final`` field the enclosing class declares with the same
+        initializer hold a ``T`` (BL-29, ADR-86). A parameter, a field
+        without ``final``, an inherited field, any further assignment
+        (compound or ``++``/``--`` included), an anonymous class body and a
+        lambda keep the declared type: this returns ``None``.
+        """
+        source = self.units[info.method.path].source
+        field_only = False
+        if receiver.type == "identifier":
+            name = parser.node_text(source, receiver)
+        elif receiver.type == "field_access":
+            target = receiver.child_by_field_name("object")
+            field = receiver.child_by_field_name("field")
+            if target is None or field is None or target.type != "this" or field.type != "identifier":
+                return None
+            name, field_only = parser.node_text(source, field), True
+        else:
+            return None
+        scope = invocation.parent
+        while scope is not None:
+            if not field_only:
+                declarator = self._declarator(info, scope, name, invocation)
+                if declarator is not None:
+                    return self._created_local(info, name, declarator)
+            if _is_anonymous_body(scope):
+                declared, _type = self._class_scope_field(info, scope, name)
+                if declared or field_only:
+                    return None
+            elif scope.type in _TYPES:
+                declared, _type = self._class_scope_field(info, scope, name)
+                if declared or field_only:
+                    return self._created_field(info, scope, name)
+            scope = scope.parent
+        return None
+
+    def _created_local(self, info: _Method, name: str, declarator: _Declarator) -> str | None:
+        value = declarator.value
+        if (
+            declarator.type_node is None or value is None
+            or declarator.lambda_slot is not None or declarator.element_of is not None
+        ):
+            return None
+        variable = value.parent
+        declaration = variable.parent if variable is not None else None
+        if declaration is None or declaration.type != "local_variable_declaration" or declaration.parent is None:
+            return None
+        source = self.units[info.method.path].source
+        if _assigned(source, declaration.parent, name):
+            return None
+        return self._creation(info.method.path, value, info.owner)
+
+    def _created_field(self, info: _Method, scope: Node, name: str) -> str | None:
+        path = info.method.path
+        source = self.units[path].source
+        body = scope.child_by_field_name("body")
+        found = [
+            (member, child)
+            for member in (body.named_children if body is not None else [])
+            if member.type == "field_declaration"
+            for child in member.named_children
+            if child.type == "variable_declarator"
+            and (ident := child.child_by_field_name("name")) is not None
+            and parser.node_text(source, ident) == name
+        ]
+        # An inherited field keeps its declared type.
+        if len(found) != 1 or body is None:
+            return None
+        member, variable = found[0]
+        modifiers = parser.modifiers_node(member)
+        if modifiers is None or "final" not in parser.node_text(source, modifiers).split():
+            return None
+        if _assigned(source, body, name):
+            return None
+        return self._creation(path, variable.child_by_field_name("value"), self.owner(path, scope))
+
+    def _creation(self, path: str, value: Node | None, owner: str) -> str | None:
+        """The named source class ``new T(...)`` creates; an anonymous class
+        body is no named type (BL-30 owns it)."""
+        if value is None or value.type != "object_creation_expression" or any(
+            child.type == "class_body" for child in value.children
+        ):
+            return None
+        type_node = value.child_by_field_name("type")
+        if type_node is None:
+            return None
+        created = self.resolve(path, parser.node_text(self.units[path].source, type_node), owner, at=type_node)
+        return created if created in self.types else None
+
+    def _narrowed_targets(
+        self, info: _Method, receiver: Node, invocation: Node, receiver_type: str,
+        name: str, arity: int, argument_types: tuple[str | None, ...] | None,
+        targets: list[IntegrationMethod],
+    ) -> tuple[str, list[IntegrationMethod], bool] | None:
+        """The dispatch on the type a variable always holds (BL-29), as
+        ``(type, targets, pruned)``, when it is a source subtype of the
+        declared receiver type and its targets are among ``targets``."""
+        created = self.created_type(info, receiver, invocation)
+        if created is None or created == receiver_type:
+            return None
+        module = self._receiver_module(created, info)
+        if not any(owner == receiver_type for owner, _module in self.ancestors(created, module)):
+            return None
+        narrowed, pruned, _declaration = self._candidate_targets(
+            created, name, arity, info.module, info.method.path, argument_types=argument_types,
+        )
+        reached = {target.id for target in targets}
+        if not narrowed or any(target.id not in reached for target in narrowed):
+            return None
+        return created, narrowed, pruned
 
     def _declarator(self, info: _Method, scope: Node, name: str, invocation: Node) -> _Declarator | None:
         """How ``scope`` declares ``name`` for ``invocation``: as a variable
@@ -3070,6 +3199,7 @@ class JavaSymbols:
                         self.expression_type(info, argument, invocation) for argument in arguments
                     )
                 arguments_count = arity
+                dispatch_type: str | None = None
                 pruned = False
                 external = False
                 declaration: _Method | None = None
@@ -3088,6 +3218,19 @@ class JavaSymbols:
                         receiver_type, name, arguments_count, info.module, info.method.path,
                         argument_types=argument_types,
                     )
+                    if (
+                        closed_world and targets and receiver is not None
+                        and invocation.type != "method_reference" and receiver_type in self.types
+                    ):
+                        # A variable that always holds a created ``T``
+                        # dispatches on ``T``; the declaration it names
+                        # stays the declared type's (BL-29, ADR-86).
+                        narrowed = self._narrowed_targets(
+                            info, receiver, invocation, receiver_type, name, arguments_count,
+                            argument_types, targets,
+                        )
+                        if narrowed is not None:
+                            dispatch_type, targets, pruned = narrowed
                     if not targets and receiver is None:
                         static_owner = self._static_import_owner(info, name, arguments_count)
                         if static_owner is not None:
@@ -3117,9 +3260,10 @@ class JavaSymbols:
                     (info.method.id, line, target.id) in exact_sites for target in targets
                 ):
                     continue
-                incomplete = virtual and receiver_type in self.types and not any(
+                runtime_type = dispatch_type or receiver_type
+                incomplete = virtual and runtime_type in self.types and not any(
                     self.methods[target.id].binds_statically for target in targets if target.id in self.methods
-                ) and self._incomplete_implementors(receiver_type, info, name, arguments_count, targets)
+                ) and self._incomplete_implementors(runtime_type, info, name, arguments_count, targets)
                 if (
                     incomplete and declaration is not None and not declaration.concrete
                     and all(target.id != declaration.method.id for target in targets)
@@ -3141,7 +3285,7 @@ class JavaSymbols:
                 dispatch = (
                     "exact"
                     if len(targets) == 1 and not pruned and not external and not incomplete and (
-                        self._declared_concretely(targets[0], receiver_type, info)
+                        self._declared_concretely(targets[0], runtime_type, info)
                         or closed_world and self._concrete(targets[0])
                     )
                     else "possible"

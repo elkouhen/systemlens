@@ -217,7 +217,9 @@ that expansion is dropped because the exact edge already reaches it
 (ADR-70, A4). The symbol fallback then skips the invocation whose
 candidates include that target, so it cannot reopen the other
 implementations. A witness without an exact row at its site still expands
-to every compatible implementation.
+to every compatible implementation. A rebuild from persisted edges applies
+the same rule: a declared abstract edge at a site with a declared `exact`
+edge to one of its implementations adds no dispatch (ADR-86).
 
 When the index knows module dependencies, a typed engine's edge, the
 dispatch the join adds for it and the symbol fallback beside it never join
@@ -605,6 +607,21 @@ confidence unchanged. A static or un-overridden default interface
 method that is itself the target, and an overridden default body, get no
 witness; neither does a call whose dispatch is already `possible`.
 
+A local assigned once, at its declaration, with `new T(...)`, and a
+`final` field the enclosing class declares with that initializer,
+dispatch on `T` when `T` is a source subtype of the declared type (ADR-86,
+BL-29). The declaration the call names, and so the witness, stay the
+declared type's. Any other assignment in the variable's block or class
+body, compound and `++` included, keeps the declared type. So do a
+parameter, a non-final, blank or inherited field, an anonymous class and
+a lambda.
+
+The narrowed call is `exact` only under ADR-81, checked on `T`: an
+override in a subclass of `T` keeps it `possible`. When `T` has no
+indexed body for the call, such as a record accessor, the declared
+type's dispatch stands. The check walks the variable's block once per
+narrowed call site. Method references are not narrowed.
+
 A receiver typed by an external interface, one that a source type lists in
 `implements` or `extends` (and `Thread` as a `Runnable`), dispatches to the
 most specific concrete, non-static, non-private body of that name and arity
@@ -948,6 +965,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T10 | Ternary receiver whose branches share a type | `covered` (BL-23) | |
 | T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
 | T12 | Element of a JDK container accessor chain | `covered` (BL-27) | |
+| T13 | Local or `final` field created once as a named class; reassigned, inherited, anonymous and lambda values keep the declared type | `covered` (BL-29) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface | `defect` | not planned |
 | F3 | Anonymous subclass overriding a source method | `defect` | not planned |
@@ -1002,7 +1020,7 @@ aligned it.
 | A8 | Unqualified call inside an anonymous `Thread` | `covered` | BL-25 |
 | A9 | Lambda passed to a source functional interface parameter | `covered` | BL-24 |
 | A10 | Method reference, one arity or an overloaded name | `covered` | BL-24 |
-| B1 | Local or `final` field declared `Shape`, created as `Circle` | `defect` | BL-29 |
+| B1 | Local or `final` field declared `Shape`, created as `Circle` | `covered` | BL-29 |
 | B2 | Lambda (F2) or anonymous class (F3) implementing the receiver type | `defect` | BL-30 |
 | B3 | Call on an external class reaching a source subclass (H11) | `missing` | BL-31 |
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |

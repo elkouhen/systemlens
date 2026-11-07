@@ -1772,6 +1772,129 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {},
         note="BL-27: a raw or wildcard container, or a type-changing chain, gives nothing"),
+    Shape("T13", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Use {
+          private final Shape field = new Circle();
+          static final Shape SHARED = new Circle();
+          void run() { //@Use.run
+            Shape local = new Circle();
+            local.area();
+            field.area();
+            this.field.area();
+            SHARED.area();
+            for (int i = 0; i < 2; i++) {
+              Shape each = new Circle();
+              each.area();
+            }
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact", "Shape.area": "possible"},
+        note="BL-29: a local or a final field created once as a named class dispatches on it"),
+    Shape("T13-kept", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Base {
+          protected final Shape inherited = new Circle();
+        }
+        class Use extends Base {
+          Shape open = new Circle();
+          final Shape blank;
+          final Shape reset = new Circle();
+          Use() {
+            blank = new Circle();
+            this.reset = new Square();
+          }
+          void run(Shape param) { //@Use.run
+            param.area();
+            open.area();
+            blank.area();
+            reset.area();
+            inherited.area();
+            Shape later = new Circle();
+            later = new Square();
+            later.area();
+            Shape compound = new Circle();
+            compound += 1;
+            compound.area();
+            Shape counted = new Circle();
+            counted++;
+            counted.area();
+            Shape assigned;
+            assigned = new Circle();
+            assigned.area();
+            Shape captured = new Circle();
+            Runnable task = new Runnable() {
+              public void run() { captured = new Square(); }
+            };
+            captured.area();
+            Shape lambda = new Circle();
+            Runnable again = () -> { lambda = new Square(); };
+            lambda.area();
+            Shape anonymous = new Shape() { public double area() { return 0; } };
+            anonymous.area();
+            Shape made = () -> 0;
+            made.area();
+          }
+        }
+        """, "Use.run", {"Shape.area": "possible", "Circle.area": "possible", "Square.area": "possible"},
+        note="BL-29: a parameter, a non-final, blank, reassigned or inherited field, a local "
+             "assigned again (compound, ++, in an inner class or a lambda), an anonymous class "
+             "or a lambda keep the declared type; the fixture is parsed, not compiled"),
+    Shape("T13-overridden", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Big extends Circle {
+          public double area() { return 4; } //@Big.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Use {
+          void run() { //@Use.run
+            Shape local = new Circle();
+            local.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "possible", "Big.area": "possible"},
+        absent=("Square.area", "Shape.area"),
+        note="BL-29: the dispatch on the created class stays open over its subclasses (ADR-81)"),
+    Shape("T13-record", """
+        interface Named {
+          String name(); //@Named.name
+        }
+        record R(String name) implements Named {}
+        class Other implements Named {
+          public String name() { return "o"; } //@Other.name
+        }
+        class Use {
+          void run() { //@Use.run
+            Named named = new R("r");
+            named.name();
+          }
+        }
+        """, "Use.run", {"Named.name": "possible", "Other.name": "possible"},
+        note="BL-29: a created record has no indexed accessor body, so the call keeps "
+             "the declared type's dispatch; nothing is exact"),
     # 2.5 Functional and implicit implementations
     Shape("F1", """
         interface Port {

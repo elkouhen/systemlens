@@ -918,6 +918,13 @@ def _build_call_graph(
                 input_endpoint_ids=(),
                 output_endpoint_ids=(),
             )
+        # Declared exact targets per site: as in a fresh join, the witness
+        # beside an exact target dispatches only there and opens no route
+        # (ADR-70, BL-29).
+        persisted_exact: dict[tuple[str, int], set[str]] = defaultdict(set)
+        for edge in persisted_edges:
+            if edge.dispatch_confidence == "exact" and not edge.inferred:
+                persisted_exact[(edge.caller_id, edge.line)].add(edge.callee_id)
         for edge in persisted_edges:
             caller = methods_by_id.get(edge.caller_id)
             callee = methods_by_id.get(edge.callee_id)
@@ -949,6 +956,10 @@ def _build_call_graph(
                             caller,
                         ),
                     )
+                    exact_targets = persisted_exact.get((caller.id, edge.line), set())
+                    if any(candidate.id in exact_targets for candidate in candidates):
+                        # The exact edge already reaches the site's target.
+                        continue
                     for candidate in candidates:
                         synthetic = MethodCall(
                             caller=caller.qualified_method,
