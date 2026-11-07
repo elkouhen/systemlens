@@ -2096,6 +2096,17 @@ unchanged; CodeQL loses 271 edges (56 `exact`, 215 `possible`), all
 from Lombok `@Data` `equals` and `hashCode` calls on `Object` fields
 (rule 4), and keeps its 165 flows and their confidences.
 
+**Delivery of rule 1 for CodeQL and Joern (2026-11-07, BL-32):** the
+CodeQL query drops an `exact` target when a concrete production subtype
+of the receiver's dispatch bound reaches no written source body through
+`exactMethodImpl`. The Joern export lists its internal types, and the
+adapter keeps a dynamic call `possible` when a concrete subtype of the
+named type reaches no linked body or generates the member. The ADR-81
+regression fixtures give the same rows with the three engines. Joern
+reads a record's interfaces from its generic signature, by simple name,
+and checks the declaring type rather than a narrowed one; both widen the
+check, never narrow it.
+
 ## ADR-83: Check a supplied CodeQL database against the indexed sources
 
 **Status:** Accepted on 2026-11-04 with lot 1 of the

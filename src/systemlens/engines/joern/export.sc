@@ -78,12 +78,38 @@
     .filter(_.annotation.name("FeignClient").nonEmpty)
     .flatMap(declaration => declaration.fullName :: declaration.inheritsFromTypeFullName.l)
     .distinct
+  // Internal types, for ADR-81 rule 1: a concrete type whose body for a
+  // call is a record accessor, a Lombok member or inherited from a library
+  // is a runtime type no linked source body stands for.
+  def annotationsJson(annotations: List[io.shiftleft.codepropertygraph.generated.nodes.Annotation]) =
+    ujson.Arr.from(annotations.map(a => ujson.Obj("name" -> a.name, "full_name" -> a.fullName)))
+  val types = cpg.typeDecl.isExternal(false).l.map { declaration =>
+    ujson.Obj(
+      "full_name" -> declaration.fullName,
+      "file" -> declaration.filename,
+      "abstract" -> declaration.modifier.modifierType.l.contains("ABSTRACT"),
+      "inherits" -> ujson.Arr.from(declaration.inheritsFromTypeFullName.l),
+      // Joern drops the interfaces of a record from `inherits`; its generic
+      // signature still names them (`LRecord;LNamed;`).
+      "signature" -> declaration.genericSignature,
+      "annotations" -> annotationsJson(declaration.annotation.l),
+      "fields" -> ujson.Arr.from(declaration.member.l.map { member =>
+        ujson.Obj(
+          "name" -> member.name,
+          "type" -> member.typeFullName,
+          "static" -> member.modifier.modifierType.l.contains("STATIC"),
+          "annotations" -> annotationsJson(member._annotationViaAstOut.l),
+        )
+      }),
+    )
+  }
   val document = ujson.Obj(
     "schema" -> "systemlens-joern-v1",
     "methods" -> ujson.Arr.from(methods),
     "calls" -> ujson.Arr.from(calls),
     "payload_sends" -> ujson.Arr.from(payloadSends),
     "proxied_types" -> ujson.Arr.from(proxiedTypes),
+    "types" -> ujson.Arr.from(types),
   )
   os.write.over(os.Path(outFile), ujson.write(document))
 }

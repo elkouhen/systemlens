@@ -1,7 +1,7 @@
 """Engine parity: the ``source`` engine against CodeQL on the alignment shapes.
 
 One fixture holds every shape the ``source`` engine and the CodeQL query
-were measured on (rows A1 to A10 and B1 to B5 of the engine-parity table in
+were measured on (rows A1 to A10 and B1 to B6 of the engine-parity table in
 ``docs/spec-tech/indexing.md``). It tags lines as
 ``tests/test_call_graph_shapes.py`` does, with a trailing ``//@Tag``
 comment: each caller's declaration line, each target's declaration line,
@@ -45,6 +45,8 @@ package p;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import lombok.Data;
+import org.acme.ExternalLabel;
 
 interface Shape {
   double area(); //@Shape.area
@@ -290,6 +292,93 @@ class Handlers {
     handler.handle("x"); //@b5
   }
 }
+
+// B6: an implementor without a written body (ADR-81 rule 1).
+interface Named {
+  String name(); //@Named.name
+}
+
+class WrittenName implements Named {
+  public String name() { return ""; } //@WrittenName.name
+}
+
+record GeneratedName(String name) implements Named {}
+
+interface HasId {
+  String getId(); //@HasId.getId
+}
+
+class WrittenId implements HasId {
+  public String getId() { return ""; } //@WrittenId.getId
+}
+
+@Data
+class LombokId implements HasId {
+  private String id;
+}
+
+interface Labeled {
+  String label(); //@Labeled.label
+}
+
+class WrittenLabel implements Labeled {
+  public String label() { return ""; } //@WrittenLabel.label
+}
+
+class InheritedLabel extends ExternalLabel implements Labeled {}
+
+interface Shown {
+  String toString(); //@Shown.toString
+}
+
+class WrittenShown implements Shown {
+  public String toString() { return ""; } //@WrittenShown.toString
+}
+
+class ObjectShown implements Shown {}
+
+class Person {
+  public String getName() { return ""; } //@Person.getName
+}
+
+@Data
+class Employee extends Person {
+  private String name;
+}
+
+interface Solo {
+  String only(); //@Solo.only
+}
+
+class SoloImpl implements Solo {
+  public String only() { return ""; } //@SoloImpl.only
+}
+
+class Implementors {
+  void record(Named n) { //@Implementors.record
+    n.name(); //@b6.record
+  }
+
+  void lombok(HasId h) { //@Implementors.lombok
+    h.getId(); //@b6.lombok
+  }
+
+  void external(Labeled l) { //@Implementors.external
+    l.label(); //@b6.external
+  }
+
+  void object(Shown s) { //@Implementors.object
+    s.toString(); //@b6.object
+  }
+
+  void override(Person p) { //@Implementors.override
+    p.getName(); //@b6.override
+  }
+
+  void complete(Solo s) { //@Implementors.complete
+    s.only(); //@b6.complete
+  }
+}
 """
 
 Row = tuple[str, str, str]
@@ -368,6 +457,20 @@ CASES: list[Case] = [
           ("b4", "Shape.area", "possible")),
     _case("B5", "Handlers.run", None,
           ("b5", "GenericHandler.handle", "exact"), ("b5", "Handler2.handle", "possible")),
+    _case("B6-record", "Implementors.record", None,
+          ("b6.record", "WrittenName.name", "possible"), ("b6.record", "Named.name", "possible")),
+    _case("B6-lombok", "Implementors.lombok", None,
+          ("b6.lombok", "WrittenId.getId", "possible"), ("b6.lombok", "HasId.getId", "possible")),
+    _case("B6-external", "Implementors.external", None,
+          ("b6.external", "WrittenLabel.label", "possible"),
+          ("b6.external", "Labeled.label", "possible")),
+    _case("B6-object", "Implementors.object", None,
+          ("b6.object", "WrittenShown.toString", "possible"),
+          ("b6.object", "Shown.toString", "possible")),
+    _case("B6-override", "Implementors.override", None,
+          ("b6.override", "Person.getName", "possible")),
+    _case("B6-complete", "Implementors.complete", None,
+          ("b6.complete", "SoloImpl.only", "exact"), ("b6.complete", "Solo.only", "possible")),
 ]
 
 

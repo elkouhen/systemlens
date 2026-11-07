@@ -424,6 +424,99 @@ def test_q8_a_feign_fallback_stays_a_possible_target() -> None:
     )
 
 
+def _type(
+    name: str, *inherits: str, abstract: bool = False, signature: str = "<empty>",
+    annotations: tuple[str, ...] = (), fields: tuple[str, ...] = (),
+) -> dict[str, object]:
+    return {
+        "full_name": name, "file": "src/App.java", "abstract": abstract,
+        "inherits": list(inherits), "signature": signature,
+        "annotations": [{"name": item, "full_name": f"lombok.{item}"} for item in annotations],
+        "fields": [
+            {"name": field, "type": "java.lang.String", "static": False, "annotations": []}
+            for field in fields
+        ],
+    }
+
+
+def _named_call(method: str) -> dict[str, object]:
+    return {
+        "caller": "app.Api.run:void()", "caller_file": "src/App.java",
+        "caller_line": 10, "line": 11, "target": f"app.Named.{method}:java.lang.String()",
+        "dispatch": "DYNAMIC_DISPATCH",
+        "callees": [
+            _row(f"app.Named.{method}:java.lang.String()", 2, abstract=True),
+            _row(f"app.Written.{method}:java.lang.String()", 5),
+        ],
+    }
+
+
+_NAMED = _type("app.Named", "java.lang.Object", abstract=True)
+_WRITTEN = _type("app.Written", "java.lang.Object", "app.Named")
+
+
+@pytest.mark.parametrize(("implementor", "method"), [
+    # Joern drops a record's interfaces from ``inherits``; its generic
+    # signature still names them.
+    pytest.param(
+        _type("app.Generated", "java.lang.Record", signature="LRecord;LNamed;", fields=("name",)),
+        "name", id="record-accessor",
+    ),
+    pytest.param(
+        _type("app.LombokNamed", "java.lang.Object", "app.Named", annotations=("Data",), fields=("name",)),
+        "getName", id="lombok-getter",
+    ),
+    pytest.param(_type("app.Inherited", "org.acme.External", "app.Named"), "name", id="external-body"),
+    pytest.param(_type("app.ObjectShown", "java.lang.Object", "app.Named"), "toString", id="object-body"),
+])
+def test_bl32_an_implementor_without_a_written_body_keeps_the_dispatch_possible(
+    implementor: dict[str, object], method: str,
+) -> None:
+    """ADR-81 rule 1 with Joern (BL-32): the export lists the internal types;
+    a concrete one whose body is generated or inherited from a library is a
+    runtime type no linked body stands for."""
+    document = {**_document(_named_call(method)), "types": [_NAMED, _WRITTEN, implementor]}
+
+    assert _edges(parse_calls(document)) == {
+        ("app.Api.run", f"app.Named.{method}", 11, "possible"),
+        ("app.Api.run", f"app.Written.{method}", 11, "possible"),
+    }
+
+
+def test_bl32_a_complete_implementor_set_keeps_its_body_exact() -> None:
+    """A subtype inheriting the written body, an abstract type, a Lombok
+    type writing the member or generating another one leave the unique
+    body exact."""
+    document = {**_document(_named_call("getName")), "types": [
+        _NAMED,
+        # A member the Lombok type writes itself is not generated.
+        _type("app.Written", "java.lang.Object", "app.Named", annotations=("Data",), fields=("name",)),
+        _type("app.Child", "app.Written", annotations=("Data",), fields=("id",)),
+        _type("app.Partial", "java.lang.Object", "app.Named", abstract=True),
+    ]}
+
+    assert ("app.Api.run", "app.Written.getName", 11, "exact") in _edges(parse_calls(document))
+    # An export from an older script lists no type.
+    assert ("app.Api.run", "app.Written.getName", 11, "exact") in _edges(
+        parse_calls(_document(_named_call("getName")))
+    )
+
+
+def test_bl32_a_lombok_member_overriding_a_written_body_keeps_it_possible() -> None:
+    call = {
+        "caller": "app.Api.run:void()", "caller_file": "src/App.java",
+        "caller_line": 10, "line": 11, "target": "app.Base.getName:java.lang.String()",
+        "dispatch": "DYNAMIC_DISPATCH",
+        "callees": [_row("app.Base.getName:java.lang.String()", 2)],
+    }
+    document = {**_document(call), "types": [
+        _type("app.Base", "java.lang.Object"),
+        _type("app.Child", "app.Base", annotations=("Data",), fields=("name",)),
+    ]}
+
+    assert _edges(parse_calls(document)) == {("app.Api.run", "app.Base.getName", 11, "possible")}
+
+
 @pytest.mark.slow
 @_JOERN
 def test_q6_q8_joern_ignores_test_bodies_and_keeps_feign_fallbacks_possible(tmp_path: Path) -> None:

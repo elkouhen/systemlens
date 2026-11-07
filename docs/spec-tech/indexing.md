@@ -200,6 +200,18 @@ the fallback class is `possible` and the interface method stays a
 target. A call to `equals`, `hashCode` or `toString` on a receiver typed
 `Object` or by a type variable produces no row.
 
+A virtual call also loses its `exact` target when a concrete production
+type the receiver may hold has no source body for it (rule 1, BL-32).
+The receiver's bound is the one dispatch uses: the type-flow bound, or
+else the qualifier's type, a type variable's upper bound, or the enclosing
+type of an unqualified call; a created instance is an exact bound. Each
+concrete source subtype of the bound must reach a written production body
+through `exactMethodImpl`. A record accessor, a body inherited from a
+library class or `Object`, or a supertype CodeQL cannot resolve fails
+that test. A Lombok member is a viable source method already, so the
+unique-body test excludes it. The check runs only on calls that have a
+unique target.
+
 Constructor calls follow ADR-75. A `new T(...)`, `this(...)` or
 `super(...)` row names the constructor `T.<init>`, `exact` unless an
 untyped argument leaves same-arity overloads open, as above. The implicit
@@ -330,11 +342,26 @@ method has a source file among the indexed files.
 | Several bodies | every method `possible` |
 | Any of the above, and a linked body in an anonymous class, a lambda or a library | every source method `possible` |
 | Any of the above, on a call named on a `@FeignClient` interface or one of its direct supertypes (`proxied_types`) | every source method `possible` (ADR-81) |
+| A dynamic call whose named type has a concrete internal subtype (`types`) that reaches no linked body, or generates the member (record accessor, Lombok) | every source method `possible` (ADR-81 rule 1) |
 | No resolved signature (`Owner.name:<unresolvedSignature>(n)`), one source method `name` with `n` parameters on `Owner`, without a body | that method `possible`; a concrete body is left to the symbol pass |
 
 Static initializers, lambdas and anonymous-class methods are never
 targets, but a body among them still keeps the call `possible` (ADR-70,
-ADR-81). A constructor is the target `Owner.<init>` (ADR-75). Joern
+ADR-81).
+
+The `types` list holds each internal type with its supertypes, its
+`ABSTRACT` modifier, its annotations and its fields. Joern drops a
+record's interfaces from `inherits`; the adapter reads them from the
+generic signature (`LRecord;LNamed;`) by simple name, which can widen the
+subtypes of a type but never narrow them. A concrete subtype reaches a
+linked body when it or one of its internal supertypes declares one. It
+generates the member under the `source` engine's rules: a record
+component accessor, or a Lombok getter, setter, `equals`, `hashCode` or
+`toString` it does not write itself. Joern parses Lombok types only, so
+its call graph never links a generated member. The named type is the
+method's declaring type, not the receiver's type flow: Joern narrows
+nothing, so the check can only make a call `possible`. An export without
+`types`, from an older script, skips the check. A constructor is the target `Owner.<init>` (ADR-75). Joern
 inlines field initializers into every constructor that does not start
 with `this(...)`, and static field initializers into `Owner.<clinit>`,
 which callers keep; it leaves initializer blocks out of its graph, so the
@@ -1049,6 +1076,7 @@ aligned it.
 | B3 | Call on an external class reaching a source subclass (H11) | `covered` | BL-31 |
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
+| B6 | Implementor without a written body: record accessor, Lombok member, body inherited from an external class or `Object`; one complete implementor set stays `exact` (ADR-81 rule 1) | `covered` | BL-32 |
 
 ## Build layout
 

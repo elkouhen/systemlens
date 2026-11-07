@@ -44,6 +44,12 @@ predicate productionSource(Callable callable) {
   callable.fromSource() and not testSource(callable)
 }
 
+/** A type of the sources outside test source sets (ADR-81 rule 2). */
+predicate productionType(RefType type) {
+  type.fromSource() and
+  not type.getFile().getRelativePath().regexpMatch("(.*/)?src/(test|[^/]*Test)/.*")
+}
+
 /**
  * The method a call names, as declared in the sources. A call on a
  * parameterized receiver (`Gateway<String>.send`) names a parameterized
@@ -71,9 +77,68 @@ predicate proxiedCall(MethodCall call) {
  * and line that exist in the indexed repository.
  */
 predicate exactTarget(MethodCall call, Method target) {
+  uniqueTarget(call, target) and not unwrittenImplementor(call)
+}
+
+predicate uniqueTarget(MethodCall call, Method target) {
   target = viableCallable(call) and productionSource(target) and
   not proxiedCall(call) and
   forall(Callable other | other = viableCallable(call) and other != target | testSource(other))
+}
+
+/**
+ * The bound of the receiver's runtime type that the dispatch uses: the
+ * type flow's bound, or else the qualifier's type, an upper bound of a
+ * type variable, or the enclosing type of an unqualified call. A created
+ * instance is an exact bound.
+ */
+predicate receiverBound(VirtualMethodCall call, RefType bound, boolean exact) {
+  exprTypeFlow(call.getQualifier(), bound, exact)
+  or
+  not exprTypeFlow(call.getQualifier(), _, _) and
+  (
+    exists(Expr qualifier | qualifier = call.getQualifier() |
+      (
+        bound = qualifier.getType().(BoundedType).getAnUltimateUpperBoundType()
+        or
+        bound = qualifier.getType() and not bound instanceof BoundedType
+      ) and
+      if qualifier instanceof ClassInstanceExpr then exact = true else exact = false
+    )
+    or
+    not exists(call.getQualifier()) and exact = false and
+    (
+      call.isOwnMethodCall() and bound = call.getEnclosingCallable().getDeclaringType()
+      or
+      call.isEnclosingMethodCall(bound)
+    )
+  )
+}
+
+/**
+ * A concrete source type the receiver may hold at run time whose body
+ * for the call is no source method: a record accessor, a body inherited
+ * from a library class or `Object`, or one CodeQL cannot see because a
+ * supertype is unresolved. No source target is then exact (ADR-81 rule 1).
+ * A Lombok member is a source method `viableCallable` already reports.
+ */
+predicate unwrittenImplementor(VirtualMethodCall call) {
+  exists(Method declared, RefType bound, boolean exact, RefType runtime |
+    uniqueTarget(call, _) and
+    declared = declaredMethod(call) and
+    receiverBound(call, bound, exact) and
+    productionType(runtime) and
+    runtime instanceof Class and not runtime.(Class).isAbstract() and
+    (
+      exact = true and runtime = bound.getSourceDeclaration()
+      or
+      exact = false and runtime.getASourceSupertype*() = bound.getSourceDeclaration()
+    ) and
+    not exists(Method body |
+      body = exactMethodImpl(declared, runtime) and productionSource(body) and
+      not body.isCompilerGenerated()
+    )
+  )
 }
 
 /**

@@ -31,7 +31,13 @@ source-to-source calls and never guesses a target (ADR-61, ADR-85):
   direct supertype, listed in ``proxied_types``, reaches a runtime proxy
   no source body stands for: every target, a fallback class included,
   stays ``possible`` (ADR-81 rule 3). Test sources are never indexed, so
-  their bodies are never targets (rule 2).
+  their bodies are never targets (rule 2);
+- a dynamic call is ``exact`` only when every concrete source subtype of
+  the type it names, listed in ``types``, inherits or declares a linked
+  body and generates no member for the call. A record accessor, a Lombok
+  member, or a body inherited from a library class or ``Object`` keeps
+  every target ``possible`` (ADR-81 rule 1). Joern parses Lombok types
+  only, so its call graph never links a generated member.
 
 Joern names a method of a local class after the enclosing method and its
 signature (``pkg.App.create:void().Local.go:void()``); the adapter drops
@@ -211,13 +217,187 @@ def parse_calls(
         # An export from an older script lists no proxied type.
         listed = document.get("proxied_types", [])
         proxied = frozenset(str(name) for name in listed) if isinstance(listed, list) else frozenset()
+        hierarchy = _Hierarchy.of(document, indexed)
         for row in _rows(document, "calls"):
-            calls.update(_calls_of(row, indexed, declared, proxied))
+            calls.update(_calls_of(row, indexed, declared, proxied, hierarchy))
     except (KeyError, TypeError, ValueError) as exc:
         raise JoernError("Joern returned an unexpected call schema.") from exc
     return sorted(calls, key=lambda call: (
         call.caller_path, call.call_line, call.caller, call.callee, call.dispatch_confidence,
     ))
+
+
+@dataclass(frozen=True)
+class _Field:
+    name: str
+    type: str
+    annotations: frozenset[str]
+
+
+@dataclass(frozen=True)
+class _Type:
+    full_name: str
+    concrete: bool
+    record: bool
+    inherits: tuple[str, ...]
+    # Simple names of supertypes the generic signature lists and
+    # ``inherits`` misses, such as the interfaces of a record.
+    unresolved: tuple[str, ...]
+    annotations: frozenset[str]
+    fields: tuple[_Field, ...]
+
+
+def _signature_supertypes(signature: str) -> list[str]:
+    """Simple names of the top-level types of ``LRecord;LNamed<LT;>;``."""
+    names: list[str] = []
+    depth = 0
+    current: list[str] = []
+    for character in signature:
+        if character == "<":
+            depth += 1
+        elif character == ">":
+            depth -= 1
+        elif depth == 0 and character == ";":
+            written = "".join(current)
+            if written.startswith("L"):
+                names.append(re.split(r"[/.$]", written[1:])[-1])
+            current = []
+        elif depth == 0:
+            current.append(character)
+    return names
+
+
+def _lombok_names(rows: object) -> frozenset[str]:
+    """Simple names of the annotations that are, or may be, Lombok's.
+
+    Joern resolves an imported Lombok annotation to ``lombok.Name``; an
+    annotation it could not resolve keeps its written name.
+    """
+    names: set[str] = set()
+    for row in rows if isinstance(rows, list) else []:
+        name = str(row.get("name", ""))
+        full_name = str(row.get("full_name", ""))
+        if full_name == f"lombok.{name}" or "." not in full_name or "<unresolved" in full_name:
+            names.add(name)
+    return frozenset(names)
+
+
+class _Hierarchy:
+    """The internal types of the export, for ADR-81 rule 1."""
+
+    def __init__(self, types: Mapping[str, _Type]) -> None:
+        self.types = types
+        self._by_simple_name: dict[str, list[str]] = {}
+        for name in types:
+            self._by_simple_name.setdefault(re.split(r"[.$]", name)[-1], []).append(name)
+        self._ancestors: dict[str, frozenset[str]] = {}
+        self._subtypes: dict[str, list[_Type]] = {}
+
+    @classmethod
+    def of(cls, document: Mapping[str, object], indexed: frozenset[str]) -> "_Hierarchy | None":
+        """``None`` for an export from an older script, without ``types``."""
+        rows = document.get("types")
+        if not isinstance(rows, list):
+            return None
+        types: dict[str, _Type] = {}
+        for row in rows:
+            path = _path(row.get("file"))
+            if not path or (indexed and path not in indexed):
+                continue
+            inherits = tuple(str(name) for name in row.get("inherits", []))
+            named = {name.rsplit(".", 1)[-1] for name in inherits}
+            unresolved = tuple(
+                simple for simple in _signature_supertypes(str(row.get("signature", "")))
+                if simple not in named
+            )
+            fields = row.get("fields", [])
+            types[str(row["full_name"])] = _Type(
+                full_name=str(row["full_name"]),
+                concrete=not bool(row.get("abstract", False)),
+                record="java.lang.Record" in inherits,
+                inherits=inherits,
+                unresolved=unresolved,
+                annotations=_lombok_names(row.get("annotations")),
+                fields=tuple(
+                    _Field(
+                        name=str(field["name"]), type=str(field.get("type", "")),
+                        annotations=_lombok_names(field.get("annotations")),
+                    )
+                    for field in fields if isinstance(fields, list) and not field.get("static", False)
+                ),
+            )
+        return cls(types)
+
+    def ancestors(self, name: str) -> frozenset[str]:
+        """``name`` and every type it extends or implements, through the
+        internal types; an external supertype is named, not walked."""
+        cached = self._ancestors.get(name)
+        if cached is None:
+            found: set[str] = set()
+            pending = [name]
+            while pending:
+                current = pending.pop()
+                if current in found:
+                    continue
+                found.add(current)
+                declared = self.types.get(current)
+                if declared is not None:
+                    pending.extend(declared.inherits)
+                    # A supertype known by its simple name only: every
+                    # internal type of that name, which may widen, never
+                    # narrow, the subtypes of a call's type.
+                    for simple in declared.unresolved:
+                        pending.extend(self._by_simple_name.get(simple, ()))
+            cached = self._ancestors[name] = frozenset(found)
+        return cached
+
+    def concrete_subtypes(self, name: str) -> list[_Type]:
+        cached = self._subtypes.get(name)
+        if cached is None:
+            cached = self._subtypes[name] = [
+                declared for declared in self.types.values()
+                if declared.concrete and name in self.ancestors(declared.full_name)
+            ]
+        return cached
+
+    def incomplete(self, owner: str, name: str, arity: int, bodies: Iterable[str]) -> bool:
+        """Whether some concrete subtype of ``owner`` has a body for
+        ``name`` that no owner of ``bodies`` declares (ADR-81 rule 1). A
+        member the type writes itself is never generated."""
+        written = frozenset(bodies)
+        return any(
+            declared.full_name not in written and _generated_member(declared, name, arity)
+            or not written & self.ancestors(declared.full_name)
+            for declared in self.concrete_subtypes(owner)
+        )
+
+
+def _generated_member(declared: _Type, name: str, arity: int) -> bool:
+    """Whether the compiler or Lombok writes ``name`` on ``declared``, as the
+    ``source`` engine decides it (``JavaSymbols._generated_member``)."""
+    if declared.record:
+        return arity == 0 and any(field.name == name for field in declared.fields)
+    if (name, arity) in {("equals", 1), ("hashCode", 0)}:
+        return bool(declared.annotations & {"Data", "Value", "EqualsAndHashCode"})
+    if (name, arity) == ("toString", 0):
+        return bool(declared.annotations & {"Data", "Value", "ToString"})
+    prefix = next((prefix for prefix in ("get", "is", "set") if name.startswith(prefix)), None)
+    if prefix is None or arity != (1 if prefix == "set" else 0):
+        return False
+    accessors = {"Getter"} if prefix != "set" else {"Setter"}
+    class_level = bool(declared.annotations & (accessors | ({"Data"} if prefix == "set" else {"Data", "Value"})))
+    suffix = name[len(prefix):]
+    return any(
+        (class_level or field.annotations & accessors)
+        and field.name[:1].upper() + field.name[1:] == suffix
+        and (prefix != "is" or field.type == "boolean")
+        for field in declared.fields
+    )
+
+
+def _owner(full_name: str) -> str:
+    """``pkg.T`` of the Joern method full name ``pkg.T.m:ret(args)``."""
+    return full_name[:full_name.rfind(".", 0, full_name.rfind(":"))]
 
 
 def _rows(document: Mapping[str, object], key: str) -> list[Mapping[str, object]]:
@@ -292,6 +472,7 @@ def _calls_of(
     row: Mapping[str, object], indexed: frozenset[str],
     declared: Mapping[tuple[str, int], list[_Method]] | None = None,
     proxied: frozenset[str] = frozenset(),
+    hierarchy: _Hierarchy | None = None,
 ) -> list[MethodCall]:
     call_line = int(str(row["line"]))
     if call_line <= 0:
@@ -329,6 +510,17 @@ def _calls_of(
         and (method.external or method.anonymous)
         for method in linked
     ) or _qualified(target).rsplit(".", 1)[0] in proxied
+    target_types = _parameter_types(target)
+    if (
+        not unreported and hierarchy is not None and concrete and target_types is not None
+        and row.get("dispatch") == "DYNAMIC_DISPATCH"
+    ):
+        # A runtime type whose body is generated or inherited from a
+        # library: no linked body is the only one (ADR-81 rule 1).
+        unreported = hierarchy.incomplete(
+            _owner(target), _qualified(target).rsplit(".", 1)[-1], len(target_types),
+            (_owner(method.full_name) for method in concrete),
+        )
     caller_name = "<anonymous>" if caller.anonymous else caller.qualified
     caller_types = None if caller.anonymous else caller.parameter_types
 
