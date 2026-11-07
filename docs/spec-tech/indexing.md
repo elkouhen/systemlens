@@ -1078,6 +1078,11 @@ aligned it.
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 | B6 | Implementor without a written body: record accessor, Lombok member, body inherited from an external class or `Object`; one complete implementor set stays `exact` (ADR-81 rule 1) | `covered` | BL-32 |
 
+The items of this table change the edges of unchanged sources. The
+code-flow signature moved to `code-flow-v51-call-graph-alignment` with
+them, so the next `index` of an existing index re-runs the call-graph
+stage and rebuilds its edges and flows without `--full`.
+
 ## Build layout
 
 The layout walks the repository once with `os.walk`, without a depth limit.

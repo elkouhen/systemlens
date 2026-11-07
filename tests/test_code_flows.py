@@ -28,6 +28,7 @@ from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, JpaMethod, MongoMethod
 from systemlens.indexing.code_flows import (
+    CODE_FLOW_SIGNATURE,
     CallGraph,
     CallGraphEdge,
     _data_access_branch,
@@ -3385,3 +3386,35 @@ class C {
     assert ports["com.example.C.entry"] == (("in",), ())
     assert ports["com.example.C.Local.send"] == ((), ("out",))
     assert not [flow for flow in flows if flow.steps and flow.steps[-1].endpoint_id == "out"]
+
+
+# The code-flow signature delivered before the call-graph alignment of
+# BL-23 to BL-32 (``BACKLOG.md``).
+_SIGNATURE_BEFORE_ALIGNMENT = "code-flow-v50-sibling-effect-edges"
+
+
+def test_an_index_from_before_the_call_graph_alignment_rebuilds_its_edges(tmp_path: Path) -> None:
+    """BL-23 to BL-32 change the edges of unchanged sources.
+
+    The code-flow signature changed with them: the next ``index`` of an
+    existing index re-runs the call-graph stage without any source change,
+    so the new edges and flows reach it without ``--full``.
+    """
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURES / "constructors", repo)
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+        edges = {(edge.caller_id, edge.callee_id, edge.line) for edge in store.all_call_edges()}
+        current = store.get_meta("code_flow_signature") or ""
+        assert edges and current.startswith(CODE_FLOW_SIGNATURE + "|")
+        # The index an older release wrote, with the edges it computed.
+        store.set_meta(
+            "code_flow_signature",
+            _SIGNATURE_BEFORE_ALIGNMENT + current.removeprefix(CODE_FLOW_SIGNATURE),
+        )
+        store.replace_call_edges([])
+
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store)
+        assert {(edge.caller_id, edge.callee_id, edge.line) for edge in store.all_call_edges()} == edges
+        assert store.get_meta("code_flow_signature") == current
