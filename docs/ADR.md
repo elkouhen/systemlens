@@ -1236,7 +1236,8 @@ source body can receive it, including the unique implementation of an
 interface. When it only fills CodeQL's gaps, interface dispatch to a subtype
 stays `possible`. `analyze compare-engines` measures two engines on one index.
 The source engine also types `var` initializers, static calls on a type name,
-method references with a single declared arity, field accesses, and
+method references with a single declared arity (since BL-24, the arity
+the target functional interface fixes; see `indexing.md`), field accesses, and
 same-arity overloads from literal or typed arguments, including arguments
 assignable to a source ancestor; an ancestor's concrete body is `exact`.
 An override whose parameter type comes from an external wildcard import
@@ -1559,8 +1560,8 @@ the same callee. The persisted graph keeps two edges at such a site, the
 exact one and the witness; flows and their confidence are unchanged.
 
 Amendment of 2026-11-07 (BL-28). Status: accepted on 2026-11-07 under the
-product owner's mandate to process the alignment backlog autonomously; to
-be confirmed by the product owner.
+product owner's mandate to process the alignment backlog autonomously, and
+confirmed by the product owner the same day.
 
 When a closed-world call has no `exact` target, the source pass also emits
 the abstract declaration the call names as a `possible` row beside the
@@ -1655,8 +1656,9 @@ task C6 of the dispatch-scope plan.
 ## ADR-72: Keep dispatch possible when an implicit implementation exists
 
 **Status:** Reopened and accepted on 2026-11-07 under the product owner's
-mandate to process the alignment backlog autonomously; to be confirmed by
-the product owner. Backlog item BL-30. Amends ADR-70 and ADR-86.
+mandate to process the alignment backlog autonomously, and confirmed by
+the product owner the same day. Backlog item BL-30. Amends ADR-70 and
+ADR-86.
 
 History: proposed on 2026-11-03 for task K3 of the call-graph coverage
 plan (backlog item BL-19); not validated, and dropped by the product
@@ -1747,8 +1749,9 @@ application loaded the library.
 ## ADR-74: Dispatch calls on external classes to source overrides
 
 **Status:** Reopened and accepted on 2026-11-07 under the product owner's
-mandate to process the alignment backlog autonomously; to be confirmed by
-the product owner. Backlog item BL-31. Extends ADR-70, ADR-71 and ADR-86.
+mandate to process the alignment backlog autonomously, and confirmed by
+the product owner the same day. Backlog item BL-31. Extends ADR-70,
+ADR-71 and ADR-86.
 
 History: proposed on 2026-11-03 for task K6 of the call-graph coverage
 plan (backlog item BL-13); not validated, and dropped by the product
@@ -2289,8 +2292,8 @@ ADR-76 to every engine's evidence: a type that names no DTO stays unknown.
 ## ADR-86: Dispatch a variable created once on its created class
 
 **Status:** Accepted on 2026-11-07 under the product owner's mandate to
-process the alignment backlog autonomously; to be confirmed by the product
-owner. Amends ADR-70 and ADR-81. Backlog item BL-29.
+process the alignment backlog autonomously, and confirmed by the product
+owner the same day. Amends ADR-70 and ADR-81. Backlog item BL-29.
 
 **Context:** The source pass types a receiver by the written type of its
 variable. CodeQL narrows that type by the value that flows into it. With

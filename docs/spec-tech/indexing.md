@@ -389,8 +389,8 @@ indexed methods.
 Seven `ContactsService` calls keep an unresolved signature: Joern reaches
 the interface declaration as `possible` and the join's dispatch reaches
 the implementation as `possible`, so 11 flows stay `low` (ADR-85). Joern
-reports 1541 engine calls against CodeQL's 6279: calls to
-Lombok-generated accessors have no source line.
+reports 1753 engine calls against CodeQL's 6661 (measured on 2026-11-07):
+calls to Lombok-generated accessors have no source line.
 
 Indexing asks the configured engine (ADR-61) for calls through
 `callgraph.engine.CallGraphEngine`; it never imports an engine module. A

@@ -6,8 +6,10 @@ asked for every item to be processed autonomously, with the decisions
 taken on their behalf listed at the end of the run. The lot order
 stands. Owner: SystemLens implementer. Reviewer: product owner.
 Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21 to BL-32;
-the backlog is fully processed. Each delivered item's Delivery line
-names its commit and test.
+the backlog is fully processed. The product owner confirmed the decisions
+taken on their behalf (ADR-70 amendment, ADR-86, reopened ADR-72 and
+ADR-74) on 2026-11-07. Each delivered item's Delivery line names its
+commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
 so each item stands on its own. Item IDs continue the numbering of the
@@ -327,7 +329,7 @@ dropped on 2026-11-07, and waits for a decision record.
 - **Depends on:** an amendment of ADR-70, validated first.
 - **Status:** `delivered`.
 - **Delivery:** the ADR-70 amendment of 2026-11-07, accepted under the
-  product owner's mandate and to be confirmed (commit `e78a9cb`). Parity
+  product owner's mandate and confirmed (commit `e78a9cb`). Parity
   cases A7 and B4 pass, in the default suite and in the `slow` CodeQL
   test. Whenever no target is `exact`, the abstract declaration the call
   names joins the targets as a declared, non-inferred `possible` row. It
@@ -362,8 +364,8 @@ dropped on 2026-11-07, and waits for a decision record.
   then `exact` only under the ADR-81 rules.
 - **Depends on:** a new ADR, since it adds an `exact` rule.
 - **Status:** `delivered`.
-- **Delivery:** ADR-86, accepted under the product owner's mandate and to
-  be confirmed (commit `c1e3553`). Parity cases B1-local and B1-field
+- **Delivery:** ADR-86, accepted under the product owner's mandate and
+  confirmed (commit `c1e3553`). Parity cases B1-local and B1-field
   pass, in the default suite and in the `slow` CodeQL test. Call shapes
   T13 (local, `final` and `static final` fields, `this.f`, a loop body),
   T13-kept (parameter, non-final, blank, reassigned and inherited fields,
@@ -400,7 +402,7 @@ dropped on 2026-11-07, and waits for a decision record.
   the product owner decides whether the drop stands.
 - **Status:** `delivered`.
 - **Delivery:** ADR-72 reopened and accepted under the product owner's
-  mandate, to be confirmed, and amended to the CodeQL output measured
+  mandate, confirmed, and amended to the CodeQL output measured
   after the join (commit `33cab5c`). Two rules: a call stays `possible`
   when a lambda, a method reference or an anonymous class can implement
   it; a variable created once with such a value reaches no named body of
@@ -433,7 +435,7 @@ dropped on 2026-11-07, and waits for a decision record.
   2026-11-07 (BL-13). The product owner decides whether the drop stands.
 - **Status:** `delivered`.
 - **Delivery:** ADR-74 reopened and accepted under the product owner's
-  mandate, to be confirmed (commit `33cab5c`). Parity case B3 passes, in
+  mandate, confirmed (commit `33cab5c`). Parity case B3 passes, in
   the default suite and in the `slow` CodeQL test: a created-once
   subclass is `exact` under ADR-81, any other dispatch `possible`. Call
   shapes H11, H11-created, H11-kept and H11-scope; a `test_code_flows.py`
