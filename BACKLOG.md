@@ -5,7 +5,7 @@ against CodeQL, and validated the same day by the product owner, who
 asked for every item to be processed autonomously, with the decisions
 taken on their behalf listed at the end of the run. The lot order
 stands. Owner: SystemLens implementer. Reviewer: product owner.
-Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22, BL-23, BL-27.
+Baseline: `main` at `e5243ea`. Delivered on 2026-11-07: BL-21, BL-22, BL-23, BL-24, BL-25, BL-27.
 Each delivered item's Delivery line names its commit and test.
 
 The review was never committed: its measurements are kept in Appendix A
@@ -46,8 +46,8 @@ unresolved or `possible`.
 | [BL-21](#bl-21) | Make every alignment gap a visible engine-parity test | P1 | `delivered` |
 | [BL-22](#bl-22) | Fix three documentation drifts on engine confidence and counts | P2 | `delivered` |
 | [BL-23](#bl-23) | Type `var` loop variables, ternaries, pattern variables and `X.this` | P1 | `delivered` |
-| [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `open` |
-| [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `open` |
+| [BL-24](#bl-24) | Type lambda parameters and method references from a source functional interface | P2 | `delivered` |
+| [BL-25](#bl-25) | Resolve unqualified calls inside anonymous classes of fixed-member external types | P2 | `delivered` |
 | [BL-26](#bl-26) | Substitute source type arguments into type-variable returns, fields and bounds | P1 | `blocked: A7 needs BL-28` |
 | [BL-27](#bl-27) | Type the element of a JDK container accessor chain | P1 | `delivered` |
 | [BL-28](#bl-28) | Emit the declared row beside several possible implementations | P2 | `open` |
@@ -174,7 +174,18 @@ dropped on 2026-11-07, and waits for a decision record.
   functional interface, source or JDK, and stays unresolved when the
   target is unknown.
 - **Depends on:** BL-21.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** parity cases A9 and A10-overload pass in
+  `tests/test_engine_parity.py`, and in its `slow` CodeQL test. Call shape
+  F5 is new, with negative cases: disagreeing overloads, two abstract
+  methods, an unproven type argument, an external superinterface
+  (F5-unproven), an unknown target and a type name fitting two arities
+  (F5-reference-unknown). A source method parameter typed by a JDK
+  functional interface fixes a method reference's arity but leaves a
+  lambda untyped. `tests/test_source_engine.py` now expects
+  `forEach(service::multi)` to bind `multi(String)`. Train-ticket stays at
+  406 flows and 1712 edges, the lab at 23 flows, `compare-engines`
+  unchanged. Commit: `3bfe4d2`.
 - **Why P2:** common in event and handler code, absent from the reference
   projects.
 
@@ -199,7 +210,17 @@ dropped on 2026-11-07, and waits for a decision record.
   the call unresolved. The lists are documented in `indexing.md`.
 - **Depends on:** BL-21. A rule that resolves against any external
   supertype would need an ADR; this item does not propose it.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** parity case A8 passes in `tests/test_engine_parity.py`,
+  and in its `slow` CodeQL test. `Object`, `Thread`, `TimerTask` and the
+  two Spring adapters join the fixed-member list with every public,
+  protected or static member name; `indexing.md` lists all of them. Call
+  shape S3 gains anonymous `Thread`, `TimerTask`, `Object` and adapter
+  cases, with negative cases for a member name (`interrupt`, `cancel`,
+  `init`) and an unknown external supertype. The two `JWTUtil` calls were
+  already resolved through `UserDetails`: train-ticket stays at 406 flows
+  and 1712 edges, the lab at 23 flows, `compare-engines` unchanged.
+  Commit: `b131004`.
 - **Why P2:** frequent shape on train-ticket's configuration classes, but
   only two calls reach source methods there.
 
