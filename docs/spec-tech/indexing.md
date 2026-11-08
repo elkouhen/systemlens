@@ -476,6 +476,23 @@ of an `Optional`, so `stream().findFirst().get()` too, `get(key)` of a
 `Map`, and `getKey()` and `getValue()` of a written `Map.Entry<K, V>`.
 A raw or wildcard container, or a chain through `map`, gives no type.
 
+The view also starts at a call to a source method (BL-35): with
+`List<Order> list()`, `catalog.list().get(0)` is an `Order`, and so are
+`for (var o : catalog.list())` and `catalog.list().forEach(o -> ..)`.
+The declared return type is read through the declarations and type
+arguments the source-generics model uses below.
+
+Those declarations are the receiver's own, else its source ancestors'.
+Several declarations of one parameter list must give the same view, as
+`Box<T> wrap()` declared on an interface and again on an abstract class.
+Same-arity overloads, disagreeing declarations, and a raw return give
+no view.
+
+A `var` local takes the view of its initializer, read where it is
+written: `var l = catalog.list(); l.get(0)` and `var s =
+orders.stream(); s.findFirst().get()` are typed. The guard that ends a
+`var` typing cycle (T4) also ends a view cycle.
+
 A type variable in a return or field type takes the argument the sources
 write for it (BL-26). The receiver's declared type gives it: a field,
 local, parameter, creation, cast or declared return type written
@@ -1024,6 +1041,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
 | T12 | Element of a JDK container accessor chain | `covered` (BL-27) | |
 | T13 | Local or `final` field created once as a named class; reassigned and inherited values keep the declared type | `covered` (BL-29) | |
+| T14 | Element of a JDK container a source method returns or a `var` holds; agreeing inherited declarations | `covered` (BL-35) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1105,7 +1123,7 @@ shapes from the jars it fetches while it builds its database.
 | A07 | `repo.findAll().stream().map(o -> o.getName())` | `missing` | BL-43, BL-37 |
 | A08 | `repo.save(order).ship()` | `missing` | BL-43 |
 | A09 | `repo.findAllById(ids).get(0).ship()` | `missing` | BL-43 |
-| A10 | Source `Optional<Order> findByName(..)`, then `.orElseThrow().ship()` | `missing` | BL-35 |
+| A10 | Source `Optional<Order> findByName(..)`, then `.orElseThrow().ship()` | `covered` | BL-35 |
 | A11 | Source `Page<Order> findAll(Pageable)`, then `.getContent().get(0).ship()` | `missing` | BL-43 |
 | A12 | `ResponseEntity<Order> r = client.get(); r.getBody().ship()` | `missing` | BL-43 |
 | A13 | `ResponseEntity.ok(order).getBody().ship()` | `missing` | BL-43 |
@@ -1124,12 +1142,12 @@ shapes from the jars it fetches while it builds its database.
 | A32 | `ctx.getBean(OrderService.class).place()` | `missing` | BL-44 |
 | A33 | `Objects.requireNonNull(order).ship()` | `missing` | BL-36 |
 | A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
-| A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-35, BL-43 |
+| A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `missing` | BL-41 |
 | A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `missing` | BL-40 |
-| A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-35, BL-43 |
+| A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `missing` | BL-41 |
-| A44 | `var opt = Optional.of(order); opt.get().ship()` | `missing` | BL-35 |
+| A44 | `var opt = Optional.of(order); opt.get().ship()` | `missing` | BL-36 (`Optional.of`); BL-35 typed the `var` |
 | A45 | `Stream.of(a, b).findFirst().get().ship()` | `missing` | BL-36 |
 | B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B14 | `Status.valueOf(s).label()` | `missing` | BL-42 |
@@ -1143,24 +1161,24 @@ shapes from the jars it fetches while it builds its database.
 | B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B44 | `for (var o : array)` over `Order[]` | `missing` | BL-42 |
 | B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `missing` | BL-36 |
-| C01 | Source `List<Order> list()`, then `.get(0).ship()` | `missing` | BL-35 |
-| C02 | Source `Optional<Order> maybe()`, then `.get().ship()` | `missing` | BL-35 |
-| C03 | Source `Map<String, Order> index()`, then `.get(k).ship()` | `missing` | BL-35 |
-| C04 | Static source `List<Order> all()`, then `.get(0).ship()` | `missing` | BL-35 |
-| C05 | `catalog.list().forEach(o -> o.ship())` | `missing` | BL-35, BL-37 |
-| C06 | `for (var o : catalog.list())` | `missing` | BL-35 |
-| C07 | `var list = orders; list.get(0).ship()` | `missing` | BL-35 |
-| C08 | `var s = orders.stream(); s.findFirst().get().ship()` | `missing` | BL-35 |
+| C01 | Source `List<Order> list()`, then `.get(0).ship()` | `covered` | BL-35 |
+| C02 | Source `Optional<Order> maybe()`, then `.get().ship()` | `covered` | BL-35 |
+| C03 | Source `Map<String, Order> index()`, then `.get(k).ship()` | `covered` | BL-35 |
+| C04 | Static source `List<Order> all()`, then `.get(0).ship()` | `covered` | BL-35 |
+| C05 | `catalog.list().forEach(o -> o.ship())` | `covered` | BL-35 |
+| C06 | `for (var o : catalog.list())` | `covered` | BL-35 |
+| C07 | `var list = orders; list.get(0).ship()` | `covered` | BL-35 |
+| C08 | `var s = orders.stream(); s.findFirst().get().ship()` | `covered` | BL-35 |
 | C09 | Lambda passed to a source `each(Consumer<Order>)` | `missing` | BL-37 |
 | C10 | Lambda passed to a source `<R> R apply(Function<Order, R>)` | `missing` | BL-37 |
 | C11 | `(flag ? order : null).ship()` | `missing` | BL-42 |
-| C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `missing` | BL-35 |
-| C14 | `var l = catalog.list(); l.get(0).ship()` | `missing` | BL-35 |
-| D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `missing` | BL-35, BL-38 |
+| C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `covered` | BL-35 |
+| C14 | `var l = catalog.list(); l.get(0).ship()` | `covered` | BL-35 |
+| D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `covered` | BL-35 |
 | D04 | `new ArrayList<Order>(orders).get(0).ship()` | `missing` | BL-36 |
-| D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `missing` | BL-35, BL-37 |
+| D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `missing` | BL-37; BL-35 typed `list()` |
 | D06 | `orders.forEach(taker::take)`, overloaded `take` | `missing` | BL-37 |
-| E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `missing` | BL-35 |
+| E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

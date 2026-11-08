@@ -1835,6 +1835,140 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {},
         note="BL-27: a raw or wildcard container, or a type-changing chain, gives nothing"),
+    Shape("T14", """
+        import java.util.List;
+        import java.util.Map;
+        import java.util.Optional;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Store {
+          Optional<Circle> maybe() { return null; } //@Store.maybe
+          Map<String, Circle> index() { return null; } //@Store.index
+          static List<Circle> all() { return null; } //@Store.all
+        }
+        class Use {
+          Store store;
+          void run() { //@Use.run
+            store.maybe().get().area();
+            store.index().get("k").area();
+            Store.all().get(0).area();
+            Store.all().stream().findFirst().get().area();
+            for (var c : Store.all()) {
+              c.area();
+            }
+            Store.all().forEach(c -> c.area());
+          }
+        }
+        """, "Use.run", {
+            "Store.maybe": "exact", "Store.index": "exact", "Store.all": "exact", "Circle.area": "exact",
+        },
+        note="BL-35: a source method's declared container return gives the element"),
+    Shape("T14-var", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Store {
+          List<Circle> all() { return null; } //@Store.all
+        }
+        class Use {
+          Store store;
+          List<Circle> field;
+          void run() { //@Use.run
+            var held = store.all();
+            held.get(0).area();
+            var s = field.stream();
+            s.findFirst().get().area();
+            var a = field;
+            var field = a;
+            field.get(0).area();
+          }
+        }
+        """, "Use.run", {"Store.all": "exact", "Circle.area": "exact"},
+        note="BL-35: a var takes the view of its initializer, read where it is written"),
+    Shape("T14-inherited", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        interface Catalog<T extends Shape> {
+          List<T> items(); //@Catalog.items
+        }
+        abstract class Base<T extends Shape> implements Catalog<T> {
+          public abstract List<T> items(); //@Base.items
+        }
+        abstract class Circles extends Base<Circle> {}
+        class CircleStore extends Circles {
+          public List<Circle> items() { return null; } //@CircleStore.items
+        }
+        class Use {
+          Circles circles;
+          void run() { //@Use.run
+            circles.items().get(0).area();
+          }
+        }
+        """, "Use.run", {"CircleStore.items": "exact", "Circle.area": "exact"},
+        note="BL-35, review B.4: declarations of one parameter list that agree give the view"),
+    Shape("T14-unproven", """
+        import java.util.List;
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        interface Api {
+          List<? extends Shape> items(); //@Api.items
+        }
+        abstract class Mid implements Api {
+          public abstract List<Circle> items(); //@Mid.items
+        }
+        abstract class Leaf extends Mid {}
+        class LeafImpl extends Leaf {
+          public List<Circle> items() { return null; } //@LeafImpl.items
+        }
+        class Store {
+          List<Circle> find(String name) { return null; } //@Store.findName
+          List<Square> find(Integer id) { return null; } //@Store.findId
+          List raw() { return null; } //@Store.raw
+          List<?> any() { return null; } //@Store.any
+        }
+        class Use {
+          Store store;
+          Leaf leaf;
+          void run(Object key) { //@Use.run
+            leaf.items().get(0).area();
+            store.find(key).get(0).area();
+            store.raw().get(0).area();
+            store.any().get(0).area();
+            var r = store.raw();
+            r.get(0).area();
+          }
+        }
+        """, "Use.run", {"LeafImpl.items": "exact", "Store.raw": "exact", "Store.any": "exact"},
+        note="BL-35: disagreeing declarations, unseparated overloads, a raw or wildcard return give nothing"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area

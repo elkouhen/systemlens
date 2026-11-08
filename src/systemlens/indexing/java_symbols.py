@@ -2271,8 +2271,10 @@ class JavaSymbols:
         """The JDK container kind of an expression and its type arguments.
 
         Read from the written type of a variable, field or ``this.field``,
-        then through calls that keep the arguments (``stream()``,
-        ``filter``, ``findFirst``, ``keySet()``). ``None`` for anything else.
+        from the initializer of a ``var`` local, from the declared return
+        type of a source method (BL-35), then through calls that keep the
+        arguments (``stream()``, ``filter``, ``findFirst``, ``keySet()``).
+        ``None`` for anything else.
         """
         if node is None or depth > 16:
             return None
@@ -2282,8 +2284,11 @@ class JavaSymbols:
         if node.type == "method_invocation":
             receiver, name, arguments = parser.invocation_parts(node, source)
             inner = self._generic_view(info, receiver, node, depth + 1)
-            rule = _GENERIC_CALLS.get((inner[0], name, len(arguments))) if inner is not None else None
-            if inner is None or rule is None:
+            if inner is None:
+                # ``catalog.list()``: a source method's declared return.
+                return self._returned_view(info, node, depth + 1)
+            rule = _GENERIC_CALLS.get((inner[0], name, len(arguments)))
+            if rule is None:
                 return None
             return rule[0], tuple(inner[1][index] for index in rule[1])
         field_only = False
@@ -2301,6 +2306,17 @@ class JavaSymbols:
         if written is None:
             return None
         path, type_node, owner, env = written
+        if parser.node_text(self.units[path].source, type_node).strip() == "var":
+            # ``var list = catalog.list()``: the view of the initializer,
+            # read where it is written, under the typing cycle guard.
+            value = self._var_value(path, type_node, name)
+            if value is None or (key := (path, value.start_byte)) in self._typing:
+                return None
+            self._typing.add(key)
+            try:
+                return self._generic_view(info, value, value, depth + 1)
+            finally:
+                self._typing.discard(key)
         container = self.resolve(
             path, parser.node_text(self.units[path].source, type_node), owner, allow_ambiguous=True, at=type_node,
         )
@@ -2317,6 +2333,20 @@ class JavaSymbols:
         return kind, tuple(
             self._type_argument_value(path, argument, owner, env) for argument in written_arguments
         )
+
+    def _var_value(self, path: str, type_node: Node, name: str) -> Node | None:
+        """The initializer of the ``var`` local ``name`` that ``type_node``
+        declares: a local variable or a ``try`` resource."""
+        declaration = type_node.parent
+        if declaration is None:
+            return None
+        if declaration.type == "resource":
+            return declaration.child_by_field_name("value")
+        for child in declaration.named_children:
+            ident = child.child_by_field_name("name") if child.type == "variable_declarator" else None
+            if ident is not None and parser.node_text(self.units[path].source, ident) == name:
+                return child.child_by_field_name("value")
+        return None
 
     def _written_variable(
         self, info: _Method, name: str, invocation: Node, *, field_only: bool = False,
@@ -2718,9 +2748,18 @@ class JavaSymbols:
             return parameterized
         return typed, {}
 
-    def _returned(self, info: _Method, invocation: Node, depth: int) -> tuple[str, _Env] | None:
-        """The declared return type of a call and its type arguments, when
-        one declaration on a source receiver binds it."""
+    def _return_declarations(
+        self, info: _Method, invocation: Node, depth: int,
+    ) -> tuple[tuple[str, _Env], list[_Method], list[Node]] | None:
+        """The declarations a call on a source receiver reads its return
+        type from: ``(receiver context, declarations, arguments)``.
+
+        They are looked up as :meth:`receiver_type` does: the receiver's own
+        declarations, else those of its source ancestors. Several
+        declarations share one parameter list, as an interface method and
+        the abstract class declaring it again; overloads of one arity that
+        the call does not tell apart give ``None``.
+        """
         source = self.units[info.method.path].source
         parent_receiver, name, arguments = parser.invocation_parts(invocation, source)
         context = self._receiver_env(info, parent_receiver, invocation, depth + 1)
@@ -2735,14 +2774,65 @@ class JavaSymbols:
             candidate for base, base_module in self.ancestors(owner, module)
             for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])
         ]
-        if len(declarations) != 1:
+        if len({candidate.parameters for candidate in declarations}) != 1:
             return None
-        declaration = declarations[0]
-        type_node = declaration.node.child_by_field_name("type")
-        if type_node is None:
+        return context, declarations, arguments
+
+    def _returned(self, info: _Method, invocation: Node, depth: int) -> tuple[str, _Env] | None:
+        """The declared return type of a call and its type arguments, when
+        the declarations on a source receiver agree on it."""
+        found = self._return_declarations(info, invocation, depth)
+        if found is None:
             return None
-        env = self._call_env(info, declaration, context, invocation, arguments, depth + 1)
-        return self._parameterized(declaration.method.path, type_node, declaration.owner, env)
+        context, declarations, arguments = found
+        results: list[tuple[str, _Env] | None] = []
+        for declaration in declarations:
+            type_node = declaration.node.child_by_field_name("type")
+            if type_node is None:
+                return None
+            env = self._call_env(info, declaration, context, invocation, arguments, depth + 1)
+            results.append(self._parameterized(declaration.method.path, type_node, declaration.owner, env))
+        return results[0] if all(result == results[0] for result in results) else None
+
+    def _returned_view(
+        self, info: _Method, invocation: Node, depth: int,
+    ) -> tuple[str, tuple[str | None, ...]] | None:
+        """The JDK container view of a call to a source method (BL-35).
+
+        ``List<Order> list()`` gives ``("iterable", ("p.Order",))``: the
+        declared return type is read through the declarations and the type
+        arguments :meth:`_returned` uses. Declarations that disagree, and a
+        return type that is no JDK container or omits its arguments, give
+        ``None``.
+        """
+        found = self._return_declarations(info, invocation, depth)
+        if found is None:
+            return None
+        context, declarations, arguments = found
+        views: set[tuple[str, tuple[str | None, ...]]] = set()
+        for declaration in declarations:
+            type_node = declaration.node.child_by_field_name("type")
+            if type_node is None or type_node.type != "generic_type":
+                return None
+            path = declaration.method.path
+            name_node = type_node.named_children[0]
+            container = self.resolve(
+                path, parser.node_text(self.units[path].source, name_node), declaration.owner,
+                allow_ambiguous=True, at=name_node,
+            )
+            if container not in _GENERIC_CONTAINERS:
+                return None
+            kind, arity = _GENERIC_CONTAINERS[container]
+            written = parser.child_by_type(type_node, "type_arguments")
+            written_arguments = written.named_children if written is not None else []
+            if len(written_arguments) != arity:
+                return None
+            env = self._call_env(info, declaration, context, invocation, arguments, depth + 1)
+            views.add((kind, tuple(
+                self._type_argument_value(path, argument, declaration.owner, env)
+                for argument in written_arguments
+            )))
+        return views.pop() if len(views) == 1 else None
 
     def _call_env(
         self, info: _Method, declaration: _Method, context: tuple[str, _Env], invocation: Node,
