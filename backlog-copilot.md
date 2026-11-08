@@ -1,8 +1,8 @@
 # Backlog: Copilot review of source indexing
 
 Status: written on 2026-11-08 and validated the same day by the product
-owner, who asked for it to be processed. Lots 1 to 5 (BC-01 to BC-30)
-are `delivered`; the other items are `open`. Lot order: 1 to 6. A
+owner, who asked for it to be processed. The backlog is fully processed:
+BC-01 to BC-39 are `delivered`, and no item is blocked. Lot order: 1 to 6. A
 decision record an item depends on is written and accepted under the
 product owner's mandate, to be confirmed by them.
 Each item first re-checks its finding against current `main`, since
@@ -67,15 +67,15 @@ the change.
 | [BC-28](#bc-28) | Bound the reverse call-chain diagnostic | F6 | low | `delivered` |
 | [BC-29](#bc-29) | Keep the persisted graph when a module refresh times out | P1 | high (CodeQL) | `delivered` |
 | [BC-30](#bc-30) | Keep a refreshed module's method rows | P2 | med (CodeQL) | `delivered` |
-| [BC-31](#bc-31) | Keep profile-conflicting properties dynamic | C2 | med | `open` |
-| [BC-32](#bc-32) | Scope `@Value` field resolution to the declaring class | C3 | med | `open` |
-| [BC-33](#bc-33) | Join Feign `url` and `path`; resolve empty and nested defaults | C4 | med | `open` |
-| [BC-34](#bc-34) | Fix StreamBridge and Kafka Streams detection | C5 | med | `open` |
-| [BC-35](#bc-35) | Infer REST `message_type` only for mapped methods | C6 | med | `open` |
-| [BC-36](#bc-36) | Recognise dropped client and listener shapes | C7, G6 | low-med | `open` |
-| [BC-37](#bc-37) | Cache parsed OpenAPI contracts | G6 | med | `open` |
-| [BC-38](#bc-38) | Small fixes and dead code | C7, G1, G5 | low | `open` |
-| [BC-39](#bc-39) | Performance hygiene in the symbol pass and the walks | P3, G7, C7 | low | `open` |
+| [BC-31](#bc-31) | Keep profile-conflicting properties dynamic | C2 | med | `delivered` |
+| [BC-32](#bc-32) | Scope `@Value` field resolution to the declaring class | C3 | med | `delivered` |
+| [BC-33](#bc-33) | Join Feign `url` and `path`; resolve empty and nested defaults | C4 | med | `delivered` |
+| [BC-34](#bc-34) | Fix StreamBridge and Kafka Streams detection | C5 | med | `delivered` |
+| [BC-35](#bc-35) | Infer REST `message_type` only for mapped methods | C6 | med | `delivered` |
+| [BC-36](#bc-36) | Recognise dropped client and listener shapes | C7, G6 | low-med | `delivered` |
+| [BC-37](#bc-37) | Cache parsed OpenAPI contracts | G6 | med | `delivered` |
+| [BC-38](#bc-38) | Small fixes and dead code | C7, G1, G5 | low | `delivered` |
+| [BC-39](#bc-39) | Performance hygiene in the symbol pass and the walks | P3, G7, C7 | low | `delivered` |
 
 Severity reads: high aborts an index, leaks a secret or corrupts a
 persisted view; med loses or invents a target on a plausible shape; low
@@ -703,6 +703,13 @@ both lots. The companion skill names none of the changed behaviour.
   profile document's value through `setdefault`.
 - **Fix:** return an "ambiguous" sentinel that stays dynamic. Tag YAML
   documents by `on-profile` and apply the same "all profiles agree" rule.
+- **Status:** `delivered`.
+- **Delivery:** `4c43814`. Both probes reproduced (`c2a` gave `orders`,
+  `c2b` `orders-prod`). Profiles that disagree make the lookup
+  ambiguous, and the placeholder default is then ignored. A YAML document
+  with `on-profile` or `spring.profiles` counts as a profile file.
+  `extraction-rules.md` states the rule. Test
+  `test_profile_conflicting_properties_stay_dynamic`.
 
 <a id="bc-32"></a>
 ### BC-32. Scope `@Value` field resolution to the declaring class
@@ -714,6 +721,11 @@ both lots. The companion skill names none of the changed behaviour.
 - **Fix:** when the current class declares the name, resolve from that
   file only. Try same-file constants first. Exclude test sources from the
   table.
+- **Status:** `delivered`.
+- **Delivery:** `e136f18`. Probe `c3` reproduced both shapes. A name
+  the referencing file declares as a field never reaches the repository
+  table, a same-file constant comes first, and `src/test` is skipped.
+  Test `test_a_value_field_resolves_only_in_its_declaring_class`.
 
 <a id="bc-33"></a>
 ### BC-33. Join Feign `url` and `path`; resolve empty and nested defaults
@@ -725,6 +737,13 @@ both lots. The companion skill names none of the changed behaviour.
 - **Fix:** join the url's path with `path`, keeping a literal `path`
   when the url is dynamic. Treat an empty default as `""`. Substitute
   embedded placeholders until the text is stable.
+- **Status:** `delivered`.
+- **Delivery:** `a7dd4a6`. Probe `c4` reproduced all five shapes. The
+  prefix is the url's path joined with `path`; a url that is one
+  unresolved placeholder adds nothing. `expand_placeholders` resolves
+  innermost first until stable. An empty default is `""` for a route
+  only: a topic stays dynamic. Test
+  `test_feign_joins_url_and_path_and_defaults_nest`.
 
 <a id="bc-34"></a>
 ### BC-34. Fix StreamBridge and Kafka Streams detection
@@ -737,6 +756,12 @@ both lots. The companion skill names none of the changed behaviour.
   `spring.cloud.stream.bindings.<n>.destination`, or else emit a dynamic
   topic. Match Kafka Streams calls on the receiver type and add `table`,
   `globalTable` and `through`.
+- **Status:** `delivered`.
+- **Delivery:** `7f711f1`. Probe `c5` reproduced all four shapes. An
+  unmapped binding keeps its name as a dynamic topic. A Streams call is
+  matched on the declared type of its chain's root variable. `through`
+  is a producer only. Test
+  `test_stream_bridge_bindings_and_kafka_streams_receivers`.
 
 <a id="bc-35"></a>
 ### BC-35. Infer REST `message_type` only for mapped methods
@@ -746,6 +771,11 @@ both lots. The companion skill names none of the changed behaviour.
   `OrderHandler` as `message_type`, and a Data REST search gets `String`.
 - **Fix:** restrict the inference to `spring` and `feign` endpoints
   that are anchored on a mapping annotation.
+- **Status:** `delivered`.
+- **Delivery:** `55861b6`. Probe `c6` reproduced the three types. Only
+  `spring` and `feign` endpoints anchored on the method's declaration,
+  not its body, are typed; an inherited mapping's override stays typed.
+  Test `test_rest_message_type_comes_only_from_mapped_methods`.
 
 <a id="bc-36"></a>
 ### BC-36. Recognise dropped client and listener shapes
@@ -768,6 +798,16 @@ both lots. The companion skill names none of the changed behaviour.
   over every predicate key.
 - **Note:** `@GetMapping({"/a","/b"})` is documented as dynamic
   (`extraction-rules.md:215`) and stays out of scope.
+- **Status:** `delivered`.
+- **Delivery:** `483b5e9`. Probe `c7` reproduced every shape except
+  repeated `@Scheduled`, which already started one flow per schedule;
+  `@Schedules` did not. RestTemplate gains `patchForObject`,
+  `headForHeaders` and `optionsForAllow`. `expanded_annotations` also
+  unwraps `@RabbitListeners` and `@JmsListeners`. Rabbit and JMS already
+  made a one-argument send dynamic. A `send(record)` adds nothing beside
+  its `ProducerRecord` creation. Tests
+  `test_dropped_client_and_listener_shapes_are_recognised` and
+  `test_a_schedules_container_starts_a_flow_per_schedule`.
 
 <a id="bc-37"></a>
 ### BC-37. Cache parsed OpenAPI contracts
@@ -777,6 +817,12 @@ both lots. The companion skill names none of the changed behaviour.
   operations. The method lookup is O(endpoints × methods).
 - **Fix:** cache operation ids per contract, and index methods by
   (module, name).
+- **Status:** `delivered`.
+- **Delivery:** `9a62ded`. The integration-method projection parses each
+  contract once and indexes the overriding methods by (module, name).
+  A synthetic 73 KiB contract parses in 0.047 s: 14 s for 300 endpoints
+  before, once after. Test
+  `test_an_openapi_contract_is_parsed_once_for_all_its_operations`.
 
 <a id="bc-38"></a>
 ### BC-38. Small fixes and dead code
@@ -790,6 +836,16 @@ both lots. The companion skill names none of the changed behaviour.
   packages at any depth.
 - `source_projection` treats an empty `allowed_paths` as "no
   restriction". Test `is not None` instead.
+- **Status:** `delivered`.
+- **Delivery:** `5c16a43`. The quoted key took line 1; bare,
+  double- and single-quoted keys now match. Removed after a grep of
+  `src`, `tests`, `scripts` and `../systemlens-skill/` found no caller:
+  `_extract_rest_path`, `_class_base_path`, `_extract_kafka_topic`,
+  `_resolve_topic_expression`, `_find_first_literal`, their regexes and
+  helpers, and `prepare_generation_workspace` with the CodeQL database's
+  `generate_sources` branch. Tests
+  `test_a_single_quoted_openapi_path_keeps_its_line` and
+  `test_an_empty_allowed_path_list_projects_no_source`.
 
 <a id="bc-39"></a>
 ### BC-39. Performance hygiene in the symbol pass and the walks
@@ -804,6 +860,43 @@ them.
   miss.
 - The inventory walk does not prune `.git`, `node_modules` or `target`.
 - Spring property file discovery is not cached.
+- **Status:** `delivered`; three hot spots stay deferred, below.
+- **Delivery:** `36c90ca`. Measured on train-ticket, index 12.7 s. The
+  inventory walk entered 2,860 files and kept 2,691, 1,657 of them in a
+  module's `node_modules`, which the root-anchored `node_modules/**`
+  missed. It now prunes `.git`, `node_modules` and build outputs: 1,139
+  walked, 1,034 kept, `list_repo_files` 0.21 s to 0.10 s. One property
+  discovery costs 0.23 s there; it is now cached per directory, though
+  neither reference project resolves more than two placeholders. Tests
+  `test_the_inventory_walk_prunes_dependency_and_build_trees` and
+  `test_spring_property_files_are_discovered_once_per_directory`.
+- **Deferred:** the symbol pass takes 1.63 s (0.17 s to build, 1.46 s
+  for the calls). `_assigned` takes 0.39 s over 2,554 calls and
+  `_external_dispatch` 0.002 s over 2,211. Receiver chains are about a
+  third of the call pass under a profiler; their typing depends on the
+  call site and on a depth bound, so memoising them is not trivial.
+
+Lot 6 validation: the `c1` to `c7` probes were re-run at `0902285`, and
+every finding reproduced except repeated `@Scheduled` (BC-36). No accepted
+ADR or PDR is contradicted, so no decision record was written;
+`extraction-rules.md`, `configuration.md`, `extractors.md`,
+`indexing.md` and `data-model.md` state the changed rules. The last
+commit moves the endpoint inventory to
+`endpoint-inventory-v31-scanner-precision` and `CODE_FLOW_SIGNATURE` to
+`code-flow-v62-scanner-precision`.
+
+Fresh scratch copies at `36c90ca`, compared with `0902285`, persist the
+same endpoints, message types, flows, relations and edges: 530
+endpoints, 451 flows and 1763 edges on train-ticket, 15 endpoints, 25
+flows and 105 edges on the lab. None of the changed shapes occurs there.
+Train-ticket scans 910 files instead of 2,567, since a module's
+`node_modules` is no longer inventoried (BC-39).
+
+`analyze compare-engines --engines source,codeql` reports zero
+differences on both: 447 and 25 flow pairs, 1763 and 105 edges. Ruff,
+mypy, the default suite, the slow parity, internal-flow and code-flow
+tests, and `scripts/check_companion_contracts.py` pass. The companion
+skill names none of the changed behaviour.
 
 ## Appendix A: rejected or reduced findings
 
