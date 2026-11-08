@@ -558,6 +558,11 @@ def _type_body_members(declaration: Node) -> list[Node]:
     return members
 
 
+def _is_constructor_reference(node: Node) -> bool:
+    """Whether a method reference is ``Type::new`` (BC-19)."""
+    return node.type == "method_reference" and any(child.type == "new" for child in node.children)
+
+
 def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
     """Whether a receiver inside an anonymous class body denotes that instance."""
     if receiver is None or receiver.type in {"this", "super"}:
@@ -5088,7 +5093,9 @@ class JavaSymbols:
         for invocation, _context in self._call_sites(info):
             line = invocation.start_point.row + 1
             receiver: Node | None
-            if invocation.type in {"object_creation_expression", "enum_constant"}:
+            if invocation.type in {"object_creation_expression", "enum_constant"} or (
+                _is_constructor_reference(invocation)
+            ):
                 name, on_this = CONSTRUCTOR, False
             elif invocation.type == "explicit_constructor_invocation":
                 name = CONSTRUCTOR
@@ -5176,6 +5183,50 @@ class JavaSymbols:
             "exact" if len(selected) == 1 else "possible"
         )
 
+    def _constructor_reference_targets(
+        self, info: _Method, reference: Node,
+    ) -> tuple[list[IntegrationMethod], str]:
+        """The constructors ``Type::new`` may run (BC-19).
+
+        As for a method reference, the arity is the target functional
+        interface's parameter count, or the only arity the type declares;
+        the proven parameter types then select an overload, ``exact``.
+        Overloads they leave open, an array constructor and an external
+        type reach nothing.
+        """
+        path = info.method.path
+        type_node = reference.named_children[0] if reference.named_children else None
+        if type_node is None or type_node.type == "array_type":
+            return [], ""
+        owner = self.resolve(path, parser.node_text(self.units[path].source, type_node), info.owner, at=type_node)
+        if owner is None or owner not in self.types:
+            return [], ""
+        modules = sorted({
+            self.path_modules.get(location, "") for location, _node in self._type_candidates(owner, path)
+        })
+        parameters = self._reference_parameters(info, reference)
+        if parameters is not None:
+            arity = len(parameters)
+        else:
+            arities = set(self._arities.get((owner, CONSTRUCTOR), ()))
+            if len(arities) != 1:
+                return [], ""
+            arity = next(iter(arities))
+        contracts = [
+            candidate for module in modules
+            for candidate in self.by_owner.get((owner, CONSTRUCTOR, arity, module), [])
+        ] or [
+            candidate for module in modules
+            for candidate in self.varargs_by_owner.get((owner, CONSTRUCTOR, module), [])
+            if len(candidate.parameters) - 1 <= arity
+        ]
+        if not contracts:
+            return [], ""
+        selected = self._select_overload(contracts, parameters if parameters is not None else (None,) * arity)
+        # Overloads left open stay unresolved, as for a method reference
+        # (ADR-87).
+        return ([selected[0].method], "exact") if len(selected) == 1 else ([], "")
+
     def fallback_calls(
         self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
         exact_sites: set[tuple[str, int, str]] | None = None,
@@ -5211,8 +5262,12 @@ class JavaSymbols:
             source = self.units[info.method.path].source
             for invocation, context in self._call_sites(info):
                 line = invocation.start_point.row + 1
-                if invocation.type in _CONSTRUCTOR_SITES:
-                    targets, dispatch = self._constructor_targets(info, invocation)
+                if invocation.type in _CONSTRUCTOR_SITES or _is_constructor_reference(invocation):
+                    targets, dispatch = (
+                        self._constructor_reference_targets(info, invocation)
+                        if invocation.type == "method_reference"
+                        else self._constructor_targets(info, invocation)
+                    )
                     calls.extend(
                         MethodCall(
                             info.method.qualified_method, info.method.path, info.method.start_line,

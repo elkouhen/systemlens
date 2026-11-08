@@ -1147,6 +1147,25 @@ enum Kind17 { //@E17
 
   void f() {}
 }
+
+// E18: constructor references, and a method reference with explicit type
+// arguments (BC-19). JDK types are written in full: the file's wildcard
+// import does not name them for the source pass.
+class Foo18 {
+  Foo18(String s) {} //@Foo18.newText
+
+  Foo18() {} //@Foo18.new
+
+  static <T> T id(T t) { return t; } //@Foo18.id
+}
+
+class References18 {
+  void e18(java.util.List<String> xs) { //@E18
+    xs.stream().map(Foo18::new).toList(); //@e18.map
+    java.util.function.Supplier<Foo18> make = Foo18::new; //@e18.supplier
+    java.util.function.Function<String, String> same = Foo18::<String>id; //@e18.typed
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1431,6 +1450,9 @@ CASES: list[Case] = [
           ("e17.a", "Seed17.helper", "exact"), ("e17.a", "Kind17.initInt", "exact"),
           ("e17.b", "Part17.init", "exact"), ("e17.b", "Kind17.initPart", "exact"),
           ("e17.c", "Seed17.text", "exact"), ("e17.d", "Kind17.init", "exact")),
+    _case("E18", "E18", None,
+          ("e18.map", "Foo18.newText", "exact"), ("e18.supplier", "Foo18.new", "exact"),
+          ("e18.typed", "Foo18.id", "exact")),
 ]
 
 

@@ -239,16 +239,21 @@ predicate callerInScope(Callable enclosing) {
 
 /**
  * A constructor call written in the sources (ADR-75): `new T(...)`,
- * `this(...)` or `super(...)`. The implicit `super()` CodeQL adds to a
- * constructor has that constructor's own location and is left out, as are
- * the constructors of anonymous classes and lambdas (ADR-62).
+ * `this(...)`, `super(...)` or a constructor reference `T::new`. The
+ * implicit `super()` CodeQL adds to a constructor has that constructor's
+ * own location and is left out, as are the constructors of anonymous
+ * classes and lambdas (ADR-62). The `new T(...)` CodeQL synthesizes for
+ * `T::new` shares its synthetic method's location too, and stays (BC-19).
  */
 predicate sourceConstructorCall(ConstructorCall call) {
   call.getEnclosingCallable().fromSource() and
   not call.getConstructor().getDeclaringType() instanceof AnonymousClass and
-  not exists(Callable enclosing | enclosing = call.getEnclosingCallable() |
-    call.getLocation().getStartLine() = enclosing.getLocation().getStartLine() and
-    call.getLocation().getStartColumn() = enclosing.getLocation().getStartColumn()
+  not (
+    call instanceof SuperConstructorInvocationStmt and
+    exists(Callable enclosing | enclosing = call.getEnclosingCallable() |
+      call.getLocation().getStartLine() = enclosing.getLocation().getStartLine() and
+      call.getLocation().getStartColumn() = enclosing.getLocation().getStartColumn()
+    )
   )
 }
 

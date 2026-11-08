@@ -232,7 +232,9 @@ Constructor calls follow ADR-75. A `new T(...)`, `this(...)` or
 `super(...)` row names the constructor `T.<init>`, `exact` unless an
 untyped argument leaves same-arity overloads open, as above. The implicit
 `super()` CodeQL adds, which has its constructor's own location, and the
-constructors of anonymous classes and lambdas give no row. A call in
+constructors of anonymous classes and lambdas give no row. A constructor
+reference `T::new` gives the row of the `new T(..)` CodeQL synthesizes
+for it, from the reference's line (BC-19). A call in
 instance initializer code (`<obinit>`) is reported once per constructor
 that calls `<obinit>`, so its caller is that constructor; `<obinit>`
 itself is never a target. Static initializer code keeps the caller
@@ -1130,7 +1132,10 @@ constructor by arity and argument types (`exact` when one is left, every
 candidate `possible` otherwise). `this(...)` targets the caller's type and
 `super(...)` its source superclass. An enum constant without a body
 selects its enum's constructor the same way, from `<clinit>`; one with a
-body creates an anonymous class and reaches none (ADR-62). A lambda in a
+body creates an anonymous class and reaches none (ADR-62). A constructor
+reference `T::new` takes its arity from the target functional type, or
+the only arity `T` declares; it reaches a constructor, `exact`, only when
+the proven parameter types leave one (BC-19). A lambda in a
 constant's arguments belongs to `<clinit>` too, but the CodeQL join
 cannot attribute its body below the header, so only the `source` engine
 keeps those calls. A constructor binds statically: it is
@@ -1372,7 +1377,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
-| S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
+| S7 | Constructor call `new X(...)`, `this(...)`, `super(...)`; constructor reference `X::new` | `covered` (ADR-75, BC-19) | |
 | S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer, an interface's included; an enum constant's arguments and constructor | `covered` (ADR-75, BL-39, BC-14, BC-18) | |
 | S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
 | S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
@@ -1418,7 +1423,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T19 | Call to a source method whose own returns all create one class; mixed creations, a returned parameter and an overridden method keep the declared type | `covered` (BL-46) | |
 | T20 | Ternary of two source types dispatches on their union; a `null` branch gives nothing; a branch of the declared type keeps it | `covered` (BL-46) | |
 | T21 | Parameter of a private method whose every call site passes one class; mixed sites, a package method, a method reference or a reassigned parameter keep the declared type | `covered` (BL-46) | |
-| F1 | Lambda and method reference as call sites | `covered` | |
+| F1 | Lambda and method reference as call sites, with explicit type arguments `Type::<T>m` | `covered` (BC-19) | |
 | F2 | Lambda or method reference implementing a source interface: written target types, also through `super(..)`, an enum constant, varargs, an array initializer or a switch arm; created once; inherited `default`, also behind a parameter | `covered` (BL-30, BC-09, BC-12) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
@@ -1579,6 +1584,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E15 | `Map.Entry<String, Order>` under `import java.util.*`; `Outer15<String>.Inner15<Order> i; i.z()` | `covered` | BC-16 |
 | E16 | `this.client.api.call()` with `Client16.api` a field of type `Api16` | `covered` | BC-17 |
 | E17 | Enum constants `A(Seed17.helper())`, `B(new Part17())`, `C(..) { .. }` with a body and `D` without arguments | `covered` | BC-18 |
+| E18 | `map(Foo18::new)`, `Supplier<Foo18> make = Foo18::new` and `Foo18::<String>id` | `covered` | BC-19 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

@@ -662,6 +662,35 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Service.newLong": "possible", "Service.newString": "possible"},
         note="ADR-75: overloads the arguments cannot separate stay possible"),
+    Shape("S7-constructor-reference", """
+        import java.util.List;
+        import java.util.function.Function;
+        import java.util.function.Supplier;
+        class Foo {
+          Foo(String s) {} //@Foo.newString
+          Foo() {} //@Foo.new
+        }
+        class Bar {
+          Bar(int i) {} //@Bar.newInt
+          Bar(long l) {} //@Bar.newLong
+        }
+        class Only {
+          Only(Object o) {} //@Only.new
+        }
+        class Use {
+          void run(List<String> xs, org.acme.Registry registry) { //@Use.run
+            xs.stream().map(Foo::new).toList();
+            Supplier<Foo> make = Foo::new;
+            registry.register(Only::new);
+            registry.register(Bar::new);
+            Function<Integer, int[]> array = int[]::new;
+          }
+        }
+        """, "Use.run",
+        {"Foo.newString": "exact", "Foo.new": "exact", "Only.new": "exact"},
+        absent=("Bar.newInt", "Bar.newLong"),
+        note="BC-19: the target functional type's arity, or the only arity declared, selects the "
+             "constructor; overloads of an unproven target stay unresolved"),
     Shape("S8", """
         class Service {
           void init() {} //@Service.init
@@ -3306,6 +3335,18 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Port.send": "possible", "A1.send": "possible", "A2.send": "possible"}),
+    Shape("F1-type-arguments", """
+        import java.util.function.Function;
+        class Util {
+          static <T> T id(T t) { return t; } //@Util.id
+        }
+        class Use {
+          void run() { //@Use.run
+            Function<String, String> f = Util::<String>id;
+          }
+        }
+        """, "Use.run", {"Util.id": "exact"},
+        note="BC-19: explicit type arguments keep the method name the last child; no fix was needed"),
     Shape("F2", """
         interface Fn {
           void apply(); //@Fn.apply
