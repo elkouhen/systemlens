@@ -844,8 +844,17 @@ external class or from `Object`, and a `@FeignClient` proxy break that
 rule. The targets then stay `possible`, and the abstract declaration the
 call names joins them, as CodeQL reports it. A subtype body whose
 signature stays unresolved (varargs, an external wildcard import) and
-whose written parameter types match the contract is a `possible` target.
+whose written parameter types match the contract is a `possible` target;
+a `T...` parameter is written `T[]`, so `log(int...)` does not match
+`log(String...)` (BC-15).
 The check costs one scan of the source types per receiver type, cached.
+
+Lombok names a getter `getX`, or `isX` for a primitive `boolean`, whose
+field named `isX` keeps that name; a setter is `setX` (BC-15). `@Getter`
+also applies to an enum's fields. `@Accessors` renames the accessors, so a
+type that carries it may generate any accessor of the call's arity and
+types none.
+
 Several implementations are always `possible`. Whenever no target is
 `exact`, the abstract declaration the call names joins the targets as a
 declared row, as CodeQL reports it (ADR-70, BL-28). The row is left out
@@ -1357,7 +1366,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
 | S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
-| H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | |
+| H2 | Override on the declared receiver; virtual dispatch over subclasses; varargs overloads and Lombok-generated overrides | `covered` (BC-15) | |
 | H3 | Template method: `step()` or `this.step()` from the base class | `covered` | |
 | H4 | `super.m()` declared by the direct parent | `covered` | |
 | H5 | `super.m()` declared by a grandparent | `covered` | |
@@ -1555,6 +1564,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E11 | `take(x)` with `Foo11 x[]`; `Foo11 a = new Foo11(), b = a.n()` beside a field `Bar11 a`; a resource `c` shadowing a field in the try body only | `covered` | BC-11 |
 | E12 | `step.run()` in a constructor that `super(() -> {})` and `super(new Step12Impl())` both reach | `covered` | BC-12 |
 | E13 | `f.go()` in an enum constant body declaring its own `f`; `Seed13.compute()` in an interface field initializer | `covered` | BC-14 |
+| E14 | `log.log("x")` on `Log14.log(String...)` with a subclass `IntLog14.log(int...)` | `covered` | BC-15 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

@@ -166,6 +166,20 @@ _KNOWN_EXTERNAL_SUPERTYPES: dict[str, tuple[str, ...]] = {
     ),
 }
 _LOMBOK_GETTERS = {"Data", "Getter", "Value"}
+# Types Lombok's ``@Getter`` and ``@Setter`` apply to (BC-15).
+_LOMBOK_TYPES = {"class_declaration", "enum_declaration"}
+
+
+def _lombok_accessors(field_name: str, type_text: str) -> tuple[str, str]:
+    """The getter and setter names Lombok gives a field: ``getX`` and
+    ``setX``; ``isX`` for a primitive ``boolean``, whose ``isX`` name is
+    kept as the getter and gives ``setX`` (BC-15)."""
+    capitalized = field_name[:1].upper() + field_name[1:]
+    if type_text != "boolean":
+        return "get" + capitalized, "set" + capitalized
+    if re.match(r"is[A-Z]", field_name):
+        return field_name, "set" + field_name[2:]
+    return "is" + capitalized, "set" + capitalized
 # Final JDK classes and every supertype they have: a type argument naming
 # one is related only to these (BL-45, ADR-81 amendment).
 _NUMBER_SUPERTYPES = frozenset({
@@ -484,7 +498,13 @@ _TYPE_CLAUSES = {"superclass", "super_interfaces", "extends_interfaces"}
 
 
 def _written_type(source: bytes, parameter: Node) -> str:
-    """The erased simple name of a parameter type, as written."""
+    """The erased simple name of a parameter type, as written; ``T[]`` for
+    a ``T...`` parameter (BC-15)."""
+    if parameter.type == "spread_parameter":
+        spread = _spread_type(parameter)
+        if spread is None:
+            return ""
+        return re.sub(r"<.*>", "", parser.node_text(source, spread)).strip().rsplit(".", 1)[-1] + "[]"
     parameter_type = parameter.child_by_field_name("type")
     if parameter_type is None or parameter.type != "formal_parameter":
         return ""
@@ -508,6 +528,16 @@ def _spread_type(parameter: Node) -> Node | None:
             continue
         return child
     return None
+
+
+def _type_body_members(declaration: Node) -> list[Node]:
+    """The members of a class or enum body, those after an enum's
+    constants included."""
+    body = declaration.child_by_field_name("body")
+    members: list[Node] = []
+    for member in body.named_children if body is not None else []:
+        members.extend(member.named_children if member.type == "enum_body_declarations" else [member])
+    return members
 
 
 def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
@@ -1032,21 +1062,21 @@ class JavaSymbols:
                 if ident is not None and arity == 0 and parser.node_text(source, ident) == name:
                     return True
             return False
-        if declaration.type != "class_declaration":
+        if declaration.type not in _LOMBOK_TYPES:
             return False
         if (name, arity) in {("equals", 1), ("hashCode", 0)}:
             return self._lombok_annotated(path, declaration, {"Data", "Value", "EqualsAndHashCode"})
         if (name, arity) == ("toString", 0):
             return self._lombok_annotated(path, declaration, {"Data", "Value", "ToString"})
-        prefix = next((prefix for prefix in ("get", "is", "set") if name.startswith(prefix)), None)
-        if prefix is None or arity != (1 if prefix == "set" else 0):
+        if arity > 1:
             return False
-        accessors = {"Getter"} if prefix != "set" else {"Setter"}
+        setter = arity == 1
+        accessors = {"Setter"} if setter else {"Getter"}
         class_level = self._lombok_annotated(
-            path, declaration, accessors | ({"Data"} if prefix == "set" else {"Data", "Value"}),
+            path, declaration, accessors | ({"Data"} if setter else {"Data", "Value"}),
         )
-        body = declaration.child_by_field_name("body")
-        for member in body.named_children if body is not None else []:
+        renamed = self._lombok_annotated(path, declaration, {"Accessors"})
+        for member in _type_body_members(declaration):
             if member.type != "field_declaration":
                 continue
             modifiers = parser.modifiers_node(member)
@@ -1054,14 +1084,17 @@ class JavaSymbols:
                 continue
             if not class_level and not self._lombok_annotated(path, member, accessors):
                 continue
+            if renamed or self._lombok_annotated(path, member, {"Accessors"}):
+                # ``@Accessors`` renames the accessors (fluent, chained or a
+                # prefix): any name of that arity may be generated (BC-15).
+                return True
             for child in member.named_children:
                 ident = child.child_by_field_name("name")
                 field_name = parser.node_text(source, ident) if ident is not None else ""
                 fields.append((field_name, member.child_by_field_name("type")))
-        suffix = name[len(prefix):]
         return any(
-            field_name and field_name[:1].upper() + field_name[1:] == suffix
-            and (prefix != "is" or (type_node is not None and parser.node_text(source, type_node) == "boolean"))
+            field_name and type_node is not None
+            and _lombok_accessors(field_name, parser.node_text(source, type_node).strip())[setter] == name
             for field_name, type_node in fields
         )
 
@@ -4521,15 +4554,13 @@ class JavaSymbols:
         """Declared field type behind a getter that Lombok generates.
 
         ``@Data``, ``@Value`` or a class-level ``@Getter`` imported from
-        ``lombok`` generates ``getX()`` (``isX()`` for a ``boolean``) for every
-        non-static field; a field-level ``@Getter`` generates it for that
-        field. Fields of source ancestors count, under their own annotations.
+        ``lombok`` generates ``getX()`` (``isX()`` for a ``boolean``, and a
+        ``boolean isX`` keeps its name) for every non-static field; a
+        field-level ``@Getter`` generates it for that field, on a class or
+        an enum. Fields of source ancestors count, under their own
+        annotations. ``@Accessors`` renames them, so it types nothing.
         """
-        if name.startswith("get") and len(name) > 3:
-            suffix, boolean_only = name[3:], False
-        elif name.startswith("is") and len(name) > 2:
-            suffix, boolean_only = name[2:], True
-        else:
+        if not (name.startswith("get") and len(name) > 3 or name.startswith("is") and len(name) > 2):
             return None
         # The nearest getter hides any farther up the hierarchy (S11).
         for level in self._ancestor_levels(owner, module):
@@ -4539,12 +4570,12 @@ class JavaSymbols:
                 for path, declaration in self._module_locations(candidate, candidate_module)
             ]
             for candidate, path, declaration in locations:
-                if declaration.type != "class_declaration":
+                if declaration.type not in _LOMBOK_TYPES:
                     continue
                 source = self.units[path].source
                 class_level = self._lombok_annotated(path, declaration)
-                body = declaration.child_by_field_name("body")
-                for member in body.named_children if body is not None else []:
+                renamed = self._lombok_annotated(path, declaration, {"Accessors"})
+                for member in _type_body_members(declaration):
                     if member.type != "field_declaration":
                         continue
                     modifiers = parser.modifiers_node(member)
@@ -4553,15 +4584,13 @@ class JavaSymbols:
                     if not class_level and not self._lombok_annotated(path, member, {"Getter"}):
                         continue
                     type_node = member.child_by_field_name("type")
-                    if type_node is None:
+                    if type_node is None or renamed or self._lombok_annotated(path, member, {"Accessors"}):
                         continue
                     type_text = parser.node_text(source, type_node).strip()
-                    if boolean_only and type_text != "boolean":
-                        continue
                     for child in member.named_children:
                         ident = child.child_by_field_name("name")
                         field_name = parser.node_text(source, ident) if ident is not None else ""
-                        if field_name and field_name[:1].upper() + field_name[1:] == suffix:
+                        if field_name and _lombok_accessors(field_name, type_text)[0] == name:
                             found.add(self.resolve(path, type_text, candidate, allow_ambiguous=True, at=type_node))
             if found:
                 return next(iter(found)) if len(found) == 1 else None
@@ -4574,9 +4603,11 @@ class JavaSymbols:
             simple = written.rsplit(".", 1)[-1]
             if simple not in names:
                 continue
-            if written == f"lombok.{simple}" or unit.imports.get(simple) == f"lombok.{simple}" or (
-                "." not in written and "lombok" in unit.wildcards
-            ):
+            # ``@Accessors`` lives in ``lombok.experimental``.
+            packages = ("lombok", "lombok.experimental")
+            if written in {f"{package}.{simple}" for package in packages} or unit.imports.get(simple) in {
+                f"{package}.{simple}" for package in packages
+            } or ("." not in written and any(package in unit.wildcards for package in packages)):
                 return True
         return False
 

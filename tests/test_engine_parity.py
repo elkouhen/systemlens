@@ -1065,6 +1065,21 @@ class Seed13 {
 
 // The implicit <clinit> spans the type header: the call shares its line.
 interface Defaults13 { int SEED = Seed13.compute(); } //@E13.interface
+
+// E14: a varargs overload in a subclass is no override (BC-15).
+class Log14 {
+  void log(String... values) {} //@Log14.log
+}
+
+class IntLog14 extends Log14 {
+  void log(int... values) {} //@IntLog14.log
+}
+
+class Logs14 {
+  void e14(Log14 log) { //@E14
+    log.log("x"); //@e14
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1339,6 +1354,8 @@ CASES: list[Case] = [
           ("e13.constant", "Walker13.go", "exact")),
     _case("E13-interface", "E13.interface", None,
           ("E13.interface", "Seed13.compute", "exact")),
+    _case("E14", "E14", None,
+          ("e14", "Log14.log", "exact")),
 ]
 
 

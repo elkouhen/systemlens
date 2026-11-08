@@ -801,6 +801,74 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Sub.hook": "exact"}),
+    Shape("H2-varargs-overload", """
+        class Base {
+          void log(String... a) {} //@Base.log
+        }
+        class Sub extends Base {
+          void log(int... a) {} //@Sub.log
+        }
+        class Use {
+          void run(Base b) { //@Use.run
+            b.log("x");
+          }
+        }
+        """, "Use.run", {"Base.log": "exact"},
+        note="BC-15: log(int...) overloads log(String...); it does not override it"),
+    Shape("H2-lombok-boolean", """
+        import lombok.Getter;
+        class Base {
+          public boolean isActive() { return true; } //@Base.isActive
+          public boolean isOpen() { return true; } //@Base.isOpen
+        }
+        @Getter class Gen extends Base {
+          private boolean isActive;
+        }
+        @Getter class Gen2 extends Base {
+          private boolean open;
+        }
+        class Use {
+          void run(Base n, Gen g) { //@Use.run
+            n.isActive();
+            g.isActive();
+            n.isOpen();
+          }
+        }
+        """, "Use.run", {"Base.isActive": "possible", "Base.isOpen": "possible"},
+        note="BC-15: Lombok writes isActive() for a boolean isActive and isOpen() for a boolean open, "
+             "each overriding Base's"),
+    Shape("H2-lombok-enum", """
+        import lombok.Getter;
+        class Service {
+          void go() {} //@Service.go
+        }
+        enum Kind {
+          A;
+          @Getter private Service service;
+        }
+        class Use {
+          void run(Kind k) { //@Use.run
+            k.getService().go();
+          }
+        }
+        """, "Use.run", {"Service.go": "exact"},
+        note="BC-15: @Getter on an enum field generates getService(), typed by the field"),
+    Shape("H2-lombok-accessors", """
+        import lombok.Getter;
+        import lombok.experimental.Accessors;
+        class Base {
+          public String name() { return ""; } //@Base.name
+        }
+        @Getter @Accessors(fluent = true) class Fluent extends Base {
+          private String name;
+        }
+        class Use {
+          void run(Base b) { //@Use.run
+            b.name();
+          }
+        }
+        """, "Use.run", {"Base.name": "possible"},
+        note="BC-15: @Accessors renames the accessors, so Fluent may generate an override of name()"),
     Shape("H2-virtual", """
         class A {
           void m() {} //@A.m
