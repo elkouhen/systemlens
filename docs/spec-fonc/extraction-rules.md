@@ -7,6 +7,13 @@ An endpoint has a role (`serve`/`call` for REST, `produce`/`consume` for a topic
 a system, a topic (`METHOD /path` for REST), source location, framework and
 optional module, qualified name and Java message type. A value that cannot be
 resolved statically is flagged `topic_dynamic=true`; it is never fabricated.
+
+A REST message type is the `@RequestBody` parameter, else the first
+parameter that is not HTTP metadata such as `@PathVariable`, of a Spring
+MVC or Feign mapping's method. A gateway, WebFlux,
+Spring Data REST or OpenAPI endpoint has no message type: the method around
+it does not declare that route's body.
+
 When a Kafka send uses a conditional Java topic expression, extraction keeps
 each statically resolved branch as a separate topic endpoint. This covers
 ternary expressions, topic variables assigned in `if/else` branches, and

@@ -262,6 +262,9 @@ _HTTP_INFRASTRUCTURE_TYPES = frozenset({
 })
 
 
+_MAPPED_REST_FRAMEWORKS = frozenset({"spring", "feign"})
+
+
 def _infer_rest_parameter_type(
     repo_root: Path, rel_path: str, start_line: int, role: str, framework: str
 ) -> str | None:
@@ -271,8 +274,13 @@ def _infer_rest_parameter_type(
     ``@RequestBody`` parameter, then retain the first non-framework parameter.
     Imperative HTTP-client invocations are intentionally excluded: their body
     argument requires data-flow inference rather than a declaration lookup.
+
+    Only a Spring MVC or Feign endpoint anchored on its method's declaration
+    (a mapping annotation, or an inherited mapping's override) has one. A
+    gateway, WebFlux, Data REST or OpenAPI endpoint is not a parameter of
+    the method around it, such as a ``RouteLocatorBuilder`` (BC-35).
     """
-    if role != "serve" and framework != "feign":
+    if framework not in _MAPPED_REST_FRAMEWORKS:
         return None
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:
@@ -286,6 +294,10 @@ def _infer_rest_parameter_type(
     if not candidates:
         return None
     method = min(candidates, key=lambda node: node.end_byte - node.start_byte)
+    name = method.child_by_field_name("name")
+    if name is None or start_line > name.start_point.row + 1:
+        # Anchored in the body: a call made by the method, not its mapping.
+        return None
     parameters = method.child_by_field_name("parameters")
     if parameters is None:
         return None

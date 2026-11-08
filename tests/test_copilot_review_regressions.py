@@ -482,3 +482,73 @@ def test_stream_bridge_bindings_and_kafka_streams_receivers(tmp_path: Path) -> N
         ("produce", "kafka-streams", "through-topic", False),
         ("produce", "kafka-streams", "chained-out", False),
     }
+
+
+def test_rest_message_type_comes_only_from_mapped_methods(tmp_path: Path) -> None:
+    """BC-35: every serve endpoint was typed from the method around it.
+
+    A gateway route took ``RouteLocatorBuilder``, a WebFlux route its
+    handler and a Data REST search ``String``. Only a Spring MVC or Feign
+    mapping is typed from its method's parameters.
+    """
+    repo = _service(tmp_path, {
+        "src/main/java/demo/G.java": (
+            "package demo;\n"
+            "import org.springframework.cloud.gateway.route.RouteLocator;\n"
+            "import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;\n"
+            "import org.springframework.context.annotation.Bean;\n"
+            "public class G {\n"
+            "  @Bean\n"
+            "  public RouteLocator routes(RouteLocatorBuilder builder) {\n"
+            '    return builder.routes().route("o", r -> r.path("/orders/**").uri("lb://orders")).build();\n'
+            "  }\n"
+            "}\n"
+        ),
+        "src/main/java/demo/W.java": (
+            "package demo;\n"
+            "import org.springframework.context.annotation.Bean;\n"
+            "import org.springframework.web.reactive.function.server.*;\n"
+            "import static org.springframework.web.reactive.function.server.RouterFunctions.route;\n"
+            "import static org.springframework.web.reactive.function.server.RequestPredicates.*;\n"
+            "public class W {\n"
+            "  @Bean\n"
+            "  public RouterFunction<ServerResponse> r(OrderHandler handler) {\n"
+            '    return route(GET("/w/orders"), handler::list);\n'
+            "  }\n"
+            "}\n"
+            "class OrderHandler {}\n"
+        ),
+        "src/main/java/demo/Order.java": (
+            "package demo;\nimport jakarta.persistence.Entity;\n@Entity public class Order { }\n"
+        ),
+        "src/main/java/demo/OrderRepo.java": (
+            "package demo;\n"
+            "import org.springframework.data.repository.CrudRepository;\n"
+            "import org.springframework.data.rest.core.annotation.RepositoryRestResource;\n"
+            '@RepositoryRestResource(path = "orders")\n'
+            "public interface OrderRepo extends CrudRepository<Order, Long> {\n"
+            "  java.util.List<Order> findByName(String name);\n"
+            "}\n"
+        ),
+        "src/main/java/demo/Ctl.java": (
+            "package demo;\n"
+            "import org.springframework.web.bind.annotation.*;\n"
+            "@RestController\n"
+            "public class Ctl {\n"
+            '  @PostMapping("/orders")\n'
+            "  public String post(@RequestBody OrderDto body) { return \"\"; }\n"
+            "}\n"
+            "class OrderDto {}\n"
+        ),
+    })
+
+    clear_analysis_caches()
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True)
+        typed = {
+            (endpoint.framework, endpoint.topic, endpoint.message_type)
+            for endpoint in store.all_endpoints()
+            if endpoint.message_type is not None
+        }
+
+    assert typed == {("spring", "POST /orders", "OrderDto")}
