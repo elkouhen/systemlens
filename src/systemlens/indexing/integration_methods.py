@@ -653,9 +653,10 @@ def materialize_integration_methods(
                 )
             qualified_method = f"{owner}.{name}" if owner else name
             parameter_node = declaration.child_by_field_name("parameters")
+            # A non-UTF-8 byte in a comment of the parameter list must not
+            # abort the index: decode leniently, like every other node text.
             parameter_signature = (
-                source[parameter_node.start_byte:parameter_node.end_byte]
-                .decode("utf-8")
+                java_parser.node_text(source, parameter_node)
                 if parameter_node is not None
                 else "()"
             )
@@ -702,7 +703,7 @@ def materialize_integration_methods(
                 if initializer.node.type in CONSTRUCTOR_DECLARATIONS else None
             )
             parameter_signature = (
-                source[parameter_node.start_byte:parameter_node.end_byte].decode("utf-8")
+                java_parser.node_text(source, parameter_node)
                 if parameter_node is not None else "()"
             )
             methods.append(IntegrationMethod(

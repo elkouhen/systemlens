@@ -168,3 +168,33 @@ def test_url_redaction_keeps_placeholders_and_hints_skip_userinfo() -> None:
     assert redact_url_secrets('"http://" + user + "@" + host') == (
         '"http://" + user + "@" + host'
     )
+
+
+def test_a_latin1_comment_in_a_parameter_list_keeps_its_integration_methods(
+    tmp_path: Path,
+) -> None:
+    """BC-03: parameter text was decoded as strict UTF-8.
+
+    One Latin-1 byte in a comment of a method or constructor parameter list
+    aborted the index; it now decodes with replacement, like node text.
+    """
+    _write(tmp_path / "svc/pom.xml", POM.format(name="svc", deps=""))
+    java = tmp_path / "svc/src/main/java/demo/Latin.java"
+    java.parent.mkdir(parents=True)
+    java.write_bytes(
+        b"package demo;\n"
+        b"import org.springframework.web.bind.annotation.GetMapping;\n"
+        b"import org.springframework.web.bind.annotation.RestController;\n"
+        b"@RestController\n"
+        b"public class Latin {\n"
+        b"  Latin(String a /* caf\xe9 */) {}\n"
+        b'  @GetMapping("/latin")\n'
+        b"  public String get(String a /* caf\xe9 */, String b) { return a; }\n"
+        b"}\n"
+    )
+
+    assert _index(tmp_path) == ["GET /latin"]
+    with Store(tmp_path) as store:
+        methods = {method.qualified_method for method in store.all_integration_methods()}
+
+    assert {"demo.Latin.get", "demo.Latin.<init>"} <= methods
