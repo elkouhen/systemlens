@@ -428,3 +428,57 @@ def test_feign_joins_url_and_path_and_defaults_nest(tmp_path: Path) -> None:
         ("serve", "spring", "GET <dynamic>", True),
         ("produce", "spring-kafka", "app.topic", True),
     }
+
+
+def test_stream_bridge_bindings_and_kafka_streams_receivers(tmp_path: Path) -> None:
+    """BC-34: a binding name was a topic; Streams calls matched by name.
+
+    ``streamBridge.send`` names a binding, mapped through its declared
+    destination or else dynamic. A Kafka Streams source or sink is
+    recognised by the declared type its call chain starts from, so
+    ``mapper.to(dto)`` is no producer and ``streamsBuilder.table`` is a
+    consumer.
+    """
+    repo = _service(tmp_path, {
+        "src/main/java/demo/S.java": (
+            "package demo;\n"
+            "import org.springframework.cloud.stream.function.StreamBridge;\n"
+            "public class S {\n"
+            "  private StreamBridge streamBridge;\n"
+            '  void a() { streamBridge.send("orders-out-0", "x"); }\n'
+            '  void b() { streamBridge.send("unbound-out-0", "x"); }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/K.java": (
+            "package demo;\n"
+            "import org.apache.kafka.streams.StreamsBuilder;\n"
+            "import org.apache.kafka.streams.kstream.KStream;\n"
+            "public class K {\n"
+            "  Mapper mapper;\n"
+            "  void topo(StreamsBuilder streamsBuilder) {\n"
+            '    KStream<String, String> s = streamsBuilder.stream("in-topic");\n'
+            '    s.through("through-topic");\n'
+            '    streamsBuilder.stream("chained-in").mapValues(v -> v).to("chained-out");\n'
+            '    streamsBuilder.table("tbl-topic");\n'
+            '    streamsBuilder.globalTable("global-topic");\n'
+            "  }\n"
+            "  Object conv(Object dto) { return mapper.to(dto); }\n"
+            "}\n"
+            "class Mapper { Object to(Object o) { return o; } }\n"
+        ),
+        "src/main/resources/application.yml": (
+            "spring:\n  cloud:\n    stream:\n      bindings:\n"
+            "        orders-out-0:\n          destination: orders-topic\n"
+        ),
+    })
+
+    assert _ports(repo) == {
+        ("produce", "spring-cloud-stream", "orders-topic", False),
+        ("produce", "spring-cloud-stream", "unbound-out-0", True),
+        ("consume", "kafka-streams", "in-topic", False),
+        ("consume", "kafka-streams", "chained-in", False),
+        ("consume", "kafka-streams", "tbl-topic", False),
+        ("consume", "kafka-streams", "global-topic", False),
+        ("produce", "kafka-streams", "through-topic", False),
+        ("produce", "kafka-streams", "chained-out", False),
+    }

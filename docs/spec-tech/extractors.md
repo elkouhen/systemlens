@@ -207,7 +207,10 @@ compile the project or run tests. If the local Maven cache lacks a required
 plugin or dependency, source generation fails instead of accessing a registry.
 
 `infer_kafka_endpoints` recognises Spring Kafka listeners and send sites,
-KafkaTemplate/ProducerRecord usage and Spring Cloud Stream StreamBridge calls.
+KafkaTemplate/ProducerRecord usage, Spring Cloud Stream StreamBridge calls
+and Kafka Streams sources and sinks. `_stream_bridge_topics` maps a binding
+through its destination property, and `_streams_root_type` types the
+variable a Streams call chain starts from (BC-34).
 It preserves dynamic topic expressions and derives a payload type only from
 declared Java types, never from a serializer guess. A concrete shared
 topic creates a producer/consumer service edge even when one or both Java

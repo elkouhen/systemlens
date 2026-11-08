@@ -584,6 +584,65 @@ def _streams_sink_payload_type(repo_root: Path, rel_path: str, source: bytes, ca
     return None
 
 
+_STREAMS_BUILDERS = frozenset({"StreamsBuilder"})
+# Types whose fluent chain may end in ``to(topic)`` or ``through(topic)``.
+_STREAMS_CHAIN_TYPES = frozenset({
+    "StreamsBuilder", "KStream", "KTable", "KGroupedStream", "KGroupedTable",
+    "TimeWindowedKStream", "SessionWindowedKStream", "CogroupedKStream",
+})
+_STREAMS_SOURCES = frozenset({"stream", "table", "globalTable"})
+_STREAMS_SINKS = frozenset({"to", "through"})
+
+
+def _streams_root_type(repo_root: Path, rel_path: str, source: bytes, receiver: Node | None) -> str | None:
+    """Simple type name of the variable a fluent call chain starts from.
+
+    ``builder.stream("a").mapValues(f).to("b")`` starts from ``builder``.
+    A Kafka Streams call is recognised by that declared type, never by a
+    variable name or by the file mentioning ``KStream`` (BC-34).
+    """
+    current = receiver
+    while current is not None and current.type == "method_invocation":
+        inner = current.child_by_field_name("object")
+        if inner is None:
+            break
+        current = inner
+    if current is None:
+        return None
+    typed = expression_type_text(repo_root, rel_path, source, current)
+    if typed is None:
+        return None
+    return typed.split("<", 1)[0].rsplit(".", 1)[-1].strip()
+
+
+_STREAM_BRIDGE_DESTINATION = "spring.cloud.stream.bindings.{}.destination"
+
+
+def _stream_bridge_topics(
+    value_node: Node | None, source: bytes, repo_root: Path, rel_path: str,
+) -> list[tuple[str, bool]]:
+    """Topics of ``streamBridge.send(binding, ...)`` (BC-34).
+
+    The first argument names a binding, not a topic: its
+    ``spring.cloud.stream.bindings.<name>.destination`` is the topic. A
+    binding without a declared destination keeps its name as a dynamic
+    topic, since the binder decides.
+    """
+    topics: list[tuple[str, bool]] = []
+    for binding, dynamic in _kafka_topics_from_value(value_node, source, repo_root, rel_path):
+        if dynamic:
+            topics.append((binding, True))
+            continue
+        destination = resolve_spring_property(
+            repo_root, _STREAM_BRIDGE_DESTINATION.format(binding), rel_path,
+        )
+        if destination and "${" not in destination:
+            topics.append((destination, False))
+        else:
+            topics.append((binding, True))
+    return list(dict.fromkeys(topics))
+
+
 def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> list[MessageEndpoint]:
     """Découvre tous les endpoints Kafka depuis le code Java via tree-sitter.
 
@@ -693,18 +752,27 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                             add(node, "produce", "spring-kafka", topic, dynamic,
                                 _producer_send_payload_type(repo_root, rel_path, source, node))
                 elif method_name == "send" and receiver and receiver.lower().endswith("streambridge") and has_stream_bridge and args:
-                    for topic, dynamic in _kafka_topics_from_value(
+                    for topic, dynamic in _stream_bridge_topics(
                         args[0], source, repo_root, rel_path
                     ):
                         add(node, "produce", "spring-cloud-stream", topic, dynamic,
                             _producer_send_payload_type(repo_root, rel_path, source, node))
-                elif method_name == "to" and has_kafka_streams and args:
+                elif (
+                    method_name in _STREAMS_SINKS and has_kafka_streams and args
+                    and _streams_root_type(repo_root, rel_path, source, object_node)
+                    in _STREAMS_CHAIN_TYPES
+                ):
                     for topic, dynamic in _kafka_topics_from_value(
                         args[0], source, repo_root, rel_path
                     ):
                         add(node, "produce", "kafka-streams", topic, dynamic,
                             _streams_sink_payload_type(repo_root, rel_path, source, node))
-                elif method_name == "stream" and receiver == "builder" and has_kafka_streams and args:
+                elif (
+                    method_name in _STREAMS_SOURCES and has_kafka_streams and args
+                    and object_node is not None
+                    and _streams_root_type(repo_root, rel_path, source, object_node)
+                    in _STREAMS_BUILDERS
+                ):
                     for topic, dynamic in _kafka_topics_from_value(
                         args[0], source, repo_root, rel_path
                     ):

@@ -530,6 +530,17 @@ cannot be proven to cover the send, the value is unknown.
 first argument is a key or a partition, never the topic; its last argument
 is the payload, and the one-argument `sendDefault(value)` is a producer too.
 
+`StreamBridge.send(binding, ...)` names a binding, not a topic: it
+publishes to the binding's `spring.cloud.stream.bindings.<binding>.destination`.
+Without that property the binder decides, so the binding name is kept as
+a dynamic topic.
+
+A Kafka Streams call is recognised by the declared type its call chain
+starts from, never by a variable name. `stream`, `table` and `globalTable`
+on a `StreamsBuilder` consume their topic; `to` and `through` on a chain
+from a `StreamsBuilder`, `KStream`, `KTable` or grouped stream produce it.
+A `to` call on any other object, such as a mapper, is no producer.
+
 A Kafka Streams source or sink is typed from its `KStream<K, V>` or
 `KTable<K, V>` declaration, explicit type arguments, or the value serde of
 a `Consumed` or `Produced` argument when they are statically known. The
