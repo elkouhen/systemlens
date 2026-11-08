@@ -863,6 +863,8 @@ class PrinterCases {
 COPILOT_FIXTURE = """\
 package p;
 
+import java.util.*;
+
 // E06: the implicit supertypes of an enum and a record (BC-06).
 enum Tint { RED }
 
@@ -1078,6 +1080,25 @@ class IntLog14 extends Log14 {
 class Logs14 {
   void e14(Log14 log) { //@E14
     log.log("x"); //@e14
+  }
+}
+
+// E15: a dotted type name and nested type arguments (BC-16). The file
+// imports no java.util type by name, so Map.Entry comes from java.util.*.
+class Outer15<A> {
+  class Inner15<B> {
+    void z() {} //@Outer15.Inner15.z
+  }
+
+  void z() {} //@Outer15.z
+}
+
+class Types15 {
+  void e15(java.util.Map<String, Order> m, Outer15<String>.Inner15<Order> i) { //@E15
+    for (Map.Entry<String, Order> e : m.entrySet()) {
+      e.getValue().ship(); //@e15.entry
+    }
+    i.z(); //@e15.inner
   }
 }
 """
@@ -1356,6 +1377,8 @@ CASES: list[Case] = [
           ("E13.interface", "Seed13.compute", "exact")),
     _case("E14", "E14", None,
           ("e14", "Log14.log", "exact")),
+    _case("E15", "E15", None,
+          ("e15.entry", "Order.ship", "exact"), ("e15.inner", "Outer15.Inner15.z", "exact")),
 ]
 
 

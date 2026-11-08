@@ -234,6 +234,9 @@ _JDK_FUNCTIONAL_SIGNATURES: dict[str, tuple[int, tuple[int, ...], int | None]] =
     "java.util.function.UnaryOperator": (1, (0,), 0),
     "java.util.function.BinaryOperator": (1, (0, 0), 0),
 }
+# Nested JDK types a wildcard import of their package names through their
+# outer type, as ``Map.Entry`` under ``import java.util.*`` (BC-16).
+_JDK_NESTED_TYPES = frozenset({"java.util.Map.Entry"})
 # Receivers of a method reference that are expressions, never a type name.
 _EXPRESSION_RECEIVERS = {
     "this", "super", "method_invocation", "object_creation_expression", "parenthesized_expression",
@@ -497,6 +500,21 @@ _OBJECT_DISPATCH = {("equals", 1), ("hashCode", 0), ("toString", 0)}
 _TYPE_CLAUSES = {"superclass", "super_interfaces", "extends_interfaces"}
 
 
+def _erase_arguments(text: str) -> str:
+    """``text`` without its type arguments, by bracket depth (BC-16):
+    ``Outer<String>.Inner<Order>`` is ``Outer.Inner``."""
+    erased: list[str] = []
+    depth = 0
+    for character in text:
+        if character == "<":
+            depth += 1
+        elif character == ">":
+            depth = max(depth - 1, 0)
+        elif not depth:
+            erased.append(character)
+    return "".join(erased)
+
+
 def _written_type(source: bytes, parameter: Node) -> str:
     """The erased simple name of a parameter type, as written; ``T[]`` for
     a ``T...`` parameter (BC-15)."""
@@ -504,11 +522,11 @@ def _written_type(source: bytes, parameter: Node) -> str:
         spread = _spread_type(parameter)
         if spread is None:
             return ""
-        return re.sub(r"<.*>", "", parser.node_text(source, spread)).strip().rsplit(".", 1)[-1] + "[]"
+        return _erase_arguments(parser.node_text(source, spread)).strip().rsplit(".", 1)[-1] + "[]"
     parameter_type = parameter.child_by_field_name("type")
     if parameter_type is None or parameter.type != "formal_parameter":
         return ""
-    text = re.sub(r"<.*>", "", parser.node_text(source, parameter_type)).strip()
+    text = _erase_arguments(parser.node_text(source, parameter_type)).strip()
     dimensions = parameter.child_by_field_name("dimensions")
     if dimensions is not None:
         text += "[]" * parser.node_text(source, dimensions).count("[")
@@ -1358,7 +1376,7 @@ class JavaSymbols:
         visible only from its declaration to the end of its block, or from
         inside itself (S7).
         """
-        text = re.sub(r"<.*>", "", text).strip()
+        text = _erase_arguments(text).strip()
         if at is not None and text.split(".", 1)[0].split("[", 1)[0] in self._type_parameters(at):
             return None
         if text.endswith("[]"):
@@ -1393,6 +1411,11 @@ class JavaSymbols:
         }
         if text in _JAVA_LANG:
             candidates.add(f"java.lang.{text}")
+        # ``Map.Entry`` under ``import java.util.*``: a nested JDK type
+        # named through its outer type (BC-16).
+        candidates.update(
+            f"{package}.{text}" for package in unit.wildcards if f"{package}.{text}" in _JDK_NESTED_TYPES
+        )
         # ``import java.util.concurrent.*`` makes ``Callable`` a JDK type
         # whose members are known; any other external wildcard stays open.
         candidates.update(

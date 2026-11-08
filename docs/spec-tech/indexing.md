@@ -763,7 +763,10 @@ limit. An enum constant's body is such a class: its own fields come
 before the enum's (BC-14). A field hides any field of the same name farther up the hierarchy:
 the type is searched first, then its supertypes by distance. Field
 accesses and Lombok getters follow the same rule.
-A type name resolves where it is written. A type parameter of an
+A type name resolves where it is written. Its type arguments are erased
+by bracket depth, so `Outer<String>.Inner<Order>` names `Outer.Inner`. A
+dotted name `Map.Entry` also resolves through a wildcard import of its
+package when the JDK nested type is known (BC-16). A type parameter of an
 enclosing method or class hides any source type of the same simple name:
 the name has no type, in a receiver as in a dispatch signature. A local
 class is visible from its declaration to the end of its block and inside
@@ -1355,7 +1358,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 
 | # | Shape | Status | Plan |
 |---|---|---|---|
-| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors | `covered` (BC-07) | |
+| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors; dotted and nested generic type names | `covered` (BC-07, BC-16) | |
 | S2 | Static call and static import; an import an external supertype may shadow stays unresolved | `covered` (BC-13) | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
@@ -1565,6 +1568,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E12 | `step.run()` in a constructor that `super(() -> {})` and `super(new Step12Impl())` both reach | `covered` | BC-12 |
 | E13 | `f.go()` in an enum constant body declaring its own `f`; `Seed13.compute()` in an interface field initializer | `covered` | BC-14 |
 | E14 | `log.log("x")` on `Log14.log(String...)` with a subclass `IntLog14.log(int...)` | `covered` | BC-15 |
+| E15 | `Map.Entry<String, Order>` under `import java.util.*`; `Outer15<String>.Inner15<Order> i; i.z()` | `covered` | BC-16 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
@@ -1582,7 +1586,9 @@ moved the endpoint inventory to
 signature to `code-flow-v57-dispatch-precision`, and BL-43 and BL-44 to
 `code-flow-v58-spring-signatures`. BC-02 moved the endpoint inventory to
 `endpoint-inventory-v30-redacted-url-secrets`, so an index that persisted
-a URL credential re-extracts every file and drops it.
+a URL credential re-extracts every file and drops it. BC-06 to BC-16 moved
+the code-flow signature to `code-flow-v59-java-semantics`: they change the
+edges, and BC-14 the initializer nodes, of unchanged sources.
 
 ### Internal-flow shapes
 

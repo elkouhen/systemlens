@@ -131,6 +131,28 @@ SHAPES: list[Shape] = [
         {"Base.a": "exact", "Repo.get": "exact", "Child.b": "exact", "Cache.get": "exact"},
         note="BC-07: the return type comes from the overload Java selects among the receiver's and its "
              "ancestors' declarations; an override's return hides its ancestor's"),
+    Shape("S1-dotted-generic-type", """
+        import java.util.*;
+        class Order {
+          void ship() {} //@Order.ship
+        }
+        class Outer<A> {
+          class Inner<B> {
+            void z() {} //@Outer.Inner.z
+          }
+          void z() {} //@Outer.z
+        }
+        class Use {
+          void run(Map<String, Order> m, Outer<String>.Inner<Order> i) { //@Use.run
+            for (Map.Entry<String, Order> e : m.entrySet()) {
+              e.getValue().ship();
+            }
+            i.z();
+          }
+        }
+        """, "Use.run", {"Order.ship": "exact", "Outer.Inner.z": "exact"},
+        note="BC-16: Map.Entry resolves through import java.util.*; type arguments are erased by "
+             "bracket depth"),
     Shape("S2", """
         class Base {
           static void util() {} //@Base.util
