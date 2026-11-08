@@ -3,8 +3,8 @@
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
 owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33 to BL-42, BL-47 and BL-51 to BL-53; each Delivery line names its
-commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
+BL-33 to BL-42 and BL-47 to BL-53; each Delivery line names its commit
+and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
 product owner's mandate, to be confirmed by them. Owner: SystemLens
@@ -99,9 +99,9 @@ defect in the join is visible in a test). A target is never invented
 | [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `open` |
 | [BL-46](#bl-46) | Narrow a receiver by the creations a method returns or a ternary holds | P3 | `open` |
 | [BL-47](#bl-47) | Apply the ADR-43 entry rule only while the route stays on `this` | P1 | `delivered` |
-| [BL-48](#bl-48) | Start flows from routes inherited from a base controller | P2 | `open` |
-| [BL-49](#bl-49) | Recognise more entry triggers | P2 | `open` |
-| [BL-50](#bl-50) | Decide whether an entry-only call tree is a flow | P3 | `open` |
+| [BL-48](#bl-48) | Start flows from routes inherited from a base controller | P2 | `delivered` |
+| [BL-49](#bl-49) | Recognise more entry triggers | P2 | `delivered` |
+| [BL-50](#bl-50) | Decide whether an entry-only call tree is a flow | P3 | `delivered` |
 | [BL-51](#bl-51) | Apply ADR-71 visibility when rebuilding flows from persisted edges | P2 | `delivered` |
 | [BL-52](#bl-52) | Report hop-limit truncation in the index log | P3 | `delivered` |
 | [BL-53](#bl-53) | Compare engines by (entry, trigger, output) pair | P3 | `delivered` |
@@ -657,7 +657,19 @@ decision the owner has not taken.
   that subtype (ADR-43); the probe yields the flow; the specification
   sentence is replaced.
 - **Depends on:** an ADR (the entry method of an inherited route).
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-88, accepted on 2026-11-08 under the mandate, to be
+  confirmed (commit `6248844`). An inherited route's snippet names the
+  declaring method's file and line; `materialize_integration_methods`
+  gives the route to that method, and the join runs it with the
+  inheritor's module and the inheritor as entry class, so dispatch keeps
+  to the inheritor while the route stays on `this`. The flow fixture
+  gains `UserController`, a second inheritor whose hook publishes:
+  `POST /products/crud` yields its flow and never reaches that hook,
+  `POST /users/crud` reaches it. `extraction-rules.md` replaces the
+  limitation sentence. Signature `code-flow-v56-inherited-routes-and-triggers`,
+  endpoint inventory v29. Neither reference project has an inherited
+  route. Commit `43d3b1f`.
 - **Why P2:** frequent in generated and CRUD-heavy projects; clear
   direction.
 
@@ -681,7 +693,32 @@ decision the owner has not taken.
   probe trigger yields its flow; topology is unchanged for transient
   triggers; `extraction-rules.md` lists them.
 - **Depends on:** a PDR entry.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** PDR-16, accepted on 2026-11-08 under the mandate, to be
+  confirmed (commit `6248844`). `@RabbitListener` (with class-level
+  `@RabbitHandler`) and `@JmsListener` are consume endpoints and pair
+  with a publication of the same system and channel in another module
+  as `publishes_to`. Runners and `@PostConstruct` are `startup_entry`
+  triggers, `@EventListener` and `@TransactionalEventListener`
+  `event_entry` triggers, none a topology endpoint. `publishEvent(x)`
+  gets a `possible` edge to each listener of `x`'s static type, so the
+  publisher's flow continues into the listener. The probe's Rabbit,
+  JMS, event and runner entries yield their flows, plus
+  `ApplicationRunner`, `@PostConstruct`, a typed
+  `@TransactionalEventListener` and `POST /events`. The export labels
+  the new steps; it draws Kafka topics only, so a Rabbit or JMS
+  relation shows in the persisted topology and the CLI (PDR-16, known
+  limit). A data-only transient flow is now named by its method's owner.
+  Commit `a056ae3`; companion skill `4caf5d9`.
+  Train-ticket, both engines: 406 to 447 flow pairs, 1712 edges, zero
+  differences. The 26 new flow shapes: 20 `CommandLineRunner.run`
+  seeders (`InitData`, `InitUser`) to data writes; 2 Rabbit consumers
+  (`RabbitReceive.process` in delivery and notification) to their
+  repository writes; 4 routes to `RabbitSend.send` (three in food, one
+  in notification). 6 Rabbit endpoints, all dynamic (`Queues.queueName`
+  lives in another class), so no Rabbit relation pairs. Lab: 23 to 25 flows,
+  both engines, 104/105 edges and the same CodeQL-only edge; new:
+  `CatalogSeeder.run` to `ProductEntity` count and save. No new endpoint.
 - **Why P2:** an unrecognised entry loses every flow under it; the
   `@Scheduled` precedent makes the change mechanical once decided.
 
@@ -705,7 +742,17 @@ decision the owner has not taken.
   (deepest method, or every leaf); the export and the diagnosis guide
   follow.
 - **Depends on:** a PDR entry.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** PDR-15, decided by the product owner on 2026-11-08
+  (commit `6248844`): the rule stays, and the missing effects are added.
+  `scanner/broker_ast.py` makes `send` and `convertAndSend` on
+  `RabbitTemplate`, `AmqpTemplate` and `JmsTemplate` produce endpoints of
+  system `rabbitmq` or `jms`; a named exchange gives
+  `exchange/routing-key`. `GET /ping` is a passing negative test: no flow,
+  diagnostic status `entry_method_without_external_effect`. Positive
+  cases cover the default exchange, a named exchange and JMS, and
+  `tests/test_broker_extraction.py` the overloads. `publishEvent` is a
+  hop, not an effect (PDR-16). Commit `c403b84`.
 - **Why P3:** product definition first.
 
 <a id="bl-51"></a>
