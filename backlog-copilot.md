@@ -1,8 +1,8 @@
 # Backlog: Copilot review of source indexing
 
 Status: written on 2026-11-08 and validated the same day by the product
-owner, who asked for it to be processed. All items are `open`. Lot
-order: 1 to 6. A decision record an item depends on is written and
+owner, who asked for it to be processed. Lot 1 (BC-01 to BC-05) is
+`delivered`; the other items are `open`. Lot order: 1 to 6. A decision record an item depends on is written and
 accepted under the product owner's mandate, to be confirmed by them.
 Each item first re-checks its finding against current `main`, since
 BL-42 to BL-53 landed after the review. Findings were checked
@@ -35,11 +35,11 @@ differences on both, unless its acceptance names the change.
 
 | ID | Title | Source | Sev | Status |
 |---|---|---|---|---|
-| [BC-01](#bc-01) | Survive invalid YAML scalars | C1 | high | `open` |
-| [BC-02](#bc-02) | Redact credentials in gateway URIs and ignore userinfo in host hints | C7f, C7g | high | `open` |
-| [BC-03](#bc-03) | Decode parameter text leniently | G3 | high | `open` |
-| [BC-04](#bc-04) | Skip unreadable files in the inventory | G7 | med | `open` |
-| [BC-05](#bc-05) | Report source-generation failures as indexing errors | G2 | med | `open` |
+| [BC-01](#bc-01) | Survive invalid YAML scalars | C1 | high | `delivered` |
+| [BC-02](#bc-02) | Redact credentials in gateway URIs and ignore userinfo in host hints | C7f, C7g | high | `delivered` |
+| [BC-03](#bc-03) | Decode parameter text leniently | G3 | high | `delivered` |
+| [BC-04](#bc-04) | Skip unreadable files in the inventory | G7 | med | `delivered` |
+| [BC-05](#bc-05) | Report source-generation failures as indexing errors | G2 | med | `delivered` |
 | [BC-06](#bc-06) | Give source enums and records their implicit supertypes | S2 | med | `open` |
 | [BC-07](#bc-07) | Read a call's return type across the receiver's ancestors | S5 | med | `open` |
 | [BC-08](#bc-08) | Keep varargs out of fixed-arity overload selection | S6 | med | `open` |
@@ -99,6 +99,15 @@ Suggested order: Lot 1, then Lot 2, then Lots 3 to 6 by owner priority.
 - **Acceptance:** a fixture holding that scalar in `application.yml`
   and in `application.properties` indexes, and its other endpoints are
   kept.
+- **Status:** `delivered`.
+- **Delivery:** `f54bc2d`. Reproduced on `a1fa0ef`. Every YAML loader of
+  the extractors and the contract materializers (`_spring_properties`,
+  the two gateway loaders, the two OpenAPI loaders of `rest_mvc`,
+  `integration_methods`, `materializers`, `discovery/build/modules`)
+  catches `yaml.YAMLError`, `ValueError` and `RecursionError`.
+  `.properties` files skip the gateway YAML parser. Test:
+  `tests/test_copilot_review_regressions.py::test_an_impossible_yaml_date_does_not_abort_the_index`.
+  `extractors.md` names the three errors.
 
 <a id="bc-02"></a>
 ### BC-02. Redact credentials in gateway URIs and ignore userinfo in host hints
@@ -114,6 +123,18 @@ Suggested order: Lot 1, then Lot 2, then Lots 3 to 6 by owner priority.
   Allow an optional `userinfo@` before the host group.
 - **Acceptance:** no persisted column or HTML export contains the
   secret, and the hint is `inventory`.
+- **Status:** `delivered`.
+- **Delivery:** `352d244`. Reproduced on `a1fa0ef` with fake values.
+  `domain/redaction.redact_url_secrets` strips userinfo and masks secret
+  query values, keeping `${...}` and `{...}` values. `MessageEndpoint`
+  applies it to every snippet, whichever scanner builds it. `_URL_HOST_RE`
+  skips userinfo. The endpoint inventory signature moves to
+  `endpoint-inventory-v30-redacted-url-secrets`. Tests:
+  `test_a_gateway_uri_credential_is_redacted_everywhere` (SQLite dump and
+  HTML export) and
+  `test_url_redaction_keeps_placeholders_and_hints_skip_userinfo`.
+  Train-ticket and the lab hold no URI userinfo and no snippet the helper
+  changes: their persisted endpoints are unchanged.
 
 <a id="bc-03"></a>
 ### BC-03. Decode parameter text leniently
@@ -125,6 +146,11 @@ Suggested order: Lot 1, then Lot 2, then Lots 3 to 6 by owner priority.
   `errors="replace"`.
 - **Acceptance:** a Latin-1 fixture indexes and keeps its integration
   methods.
+- **Status:** `delivered`.
+- **Delivery:** `653ec97`. Reproduced on `a1fa0ef`. Both sites, method
+  and constructor parameter lists, use `java_parser.node_text`. UTF-8
+  sources keep the same text, so method ids are unchanged. Test:
+  `test_a_latin1_comment_in_a_parameter_list_keeps_its_integration_methods`.
 
 <a id="bc-04"></a>
 ### BC-04. Skip unreadable files in the inventory
@@ -136,6 +162,13 @@ Suggested order: Lot 1, then Lot 2, then Lots 3 to 6 by owner priority.
   resolve outside the repository root.
 - **Acceptance:** an unreadable non-Java file is reported and the index
   completes.
+- **Status:** `delivered`.
+- **Delivery:** `e598ee8`. Reproduced on `a1fa0ef`. `list_repo_files`
+  leaves out an unreadable file and a symbolic link that resolves outside
+  the root, and `index_repo` prints `fichier ignoré, <path> : <reason>`
+  for each. Test:
+  `test_an_unreadable_file_is_reported_and_the_index_completes`.
+  `indexing.md` documents the rule.
 
 <a id="bc-05"></a>
 ### BC-05. Report source-generation failures as indexing errors
@@ -150,6 +183,20 @@ Suggested order: Lot 1, then Lot 2, then Lots 3 to 6 by owner priority.
   Prefer `mvnw` when present. Log a skipped Gradle module.
 - **Acceptance:** each failure prints "Indexation impossible" with the
   cause; `cli.md` documents `mvnw`.
+- **Status:** `delivered`.
+- **Delivery:** `3500d57`. Reproduced on `a1fa0ef` (missing `mvn`,
+  non-executable `gradlew`). `generate_sources` wraps `OSError` and the
+  timeout in `SourceGenerationError`, runs `./mvnw` when present, and
+  reports each Gradle project that no `gradlew` generates. Tests:
+  `tests/test_source_generation.py`, including the CLI message.
+  `cli.md` and `indexing.md` document the wrapper and the failures.
+
+Lot 1 validation, on fresh scratch copies at `3500d57`: train-ticket
+keeps 447 flow pairs and 1712 edges, the lab 25 flows and 105 edges, and
+`analyze compare-engines --engines source,codeql` reports zero
+differences on both. Their persisted flows and endpoints equal the
+`a1fa0ef` baseline. Ruff, mypy, the default suite and
+`scripts/check_companion_contracts.py` pass.
 
 ## Lot 2: false exact edges (invariant 4)
 
