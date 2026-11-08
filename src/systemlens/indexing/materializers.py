@@ -42,7 +42,7 @@ def _load_yaml(path: Path) -> object:
     """
     try:
         return yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeDecodeError, yaml.YAMLError):
+    except (OSError, ValueError, RecursionError, yaml.YAMLError):
         return None
 
 

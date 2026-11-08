@@ -14,7 +14,11 @@ private String helpers with one unconditional return.
 Multi-document Spring YAML is read document by document; base-document values take
 precedence where no active-profile selection exists. YAML parse failures,
 including unrendered Helm Go-template expressions, leave that file without
-Spring-property facts and never abort the repository index.
+Spring-property facts and never abort the repository index. A failure is
+a `yaml.YAMLError`, a `ValueError` such as an impossible date
+(`2023-02-30`), or a `RecursionError`; every YAML loader of the
+extractors and contract materializers catches all three. A `.properties`
+file is read as properties, never as gateway YAML.
 
 The Strategy1 REST registry also recognizes generated OpenAPI client calls shaped as
 `apiClient.invokeAPI("/path", HttpMethod.GET, ...)`. It requires a literal

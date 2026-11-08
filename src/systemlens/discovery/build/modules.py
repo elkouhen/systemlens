@@ -808,7 +808,7 @@ def _discover_openapi_files(
             continue
         try:
             document = yaml.safe_load(path.read_text(encoding="utf-8", errors="replace"))
-        except (OSError, yaml.YAMLError):
+        except (OSError, ValueError, RecursionError, yaml.YAMLError):
             continue
         if isinstance(document, dict) and ("openapi" in document or "swagger" in document):
             contracts.add(relative_path)

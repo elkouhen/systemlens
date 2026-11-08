@@ -168,7 +168,9 @@ def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
         # parser failures from later YAML documents (notably Helm templates)
         # remain inside the protected boundary.
         documents = list(yaml.safe_load_all(text))
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError, RecursionError):
+        # PyYAML raises a plain ``ValueError`` for an impossible timestamp
+        # such as ``2023-02-30`` and may exhaust the stack on deep nesting.
         return {}
     flat: dict[str, str] = {}
     for data in documents:

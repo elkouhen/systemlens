@@ -1166,7 +1166,7 @@ def _infer_openapi_endpoints(
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
         document = json.loads(text) if path.suffix == ".json" else yaml.safe_load(text)
-    except (OSError, ValueError, yaml.YAMLError):
+    except (OSError, ValueError, RecursionError, yaml.YAMLError):
         return []
     if not isinstance(document, dict) or not isinstance(document.get("paths"), dict):
         return []
@@ -1589,7 +1589,7 @@ def _strategy1_openapi_operations(
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
             document = json.loads(text) if path.suffix.casefold() == ".json" else yaml.safe_load(text)
-        except (OSError, ValueError, yaml.YAMLError):
+        except (OSError, ValueError, RecursionError, yaml.YAMLError):
             continue
         if not isinstance(document, dict) or not isinstance(document.get("paths"), dict):
             continue
@@ -2278,7 +2278,7 @@ def _gateway_uri_lines(text: str) -> list[list[int | None]]:
     """
     try:
         nodes = list(yaml.compose_all(text, Loader=yaml.SafeLoader))
-    except yaml.YAMLError:
+    except (yaml.YAMLError, ValueError, RecursionError):
         return []
 
     def child(node, key: str):
@@ -2312,7 +2312,7 @@ def _infer_spring_cloud_gateway_yaml_routes(repo_root: Path, rel_path: str) -> l
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
         documents = list(yaml.safe_load_all(text))
-    except (OSError, yaml.YAMLError):
+    except (OSError, yaml.YAMLError, ValueError, RecursionError):
         return []
     uri_lines = _gateway_uri_lines(text)
 
@@ -2431,10 +2431,9 @@ def infer_framework_endpoints(
             for endpoint in _infer_openapi_generator_endpoints(repo_root, rel_path):
                 inferred[endpoint.id] = endpoint
         elif rel_path.endswith((".properties", ".yml", ".yaml")):
-            endpoints = (
-                _infer_actuator_endpoint(repo_root, rel_path)
-                + _infer_spring_cloud_gateway_yaml_routes(repo_root, rel_path)
-            )
+            endpoints = _infer_actuator_endpoint(repo_root, rel_path)
+            if not rel_path.endswith(".properties"):
+                endpoints += _infer_spring_cloud_gateway_yaml_routes(repo_root, rel_path)
             if rel_path not in strategy1_contract_paths:
                 endpoints.extend(_infer_openapi_endpoints_attributed(repo_root, rel_path))
             for endpoint in endpoints:

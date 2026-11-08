@@ -199,7 +199,7 @@ def _openapi_operation_id(repo_root: Path, endpoint: MessageEndpoint) -> str | N
         text = contract_path.read_text(encoding="utf-8", errors="replace")
         document = json.loads(text) if contract_path.suffix == ".json" else yaml.safe_load(text)
         operation = document.get("paths", {}).get(route, {}).get(method.lower(), {})
-    except (OSError, ValueError, yaml.YAMLError, AttributeError):
+    except (OSError, ValueError, RecursionError, yaml.YAMLError, AttributeError):
         return None
     operation_id = operation.get("operationId") if isinstance(operation, dict) else None
     return operation_id if isinstance(operation_id, str) and operation_id else None
