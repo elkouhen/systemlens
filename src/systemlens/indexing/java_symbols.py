@@ -935,7 +935,6 @@ class JavaSymbols:
 
         self._complete_override_signatures()
         self._index_inherited_implementations()
-        self._drop_unreachable_defaults()
         # ``dispatch`` is complete: index its signatures by name and arity so
         # a generic contract reads only the candidates it can match.
         self._dispatch_signatures: dict[
@@ -961,6 +960,8 @@ class JavaSymbols:
             if node.type == "interface_declaration" and self._feign_client(path, node)
         }
         self._subtypes: dict[tuple[str, str], list[tuple[str, str, str, Node]]] = {}
+        # Last: it reads the lambda target types, which need every index.
+        self._drop_unreachable_defaults()
 
     def _feign_client(self, path: str, declaration: Node) -> bool:
         unit = self.units[path]
@@ -1178,8 +1179,10 @@ class JavaSymbols:
         interface default, and a more specific interface's declaration
         overrides a default of its superinterface (S12). A default body
         stays a target when some source class, record or enum inherits it,
-        when an anonymous class may, when no source type implements the
-        interface at all, or when its signature is not fully resolved.
+        when an anonymous class may, when a lambda or a method reference
+        implements the interface or a subinterface (BC-09), when no source
+        type implements the interface at all, or when its signature is not
+        fully resolved.
         """
         defaults = [
             info for info in self.methods.values()
@@ -1207,6 +1210,10 @@ class JavaSymbols:
                 continue
             users = [user for user in classes if key in self.ancestors(*user)]
             if not users or any(self._inherits_default(user, info) for user in users):
+                continue
+            if info.owner in self._implicit_implementations()[1]:
+                # A lambda or method reference implementing the interface
+                # inherits the default body (ADR-72).
                 continue
             name = info.method.qualified_method.rsplit(".", 1)[-1]
             for (_owner, _module, method_name, parameters), targets in self.dispatch.items():

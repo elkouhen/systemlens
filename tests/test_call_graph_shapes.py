@@ -3041,6 +3041,26 @@ SHAPES: list[Shape] = [
         """, "Use.run", {"FnImpl.apply": "possible", "Fn.apply": "possible"},
         note="BL-30: a lambda somewhere implements Fn, so the named body is possible and the "
              "declared row of BL-28 joins it; no edge goes to the creating method"),
+    Shape("F2-inherited-default", """
+        interface Hook {
+          void h(); //@Hook.h
+          default void before() {} //@Hook.before
+        }
+        class Named implements Hook {
+          public void h() {} //@Named.h
+          public void before() {} //@Named.before
+        }
+        class Use {
+          void reg(Hook x) { //@Use.reg
+            x.before();
+          }
+          void register() {
+            reg(() -> {});
+          }
+        }
+        """, "Use.reg", {"Named.before": "possible", "Hook.before": "possible"},
+        note="BC-09: the lambda passed to reg inherits Hook's default body, so Named's override "
+             "is not the only target"),
     Shape("F2-target", """
         interface Fn {
           void apply(); //@Fn.apply

@@ -866,8 +866,9 @@ An interface `default` body follows Java's "class wins" rule: a method a
 class declares or inherits from its superclass chain, and a subinterface's
 redeclaration, take precedence. The default stays a dispatch target only
 while some source class, record or enum inherits it, an anonymous class
-may, no source type implements the interface, or its signature is not
-fully resolved.
+may, a lambda or method reference implements the interface or a
+subinterface (BC-09), no source type implements the interface, or its
+signature is not fully resolved.
 `super.m()` binds without dispatch to the most specific declaration among
 the superclass and its ancestors, after overload selection; the call is
 `exact` on a concrete body and reaches nothing otherwise. `X.super.m()`
@@ -1383,7 +1384,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T20 | Ternary of two source types dispatches on their union; a `null` branch gives nothing; a branch of the declared type keeps it | `covered` (BL-46) | |
 | T21 | Parameter of a private method whose every call site passes one class; mixed sites, a package method, a method reference or a reassigned parameter keep the declared type | `covered` (BL-46) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
-| F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
+| F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default`, also behind a parameter | `covered` (BL-30, BC-09) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
 | F5 | Lambda parameter typed by a source functional interface; method reference overload picked by its target | `covered` (BL-24) | |
@@ -1534,6 +1535,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E06 | `o(Tint.RED)`, `r(new Point(1))` and `c(Tint.RED)` against `Object`, `Enum`, `Record`, `Comparable` and `Runnable` overloads | `covered` | BC-06 |
 | E07 | `child.a(1).get()` with `Base07.a(Integer)` returning `Store07` and `Child07.a(String)` returning `Cache07` | `covered` | BC-07 |
 | E08 | `f("x")` and `f(1)` with `f(int)` and `f(Object...)` | `covered` | BC-08 |
+| E09 | `x.before()` on a parameter that receives a lambda and a named `Hook09Impl`, with a `default` `before` the named class overrides | `covered` | BC-09 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

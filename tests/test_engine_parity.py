@@ -918,6 +918,32 @@ class Varargs08 {
     f(1); //@e08.number
   }
 }
+
+// E09: a default body a lambda inherits stays a target (BC-09).
+interface Hook09 {
+  void h(); //@Hook09.h
+
+  default void before() {} //@Hook09.before
+}
+
+class Hook09Impl implements Hook09 {
+  public void h() {} //@Hook09Impl.h
+
+  public void before() {} //@Hook09Impl.before
+}
+
+class Hooks09 {
+  Hook09 named = new Hook09Impl();
+
+  void reg(Hook09 x) { //@E09
+    x.before(); //@e09
+  }
+
+  void register() {
+    reg(() -> {});
+    reg(named);
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1177,6 +1203,8 @@ CASES: list[Case] = [
           ("e07", "Base07.a", "exact"), ("e07", "Store07.get", "exact")),
     _case("E08", "E08", None,
           ("e08.text", "Varargs08.fVarargs", "exact"), ("e08.number", "Varargs08.fInt", "exact")),
+    _case("E09", "E09", None,
+          ("e09", "Hook09Impl.before", "possible"), ("e09", "Hook09.before", "possible")),
 ]
 
 
