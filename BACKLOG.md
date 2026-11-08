@@ -3,7 +3,8 @@
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
 owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33 to BL-42; each Delivery line names its commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
+BL-33 to BL-42, BL-47 and BL-51 to BL-53; each Delivery line names its
+commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
 product owner's mandate, to be confirmed by them. Owner: SystemLens
@@ -97,13 +98,13 @@ defect in the join is visible in a test). A target is never invented
 | [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `open` |
 | [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `open` |
 | [BL-46](#bl-46) | Narrow a receiver by the creations a method returns or a ternary holds | P3 | `open` |
-| [BL-47](#bl-47) | Apply the ADR-43 entry rule only while the route stays on `this` | P1 | `open` |
+| [BL-47](#bl-47) | Apply the ADR-43 entry rule only while the route stays on `this` | P1 | `delivered` |
 | [BL-48](#bl-48) | Start flows from routes inherited from a base controller | P2 | `open` |
 | [BL-49](#bl-49) | Recognise more entry triggers | P2 | `open` |
 | [BL-50](#bl-50) | Decide whether an entry-only call tree is a flow | P3 | `open` |
-| [BL-51](#bl-51) | Apply ADR-71 visibility when rebuilding flows from persisted edges | P2 | `open` |
-| [BL-52](#bl-52) | Report hop-limit truncation in the index log | P3 | `open` |
-| [BL-53](#bl-53) | Compare engines by (entry, trigger, output) pair | P3 | `open` |
+| [BL-51](#bl-51) | Apply ADR-71 visibility when rebuilding flows from persisted edges | P2 | `delivered` |
+| [BL-52](#bl-52) | Report hop-limit truncation in the index log | P3 | `delivered` |
+| [BL-53](#bl-53) | Compare engines by (entry, trigger, output) pair | P3 | `delivered` |
 
 Priority reads: P1 is pure typing with the largest expected gain on
 service code, or a defect that drops a flow for both engines; P2 is a
@@ -620,7 +621,21 @@ decision the owner has not taken.
   calculate`; S25 still excludes the sibling; train-ticket and lab flows
   are measured before and after.
 - **Depends on:** an amendment of ADR-43.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the ADR-43 amendment of 2026-11-08 (commit `13b7e3c`)
+  is accepted under the mandate, to be confirmed. The traversal state
+  carries whether every hop runs on `this`; `JavaSymbols.receiver_sites`
+  reads each call's receiver, and a call without receiver to a target
+  outside the caller's hierarchy leaves `this` too. Each persisted edge
+  records an additive `other_receiver` flag (schema 40); the rebuild,
+  `entry_dispatch_allowed` and the call-chain diagnostics read it, and an
+  unknown receiver keeps the restriction. S24 passes for `index` and
+  `flows calculate` with `source`, and in a `slow` test with `codeql`;
+  S25 still excludes the sibling. Signature
+  `code-flow-v55-entry-rule-on-this`. Train-ticket (406 flows, 1712
+  edges) and the lab (23 flows, 104/105 edges) are unchanged with both
+  engines, flow for flow. The flag is set on 4014 of the 6127 persisted
+  train-ticket CodeQL edges and on 80 of the 105 lab edges. Commit `5c4928c`.
 - **Why P1:** a defect that drops a valid flow for both engines on a
   common template-method shape.
 
@@ -708,7 +723,14 @@ decision the owner has not taken.
   calculate` with `codeql`; the rebuild shares the fresh join's
   expansion helper.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `dispatch_expansion` in `_build_call_graph` holds the
+  caller-module preference, the ADR-71 `visible()` check and the
+  exact-target narrowing; the fresh join and the rebuild both call it.
+  The `slow` CodeQL rebuild test of the flow shapes passes without
+  `plugin-notices`, and a unit test in
+  `tests/test_codeql_inheritance.py` covers it without CodeQL. Indexed flows are
+  unchanged, so the signature is not bumped. Commit `55e03ae`.
 - **Why P2:** a latent fresh/rebuilt divergence, the class of defect
   BL-29 already fixed once.
 
@@ -722,7 +744,13 @@ decision the owner has not taken.
 - **Acceptance:** the index log reports how many entries hit the limit
   and names the setting; the diagnosis guide (BL-34) cites that line.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the join counts the entries whose route stopped at the
+  bound while calls remained, and the index log prints
+  `→ <engine> : N méthode(s) d'entrée arrêtée(s) à la limite
+  engine_max_hops=H.`, cited by `docs/DIAGNOSE-INTERNAL-FLOWS.md`. A
+  resumed join counts its own entries only. Train-ticket and the lab
+  report 0 at the default 12. Commit `49ea9fe`.
 - **Why P3:** observability only.
 
 <a id="bl-53"></a>
@@ -739,7 +767,17 @@ decision the owner has not taken.
   route differences listed separately; the reachability run is removed;
   `docs/spec-fonc/cli.md` updated.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `flows` now counts (entry, trigger, output) pairs, with
+  module and status; `routes` lists the pairs both engines connect
+  through different routes, and each run adds `flow_pairs`. The
+  comparison runs no reachability query. `docs/spec-fonc/cli.md`
+  describes the keys. Train-ticket: 406 flows and 406 pairs per engine,
+  406 common, 0 route differences, edges 1712/1712 with zero
+  differences. Lab: 23 flows and 23 pairs, 23 common, 0 route
+  differences, edges 104 common and 1 CodeQL-only
+  (`ProductPersistenceAdapter.save → ProductEntity.toDomain`). Commit
+  `ccca614`.
 - **Why P3:** tooling; it matters once the owner runs the comparison on
   their project.
 
