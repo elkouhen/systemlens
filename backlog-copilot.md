@@ -4,7 +4,7 @@ Status: written on 2026-11-08 and validated the same day by the product
 owner, who asked for it to be processed. The backlog is fully processed:
 BC-01 to BC-39 are `delivered`, and no item is blocked. Lot order: 1 to 6. A
 decision record an item depends on is written and accepted under the
-product owner's mandate, to be confirmed by them.
+product owner's mandate; the owner confirmed it on 2026-11-08.
 Each item first re-checks its finding against current `main`, since
 BL-42 to BL-53 landed after the review. Findings were checked
 against `main` between `262b404` and `2831eb1` (BL-38, BL-40, BL-41
@@ -604,7 +604,7 @@ code-flow and constructor-node tests, and
   `AFTER_COMMIT` and `AFTER_COMPLETION`.
 - **Status:** `delivered`.
 - **Delivery:** PDR-17 (`1a454af`), accepted under the product owner's
-  mandate and to be confirmed by them; fix `85b4e5d`. Reproduced on
+  mandate and confirmed by them; fix `85b4e5d`. Reproduced on
   `174be5b`. An unreadable phase, such as a constant, marks nothing; the
   listener stays a trigger and a hop (PDR-16). `extraction-rules.md`,
   `algorithms.md` and `data-model.md` name the phases. Test

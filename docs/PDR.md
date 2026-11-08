@@ -26,7 +26,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-14](#pdr-14-a-two-finger-scroll-pans-and-a-pinch-zooms) | A two-finger scroll pans and a pinch zooms | Yes, product owner |
 | [PDR-15](#pdr-15-a-flow-ends-on-an-effect-and-rabbit-and-jms-publications-are-effects) | A flow ends on an effect; Rabbit and JMS publications are effects | Yes, product owner |
 | [PDR-16](#pdr-16-rabbit-jms-events-and-startup-code-start-flows) | Rabbit, JMS, events and startup code start flows | Yes, product owner |
-| [PDR-17](#pdr-17-only-a-post-commit-listener-phase-marks-a-publication-after-commit) | Only a post-commit listener phase marks a publication `after_commit` | Yes, product owner; to be confirmed |
+| [PDR-17](#pdr-17-only-a-post-commit-listener-phase-marks-a-publication-after-commit) | Only a post-commit listener phase marks a publication `after_commit` | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -500,7 +500,8 @@ mostly to data writes.
 ## PDR-17: Only a post-commit listener phase marks a publication `after_commit`
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-process the Copilot backlog; to be confirmed by the product owner (BC-27).
+process the Copilot backlog, and confirmed by the product owner the same
+day (BC-27).
 
 **Problem:** a publication inside any `@TransactionalEventListener`
 method is persisted with the `after_commit` phase, which downgrades a
