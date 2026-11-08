@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path
 import re
-from typing import Sequence
+from typing import NamedTuple, Sequence
 
 from tree_sitter import Node
 
@@ -357,6 +357,28 @@ _JDK_FACTORIES: dict[tuple[str, str], tuple[str, str]] = {
     ("java.util.Objects", "requireNonNull"): ("", "argument"),
 }
 _ACCESSOR_CALLS = {(name, count) for _kind, name, count in _ELEMENT_ACCESSORS}
+
+
+class _Nested(NamedTuple):
+    """A JDK container written as a type argument, as ``List<Order>`` in
+    ``Map<String, List<Order>>`` (BL-41): its type, its container kind and
+    its own type arguments. One level deep: a deeper argument is flat."""
+
+    type: str
+    kind: str
+    arguments: tuple[str | None, ...]
+
+
+# A type argument of a container view: a type name, or a nested container.
+_Arg = str | _Nested
+# A JDK container view: its kind and its type arguments (BL-27).
+_View = tuple[str, tuple[_Arg | None, ...]]
+
+
+def _flat(argument: _Arg | None) -> str | None:
+    """The type a view argument gives where a type name is read: a nested
+    container gives its own type, without its arguments."""
+    return argument.type if isinstance(argument, _Nested) else argument
 # The type arguments of a source generic type, by type parameter name (BL-26).
 # ``None`` for a parameter whose argument the sources do not prove.
 _Env = dict[str, str | None]
@@ -1326,6 +1348,34 @@ class JavaSymbols:
             return None
         return self._declared_type(path, argument, owner, env)
 
+    def _view_argument(self, path: str, argument: Node, owner: str, env: _Env | None) -> _Arg | None:
+        """A written type argument of a JDK container view (BL-41): a JDK
+        container written there, with the arguments its count matches, is
+        a nested view, its own arguments substituted from ``env``; any
+        other argument is read as :meth:`_type_argument_value` reads it."""
+        if argument.type == "wildcard":
+            bound = argument.named_children[-1] if argument.named_children else None
+            text = parser.node_text(self.units[path].source, argument)
+            if bound is None or not re.match(r"\?\s*extends\b", text):
+                return None
+            argument = bound
+        if argument.type != "generic_type":
+            return self._type_argument_value(path, argument, owner, env)
+        name_node = argument.named_children[0]
+        container = self.resolve(
+            path, parser.node_text(self.units[path].source, name_node), owner, allow_ambiguous=True, at=name_node,
+        )
+        if container not in _GENERIC_CONTAINERS:
+            return None
+        kind, arity = _GENERIC_CONTAINERS[container]
+        written = parser.child_by_type(argument, "type_arguments")
+        inner = written.named_children if written is not None else []
+        if len(inner) != arity:
+            return None
+        return _Nested(container, kind, tuple(
+            self._type_argument_value(path, value, owner, env) for value in inner
+        ))
+
     def _parameterized(
         self, path: str, type_node: Node, owner: str, env: _Env | None,
     ) -> tuple[str, _Env] | None:
@@ -2266,7 +2316,7 @@ class JavaSymbols:
             # written type argument gives, read in the loop header.
             view = self._generic_view(info, declarator.element_of, declarator.element_of)
             if view is not None:
-                return view[1][0] if view[0] == "iterable" else None
+                return _flat(view[1][0]) if view[0] == "iterable" else None
             # ``for (var o : orders)`` over an array: its element type (BL-42).
             array = self.expression_type(info, declarator.element_of, declarator.element_of)
             return array[:-2] if array is not None and array.endswith("[]") else None
@@ -2299,7 +2349,7 @@ class JavaSymbols:
         if view is not None:
             kind, type_arguments = view
             slots = _LAMBDA_PARAMETERS.get((kind, name, len(call_arguments), index, count))
-            return type_arguments[slots[position]] if slots is not None else None
+            return _flat(type_arguments[slots[position]]) if slots is not None else None
         # A source method whose parameter is a source (BL-24) or JDK (BL-37)
         # functional interface: the parameter types of its abstract method.
         parameters = self._functional_parameters(info, call, receiver, name, call_arguments, index)
@@ -2379,7 +2429,7 @@ class JavaSymbols:
             }
             if len(slots) != 1:
                 return None
-            return tuple(view[1][slot] for slot in next(iter(slots)))
+            return tuple(_flat(view[1][slot]) for slot in next(iter(slots)))
         return self._functional_parameters(info, call, receiver, name, call_arguments, index)
 
     def _functional_parameters(
@@ -2566,7 +2616,7 @@ class JavaSymbols:
 
     def _generic_view(
         self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
-    ) -> tuple[str, tuple[str | None, ...]] | None:
+    ) -> _View | None:
         """The JDK container kind of an expression and its type arguments.
 
         Read from the written type of a variable, field or ``this.field``,
@@ -2597,6 +2647,16 @@ class JavaSymbols:
             ):
                 # ``stream.collect(Collectors.toList())`` (BL-36).
                 return "iterable", inner[1]
+            index = _ELEMENT_ACCESSORS.get((inner[0], name, len(arguments)))
+            if index is not None:
+                # ``nested.get(k)`` on ``Map<String, List<Order>>`` (BL-41).
+                element = inner[1][index]
+                return (element.kind, element.arguments) if isinstance(element, _Nested) else None
+            if inner[0] == "map" and name == "entrySet" and not arguments:
+                # ``Set<Map.Entry<K, V>> entrySet()`` (BL-41).
+                return "iterable", (_Nested("java.util.Map.Entry", "entry", tuple(
+                    _flat(argument) for argument in inner[1]
+                )),)
             rule = _GENERIC_CALLS.get((inner[0], name, len(arguments)))
             if rule is None:
                 return None
@@ -2617,6 +2677,16 @@ class JavaSymbols:
             return None
         path, type_node, owner, env = written
         if parser.node_text(self.units[path].source, type_node).strip() == "var":
+            loop = type_node.parent
+            if loop is not None and loop.type == "enhanced_for_statement":
+                # ``for (var e : m.entrySet())``: the nested element of the
+                # iterable, read in the loop header (BL-41).
+                iterable = loop.child_by_field_name("value")
+                if path != info.method.path or iterable is None:
+                    return None
+                view = self._generic_view(info, iterable, iterable, depth + 1)
+                element = view[1][0] if view is not None and view[0] == "iterable" else None
+                return (element.kind, element.arguments) if isinstance(element, _Nested) else None
             # ``var list = catalog.list()``: the view of the initializer,
             # read where it is written, under the typing cycle guard.
             value = self._var_value(path, type_node, name)
@@ -2641,7 +2711,7 @@ class JavaSymbols:
         if len(written_arguments) != arity:
             return None
         return kind, tuple(
-            self._type_argument_value(path, argument, owner, env) for argument in written_arguments
+            self._view_argument(path, argument, owner, env) for argument in written_arguments
         )
 
     def _jdk_static_owner(self, info: _Method, receiver: Node | None, invocation: Node) -> str | None:
@@ -2695,7 +2765,7 @@ class JavaSymbols:
 
     def _factory_view(
         self, info: _Method, invocation: Node, owner: str, name: str, arguments: list[Node], depth: int,
-    ) -> tuple[str, tuple[str | None, ...]] | None:
+    ) -> _View | None:
         """The view a static JDK factory returns (BL-36, ``_JDK_FACTORIES``).
 
         Arguments of different types give nothing: the pass computes no
@@ -2739,7 +2809,7 @@ class JavaSymbols:
             self._jdk_static_owner(info, receiver, argument) == "java.util.stream.Collectors"
         )
 
-    def _created_view(self, info: _Method, creation: Node, depth: int) -> tuple[str, tuple[str | None, ...]] | None:
+    def _created_view(self, info: _Method, creation: Node, depth: int) -> _View | None:
         """The view of ``new ArrayList<Order>(..)`` or of a diamond (BL-36).
 
         Written type arguments give the view. A diamond takes the view of
@@ -2766,7 +2836,7 @@ class JavaSymbols:
         written_arguments = written.named_children if written is not None else []
         if len(written_arguments) == arity:
             return kind, tuple(
-                self._type_argument_value(path, argument, info.owner, None) for argument in written_arguments
+                self._view_argument(path, argument, info.owner, None) for argument in written_arguments
             )
         arguments = parser.argument_nodes(creation)
         if written_arguments or len(arguments) != 1:
@@ -3000,7 +3070,7 @@ class JavaSymbols:
             ):
                 type_node = scope.child_by_field_name("type")
                 if type_node is not None and parser.node_text(source, type_node).strip() == "var":
-                    return _Declarator(element_of=scope.child_by_field_name("value"))
+                    return _Declarator(type_node, element_of=scope.child_by_field_name("value"))
                 return _Declarator(type_node)
         elif scope.type == "catch_clause":
             parameter = parser.child_by_type(scope, "catch_formal_parameter")
@@ -3110,7 +3180,7 @@ class JavaSymbols:
             view = self._generic_view(info, parent_receiver, receiver, depth + 1)
             index = _ELEMENT_ACCESSORS.get((view[0], name, len(arguments))) if view is not None else None
             if view is not None and index is not None:
-                return view[1][index]
+                return _flat(view[1][index])
         owner = self.receiver_type(info, parent_receiver, receiver, depth + 1)
         if (name, len(arguments)) in _ACCESSOR_CALLS and owner not in self.types:
             # A JDK accessor whose receiver has no container view: the chain
@@ -3253,7 +3323,7 @@ class JavaSymbols:
 
     def _returned_view(
         self, info: _Method, invocation: Node, depth: int,
-    ) -> tuple[str, tuple[str | None, ...]] | None:
+    ) -> _View | None:
         """The JDK container view of a call to a source method (BL-35).
 
         ``List<Order> list()`` gives ``("iterable", ("p.Order",))``: the
@@ -3266,7 +3336,7 @@ class JavaSymbols:
         if found is None:
             return None
         context, declarations, arguments = found
-        views: set[tuple[str, tuple[str | None, ...]]] = set()
+        views: set[_View] = set()
         for declaration in declarations:
             type_node = declaration.node.child_by_field_name("type")
             if type_node is None or type_node.type != "generic_type":
@@ -3286,7 +3356,7 @@ class JavaSymbols:
                 return None
             env = self._call_env(info, declaration, context, invocation, arguments, depth + 1)
             views.add((kind, tuple(
-                self._type_argument_value(path, argument, declaration.owner, env)
+                self._view_argument(path, argument, declaration.owner, env)
                 for argument in written_arguments
             )))
         return views.pop() if len(views) == 1 else None
@@ -3420,7 +3490,7 @@ class JavaSymbols:
         if container in _GENERIC_CONTAINERS:
             view = self._generic_view(info, argument, invocation)
             if view is not None and view[0] == _GENERIC_CONTAINERS[container][0] and len(view[1]) == count:
-                values = view[1]
+                values = tuple(_flat(value) for value in view[1])
         elif container is not None and container in self.types:
             passed = self._receiver_env(info, argument, invocation, depth + 1)
             locations = self._type_candidates(container, path)

@@ -609,6 +609,28 @@ written: `var l = catalog.list(); l.get(0)` and `var s =
 orders.stream(); s.findFirst().get()` are typed. The guard that ends a
 `var` typing cycle (T4) also ends a view cycle.
 
+Nested type arguments (BL-41) change the view's data structure. A view
+holds its container kind and one value per type argument. A value is a
+type name, or a nested view when the argument is itself a JDK
+container whose argument count matches, as `List<Order>` in
+`Map<String, List<Order>>`. The nested view's own arguments are type
+names: nesting is one level deep, and a deeper container gives nothing.
+
+An accessor whose argument is nested returns that nested view, so
+`byName.get(k).get(0)` is an `Order`. `entrySet()` on a `Map<K, V>` view
+gives a collection of `Map.Entry<K, V>`. A `var` loop variable takes the
+nested element of its iterable, so `for (var e : m.entrySet())` types
+`e.getValue()`.
+
+A type variable inside a nested argument is substituted as any other:
+with `Map<String, List<T>> groups()` on a `Repo<Circle>`,
+`repo.groups().get(k).get(0)` is a `Circle`. Where a type name is read,
+for a lambda parameter, a method's type variable or a `var` loop
+variable, a nested value gives its container type only.
+
+The source-generics model below keeps flat arguments: a type variable
+bound to a container, as `T` in `Box<List<Circle>>`, stays untyped.
+
 A type variable in a return or field type takes the argument the sources
 write for it (BL-26). The receiver's declared type gives it: a field,
 local, parameter, creation, cast or declared return type written
@@ -1173,6 +1195,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T14 | Element of a JDK container a source method returns or a `var` holds; agreeing inherited declarations | `covered` (BL-35) | |
 | T15 | Implicit enum methods `valueOf(String)` and `values()` | `covered` (BL-42) | |
 | T16 | Element from the BL-36 JDK signatures: `Map` accessors, stream results, static factories, creations, futures, functional results; a shadowed static import | `covered` (BL-36) | |
+| T17 | Element of a JDK container nested as a type argument, one level deep: written, returned with its type variable substituted, `entrySet()` and `var` loops | `covered` (BL-41) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1275,10 +1298,10 @@ shapes from the jars it fetches while it builds its database.
 | A33 | `Objects.requireNonNull(order).ship()` | `covered` | BL-36 |
 | A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
 | A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-43; BL-35 typed the `var` and the source return |
-| A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `missing` | BL-41 |
+| A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `covered` | BL-41 |
 | A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `missing` | BL-40 |
 | A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-43; BL-35 typed the `var` and the source return |
-| A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `missing` | BL-41 |
+| A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `covered` | BL-41 |
 | A44 | `var opt = Optional.of(order); opt.get().ship()` | `covered` | BL-36 (`Optional.of`); BL-35 typed the `var` |
 | A45 | `Stream.of(a, b).findFirst().get().ship()` | `covered` | BL-36 |
 | B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |

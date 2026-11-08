@@ -2290,6 +2290,57 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Use.requireNonNull": "exact", "Square.area": "exact"},
         note="BL-36: a declared method shadows the static import of Objects.requireNonNull"),
+    Shape("T17", """
+        import java.util.List;
+        import java.util.Map;
+        import java.util.Optional;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        class Repo<T> {
+          Map<String, List<T>> groups() { return null; } //@Repo.groups
+        }
+        class Use {
+          Map<String, List<Circle>> byName;
+          Map<String, Circle> index;
+          List<Optional<Circle>> maybes;
+          Repo<Circle> repo;
+          void run() { //@Use.run
+            byName.get("x").get(0).area();
+            maybes.get(0).get().area();
+            repo.groups().get("x").get(0).area();
+            for (var e : index.entrySet()) {
+              e.getValue().area();
+            }
+            for (var l : byName.values()) {
+              l.get(0).area();
+            }
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact", "Repo.groups": "exact"},
+        note="BL-41: a nested container argument, substituted through one level, and entrySet"),
+    Shape("T17-unproven", """
+        import java.util.List;
+        import java.util.Map;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        class Box<T> {
+          T get() { return null; } //@Box.get
+        }
+        class Use {
+          Map<String, List<List<Circle>>> deep;
+          Box<List<Circle>> box;
+          Map<String, List<? super Circle>> lower;
+          void run() { //@Use.run
+            deep.get("x").get(0).get(0).area();
+            box.get().get(0).area();
+            lower.get("x").get(0).area();
+          }
+        }
+        """, "Use.run", {"Box.get": "exact"}, absent=("Circle.area",),
+        note="BL-41: two levels of nesting, a source generic's type variable bound to a container, "
+             "and a lower-bounded wildcard stay untyped"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area
