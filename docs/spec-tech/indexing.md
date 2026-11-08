@@ -803,9 +803,16 @@ world of the `source` engine keeps the call: each overload's targets are
 `possible` edges, and the call-edge diagnostic names the line with the
 reason `overload unresolved` (ADR-87). A varargs candidate, a method
 reference and the open-world gap filler leave such a call without target.
-When no method of the call's arity
-exists, a varargs method whose fixed parameter count does not exceed it is
-the candidate, as in Java's third phase.
+
+A varargs method `m(A a, T... t)` competes in the first two phases only at
+its own arity, as `m(A, T[])`. The third phase, reached when neither finds
+an applicable overload, expands it to the call's arity: `T` for each
+trailing argument (BC-08). With `f(int)` and `f(Object...)`, `f("x")` binds
+`f(Object...)` and `f(1)` binds `f(int)`.
+
+A known argument decides each phase as above; an unknown one keeps every
+overload it cannot exclude, so a call that may reach a varargs method has
+no target. A `T...` contract is overridden only by a `T[]` parameter.
 When one module declares a type in `src/main` and in `src/test`,
 production code resolves to the `src/main` one. The file inventory already
 excludes test source sets, so the indexed graph never sees the other.
@@ -1331,7 +1338,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
 | S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer | `covered` (ADR-75, BL-39) | |
-| S9 | Varargs call with any arity from the fixed parameter count up | `covered` | |
+| S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
 | S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
 | H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | |
@@ -1526,6 +1533,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E05 | `printer.print()` in a private `printWith(Printer)` whose one call passes a `CsvPrinter` field | `covered` | BL-46 |
 | E06 | `o(Tint.RED)`, `r(new Point(1))` and `c(Tint.RED)` against `Object`, `Enum`, `Record`, `Comparable` and `Runnable` overloads | `covered` | BC-06 |
 | E07 | `child.a(1).get()` with `Base07.a(Integer)` returning `Store07` and `Child07.a(String)` returning `Cache07` | `covered` | BC-07 |
+| E08 | `f("x")` and `f(1)` with `f(int)` and `f(Object...)` | `covered` | BC-08 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

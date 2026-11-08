@@ -671,6 +671,43 @@ SHAPES: list[Shape] = [
         }
         """, "Use.call", {"Service.log.fixed": "exact"},
         note="a fixed-arity overload that applies wins over varargs"),
+    Shape("S9-varargs-last", """
+        class Service {
+          void f(int a) {} //@Service.f.int
+          void f(Object... a) {} //@Service.f.varargs
+          void g(String a, String b) {} //@Service.g.fixed
+          void g(Object... a) {} //@Service.g.varargs
+        }
+        class Use {
+          Service service;
+          void text() { //@Use.text
+            service.f("x");
+            service.g(1, 2);
+          }
+          void number() { //@Use.number
+            service.f(1);
+            service.g("a", "b");
+          }
+        }
+        """, "Use.text", {"Service.f.varargs": "exact", "Service.g.varargs": "exact"},
+        note="BC-08: a varargs overload applies only when no fixed arity does"),
+    Shape("S9-varargs-last-fixed", """
+        class Service {
+          void f(int a) {} //@Service.f.int
+          void f(Object... a) {} //@Service.f.varargs
+          void g(String a, String b) {} //@Service.g.fixed
+          void g(Object... a) {} //@Service.g.varargs
+        }
+        class Use {
+          Service service;
+          void number(Unknown u) { //@Use.number
+            service.f(1);
+            service.g("a", "b");
+            service.g(u, u);
+          }
+        }
+        """, "Use.number", {"Service.f.int": "exact", "Service.g.fixed": "exact"},
+        note="BC-08: a fixed arity that applies wins over varargs; an untyped argument selects nothing"),
     # 2.2 Inheritance and dispatch
     Shape("H1", """
         class Base {

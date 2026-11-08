@@ -495,6 +495,15 @@ def _written_type(source: bytes, parameter: Node) -> str:
     return text.rsplit(".", 1)[-1]
 
 
+def _spread_type(parameter: Node) -> Node | None:
+    """The element type node of a ``T...`` parameter."""
+    for child in parameter.named_children:
+        if child.type in {"modifiers", "annotation", "marker_annotation", "variable_declarator"}:
+            continue
+        return child
+    return None
+
+
 def _refers_to_anonymous_instance(source: bytes, receiver: Node | None) -> bool:
     """Whether a receiver inside an anonymous class body denotes that instance."""
     if receiver is None or receiver.type in {"this", "super"}:
@@ -626,6 +635,10 @@ class _Method:
     # signature a body overrides with (JLS 4.6, 8.4.2). A contract keeps the
     # unresolved ``parameters``, which match any argument of a subtype.
     erased: tuple[str | None, ...] = ()
+    # The resolved element type ``T`` of a ``T...`` parameter, if known: the
+    # last parameter is ``T[]`` in Java's first two phases and ``T`` for
+    # each trailing argument in the third (BC-08).
+    spread: str | None = None
 
 
 @dataclass(frozen=True)
@@ -877,6 +890,13 @@ class JavaSymbols:
                     parameter_types.append(resolved_type)
                     erased.append(erased_type)
                     written.append(_written_type(source, parameter))
+                spread: str | None = None
+                last = parameters.named_children[-1] if parameters is not None and parameters.named_children else None
+                if last is not None and last.type == "spread_parameter":
+                    spread_type = _spread_type(last)
+                    spread = self.resolve(
+                        path, parser.node_text(source, spread_type), owner, at=spread_type,
+                    ) if spread_type is not None else None
                 modifiers = parser.modifiers_node(node)
                 info = _Method(
                     method, method.module, owner, node, tuple(parameter_types),
@@ -889,6 +909,7 @@ class JavaSymbols:
                         parameters.named_children[-1].type == "spread_parameter"
                     )),
                     erased=tuple(erased),
+                    spread=spread,
                 )
                 self.methods[method.id] = info
                 self.by_owner[(owner, name, len(parameter_types), method.module)].append(info)
@@ -1627,7 +1648,12 @@ class JavaSymbols:
             ]
         # Generic contracts can expose a type variable in the source AST
         # while a concrete implementation has a resolved parameter type.
-        # Gather compatible arities and let the caller reject ambiguity.
+        # Gather compatible arities and let the caller reject ambiguity. A
+        # ``T...`` parameter is overridden only by ``T[]`` (BC-08).
+        expected_types = (
+            (*contract.parameters[:-1], contract.spread + "[]")
+            if contract.varargs and contract.spread is not None else contract.parameters
+        )
         candidates = {
             candidate.method.id: candidate
             for parameters in self._dispatch_signatures.get(
@@ -1636,7 +1662,7 @@ class JavaSymbols:
             for candidate in self.dispatch[(contract.owner, contract.module, name, parameters)]
             if all(
                 expected is None or actual == expected
-                for expected, actual in zip(contract.parameters, candidate.parameters)
+                for expected, actual in zip(expected_types, candidate.parameters)
             )
         }
         # A concrete body with an unresolved parameter type is never indexed
@@ -1712,24 +1738,43 @@ class JavaSymbols:
     def _select_overload(
         self, contracts: list[_Method], argument_types: tuple[str | None, ...] | None,
     ) -> list[_Method]:
-        """Keep the same-arity overload Java selects for the argument types.
+        """Keep the overload Java selects for the argument types.
 
         Java tries three phases (JLS 15.12.2): identity, widening primitive
-        and subtyping first; then boxing and unboxing too; varargs last, a
-        shape this arity-keyed lookup leaves out. The first phase with an
-        applicable overload chooses the most specific one. A phase decides
-        only when every argument and parameter type is known, so unknown
-        arguments never narrow. Otherwise an overload survives when no known
-        argument is provably incompatible with its parameter.
+        and subtyping first; then boxing and unboxing too; varargs last. The
+        first two read a ``T...`` parameter as ``T[]`` and only at its own
+        arity; the third expands it to the call's arity (BC-08). The first
+        phase with an applicable overload chooses the most specific one. A
+        phase decides only when every argument and parameter type is known,
+        so unknown arguments never narrow. Otherwise an overload survives
+        when no known argument is provably incompatible with it.
         """
         if len({candidate.parameters for candidate in contracts}) <= 1 or argument_types is None:
             return contracts
-        signatures = {
-            candidate.parameters for candidate in contracts
-            if len(candidate.parameters) == len(argument_types)
-        }
-        known = None not in argument_types and all(None not in signature for signature in signatures)
-        for boxing in (False, True) if known else ():
+        arity = len(argument_types)
+
+        def fixed(candidate: _Method) -> tuple[str | None, ...] | None:
+            """The signature of the first two phases, if it takes part."""
+            if len(candidate.parameters) != arity:
+                return None
+            if not candidate.varargs:
+                return candidate.parameters
+            return (*candidate.parameters[:-1], None if candidate.spread is None else candidate.spread + "[]")
+
+        def variable(candidate: _Method) -> tuple[str | None, ...] | None:
+            """The signature of the third phase, expanded to the arity."""
+            if not candidate.varargs or len(candidate.parameters) - 1 > arity:
+                return None
+            fixed_count = len(candidate.parameters) - 1
+            return (*candidate.parameters[:-1], *(candidate.spread,) * (arity - fixed_count))
+
+        phases = [
+            (boxing, {candidate.method.id: fixed(candidate) for candidate in contracts}) for boxing in (False, True)
+        ] + [(True, {candidate.method.id: variable(candidate) for candidate in contracts})]
+        for boxing, by_candidate in phases:
+            signatures = {signature for signature in by_candidate.values() if signature is not None}
+            if None in argument_types or any(None in signature for signature in signatures):
+                break
             verdicts = {
                 signature: [
                     self._applicable(parameter, argument, boxing=boxing)
@@ -1755,13 +1800,15 @@ class JavaSymbols:
             ]
             if len(specific) != 1:
                 return contracts
-            return [candidate for candidate in contracts if candidate.parameters == specific[0]]
+            return [candidate for candidate in contracts if by_candidate[candidate.method.id] == specific[0]]
         selected = [
             candidate for candidate in contracts
-            if len(candidate.parameters) == len(argument_types)
-            and not any(
-                self._applicable(parameter, argument, boxing=True) is False
-                for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+            if any(
+                signature is not None and not any(
+                    self._applicable(parameter, argument, boxing=True) is False
+                    for parameter, argument in zip(signature, argument_types, strict=True)
+                )
+                for signature in (fixed(candidate), variable(candidate))
             )
         ]
         if len({candidate.parameters for candidate in selected}) == 1:
@@ -1855,7 +1902,10 @@ class JavaSymbols:
             if len(receiver_locations) == 1 else module
         )
         receiver_bases = self.ancestors(receiver_type, receiver_module)
-        contracts = self._receiver_contracts(receiver_type, name, arity, receiver_locations, receiver_bases)
+        contracts = self._receiver_contracts(
+            receiver_type, name, arity, receiver_locations, receiver_bases,
+            variable_arity=signature is None and argument_types is not None,
+        )
         if signature is not None:
             contracts = [candidate for candidate in contracts if candidate.parameters == signature]
         else:
@@ -1888,10 +1938,14 @@ class JavaSymbols:
 
     def _receiver_contracts(
         self, receiver_type: str, name: str, arity: int, receiver_locations: list[tuple[str, Node]],
-        receiver_bases: set[tuple[str, str]],
+        receiver_bases: set[tuple[str, str]], *, variable_arity: bool = False,
     ) -> list[_Method]:
         """The declarations of ``name``/``arity`` a receiver type sees, its
-        own and its ancestors', or the varargs ones when none has the arity."""
+        own and its ancestors', or the varargs ones when none has the arity.
+
+        ``variable_arity`` adds the varargs ones beside those of the arity,
+        for :meth:`_select_overload` to try in Java's third phase (BC-08).
+        """
         contracts = [candidate for owner in receiver_bases
                      for candidate in self.by_owner.get((owner[0], name, arity, owner[1]), [])]
         if len(receiver_locations) > 1:
@@ -1904,13 +1958,14 @@ class JavaSymbols:
                 key=self._by_owner_order.__getitem__,
             )
             contracts = [candidate for key in keys for candidate in self.by_owner[key]]
-        if not contracts:
+        if not contracts or variable_arity:
             # Java's third phase: a varargs method takes any arity from its
             # fixed parameter count up, when no fixed arity applies (S14).
-            contracts = [
+            seen = {candidate.method.id for candidate in contracts}
+            contracts = contracts + [
                 candidate for owner, owner_module in receiver_bases
                 for candidate in self.varargs_by_owner.get((owner, name, owner_module), [])
-                if len(candidate.parameters) - 1 <= arity
+                if len(candidate.parameters) - 1 <= arity and candidate.method.id not in seen
             ]
         return contracts
 

@@ -907,6 +907,17 @@ class Returns07 {
     child.a(1).get(); //@e07
   }
 }
+
+// E08: varargs only when no fixed arity applies (BC-08).
+class Varargs08 {
+  void f(int a) {} //@Varargs08.fInt
+  void f(Object... a) {} //@Varargs08.fVarargs
+
+  void e08() { //@E08
+    f("x"); //@e08.text
+    f(1); //@e08.number
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1164,6 +1175,8 @@ CASES: list[Case] = [
           ("e06.comparable", "Implicit.cComparable", "exact")),
     _case("E07", "E07", None,
           ("e07", "Base07.a", "exact"), ("e07", "Store07.get", "exact")),
+    _case("E08", "E08", None,
+          ("e08.text", "Varargs08.fVarargs", "exact"), ("e08.number", "Varargs08.fInt", "exact")),
 ]
 
 
