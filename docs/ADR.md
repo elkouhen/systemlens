@@ -2556,3 +2556,57 @@ flows stay identical.
 Rule 2 does not compute a least upper bound. A ternary receiver whose
 branches have different types, with no declared variable to name the
 call's declaration, stays untyped as before.
+
+## ADR-90: Hold a documented table of Spring signatures in the source engine
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+implement the internal-flow backlog; to be confirmed by the product
+owner. Backlog items BL-43 and BL-44.
+
+**Context:** The `source` engine reads no jar. A method inherited from
+an external generic supertype has no source declaration, so its return
+type is unknown. With `OrderRepo extends JpaRepository<Order, Long>`,
+`repo.findById(id).orElseThrow().getName()` loses its edge, and so do
+`repo.findAll().get(0)`, `repo.save(o).ship()` and `r.getBody().ship()`
+on a `ResponseEntity<Order>` (parity cases A01 to A13, A38, A42).
+
+`ctx.getBean(OrderService.class).place()` loses its edge too: the pass
+types no class literal (case A32). CodeQL types all of these from jars
+it downloads from Maven Central while it builds its database (BL-34).
+
+**Decision:**
+1. The `source` engine may hold a hand-kept table of external library
+   signatures. Each entry names the interface, the member, its arity,
+   and its return type in terms of the interface's type parameters.
+   `docs/spec-tech/indexing.md` documents the table with the library
+   versions it holds for.
+2. The table keeps only entries whose return type is stable across
+   Spring Data 2.x and 3.x and Spring Web 5.x and 6.x. `findOne`, whose
+   signature changed after Spring Data 1.x, is excluded.
+3. `CrudRepository.findAll()` returns `Iterable<T>`;
+   `ListCrudRepository.findAll()` and `JpaRepository.findAll()` return
+   `List<T>`. When a repository extends both kinds, the most specific
+   declared return wins. When no return is more specific than every
+   other, the call gets no view.
+4. `<S extends T> S save(S entity)` returns the argument's type when the
+   pass types the argument, and `T` otherwise.
+5. `Page<T>.getContent()` and `Slice<T>.getContent()` return `List<T>`.
+   `ResponseEntity<T>.getBody()` and `HttpEntity<T>.getBody()` return
+   `T`. `ResponseEntity.ok(T body)` returns `ResponseEntity<T>`.
+6. A class literal `X.class` is typed `Class<X>`.
+   `BeanFactory.getBean(Class<T>)` and `ApplicationContext.getBean
+   (Class<T>)` return `T`.
+7. The table never invents a target: a member absent from it keeps
+   today's behavior (AGENTS.md invariant 4). The type arguments come
+   from a source `extends` or `implements` clause, or from a written
+   variable type, through the BL-26 substitution. A raw supertype gives
+   no view.
+
+**Consequences:** The table gives the `source` engine, offline, edges
+that CodeQL gets only by downloading jars. A Spring version that
+changes one of these return types requires a table update.
+
+ModelMapper and similar mappers are not in the table, so
+`mapper.map(src, Order.class).ship()` stays untyped. Parity case A34
+records that difference as a kept deviation of this ADR, not as an open
+gap.
