@@ -9,6 +9,25 @@ from dataclasses import dataclass, replace
 DATA_STEP_KINDS = frozenset({"data_read", "data_write", "data_access"})
 
 
+# An inherited route's snippet names the method that declares it, as
+# ``systemlens-inherited-method:<path>:<line>`` (ADR-88).
+INHERITED_METHOD_MARKER = "systemlens-inherited-method:"
+
+
+def inherited_method_anchor(snippet: str) -> tuple[str, int] | None:
+    """The ``(path, start line)`` of the method an inherited route runs.
+
+    Only a route the inheritor does not override carries the marker; the
+    inherited method owns it and the inheritor is the entry class.
+    """
+    index = snippet.find(INHERITED_METHOD_MARKER)
+    if index < 0:
+        return None
+    value = snippet[index + len(INHERITED_METHOD_MARKER):].split(maxsplit=1)
+    path, _colon, line = value[0].rpartition(":") if value else ("", "", "")
+    return (path, int(line)) if path and line.isdigit() else None
+
+
 def compute_code_flow_id(
     module: str,
     path: str,

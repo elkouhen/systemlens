@@ -19,6 +19,7 @@ from systemlens.discovery.java import parser as java_parser
 from systemlens.conventions.strategy1.indexing import is_openapi_declaration_path
 from systemlens.discovery.build import maven as maven_module
 from systemlens.domain.graph import service_hint_from_host, url_service_hint
+from systemlens.domain.code_flows import INHERITED_METHOD_MARKER
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
 from systemlens.scanner._core import (
@@ -645,6 +646,12 @@ def _inherited_mapping_endpoints(
             )
             if feign_target is not None:
                 snippet += f"\n// systemlens-api-domain:{feign_target}"
+            if feign is None and override is None:
+                # The inherited method owns the route it serves (ADR-88).
+                snippet += (
+                    f"\n// {INHERITED_METHOD_MARKER}{super_key[0]}:"
+                    f"{method.start_point.row + 1}"
+                )
             start_line = anchor.start_point.row + 1
             end_line = anchor.end_point.row + 1 if override is not None else start_line
             for annotation in java_parser.annotations_of(method):

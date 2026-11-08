@@ -75,8 +75,14 @@ CASES = [
     # longer holds and SecondStep's override is reached (ADR-43, BL-47).
     _case("S24-sibling-template", f"{_ORDERS}FirstStep.entry", None,
           _flow("low", "BaseStep.execute", "SecondStep.doStep", *_TO_PUBLISHER)),
-    _case("inherited-crud-route", "POST /products/crud", "BL-48",
+    # ADR-88: the inherited method owns the route and the inheritor is the
+    # entry class: ProductController's route never reaches the hook that
+    # only its sibling UserController overrides.
+    _case("inherited-crud-route", "POST /products/crud", None,
           _flow("medium", "PaymentClient.charge", "POST /payments")),
+    _case("inherited-crud-route-sibling", "POST /users/crud", None,
+          _flow("medium", "PaymentClient.charge", "POST /payments"),
+          _flow("low", "UserController.afterCreate", *_TO_PUBLISHER)),
     _case("rabbit-listener", f"{_ORDERS}MessagingEntries.onRabbit", "BL-49",
           _flow("medium", *_TO_PUBLISHER)),
     _case("jms-listener", f"{_ORDERS}MessagingEntries.onJms", "BL-49",

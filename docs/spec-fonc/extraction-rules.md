@@ -195,7 +195,10 @@ its `url` or `path` and the API interface's type-level mapping. The
 inheritor's own mapping for the same method wins. The declaring type keeps
 its mappings only when no inheritor is indexed, so a route is never served
 twice. A route the inheritor does not override sits on its type
-declaration, so no code flow starts from it.
+declaration, and the inherited method owns it: its flows start there and
+belong to the inheritor's module. Dispatch from the inherited body keeps
+to the inheritor while the route stays on `this`, so a sibling
+inheritor's override never enters the flow (ADR-88).
 
 Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit

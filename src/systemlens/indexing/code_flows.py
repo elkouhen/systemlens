@@ -13,6 +13,7 @@ from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import (
     DATA_STEP_KINDS,
     entry_dispatch_allowed,
+    inherited_method_anchor,
     CodeFlow,
     CodeFlowStep,
     CallGraphEdge,
@@ -41,7 +42,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v55-entry-rule-on-this"
+CODE_FLOW_SIGNATURE = "code-flow-v56-inherited-routes-and-triggers"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -1633,11 +1634,28 @@ def materialize_call_graph_flows(
     explored_entries = resume_from_entry
     last_reported_explored = 0
     last_exploration_report_at = time.monotonic()
-    for entry in input_methods[resume_from_entry:]:
-        for trigger_id in entry.input_endpoint_ids:
+    def trigger_entry(
+        entry: IntegrationMethod, trigger: MessageEndpoint,
+    ) -> tuple[IntegrationMethod, str]:
+        """The entry method as a trigger's flows see it, and its entry class.
+
+        An inherited route runs the inherited method on the inheritor: the
+        flow belongs to the inheritor's module and dispatch keeps to the
+        inheritor (ADR-88). Any other trigger runs on the method's owner.
+        """
+        if (
+            trigger.qualified_name
+            and inherited_method_anchor(trigger.snippet) == (entry.path, entry.start_line)
+        ):
+            return replace(entry, module=trigger.module or entry.module), trigger.qualified_name
+        return entry, entry.qualified_method.rsplit(".", 1)[0]
+
+    for base_entry in input_methods[resume_from_entry:]:
+        for trigger_id in base_entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
+            entry, _entry_class = trigger_entry(base_entry, trigger)
             for output_id in entry.output_endpoint_ids:
                 output = endpoint_by_id.get(output_id)
                 if output is None:
@@ -1673,6 +1691,7 @@ def materialize_call_graph_flows(
         target: IntegrationMethod,
         call: MethodCall,
         on_this: bool = True,
+        entry_class: str | None = None,
     ) -> bool:
         """Keep dispatch from an inherited body on the entry's own subtype.
 
@@ -1684,13 +1703,15 @@ def materialize_call_graph_flows(
         That receiver is known only while every hop since the entry, this
         call included, runs on ``this`` (``on_this``). Once the route calls
         another object, dispatch is unrestricted (ADR-43 amendment, BL-47).
+        ``entry_class`` names the runtime subtype when it is not the entry
+        method's owner: the inheritor of an inherited route (ADR-88).
         """
         if not on_this:
             return True
+        entry_owner = entry_class or entry.qualified_method.rsplit(".", 1)[0]
         if dispatch_symbols is not None:
             current_owner = current.qualified_method.rsplit(".", 1)[0]
             target_owner = target.qualified_method.rsplit(".", 1)[0]
-            entry_owner = entry.qualified_method.rsplit(".", 1)[0]
             # Ancestor keys carry the module of the declaring type, which can
             # be a helper module: compare owners by qualified name so the
             # rule also holds when the template body lives in another module.
@@ -1714,7 +1735,8 @@ def materialize_call_graph_flows(
         # Without source symbols (a rebuild from persisted edges), keep a
         # fanned-out inherited call site on the entry's own override.
         return entry_dispatch_allowed(
-            entry.qualified_method, current.qualified_method, target.qualified_method,
+            f"{entry_owner}.{entry.qualified_method.rsplit('.', 1)[-1]}",
+            current.qualified_method, target.qualified_method,
             (
                 callee.qualified_method
                 for callee, sibling, _inferred in adjacency.get(current.id, [])
@@ -1723,12 +1745,13 @@ def materialize_call_graph_flows(
             on_this=on_this,
         )
 
-    for entry in input_methods[resume_from_entry:]:
-        component = component_by_method.get(entry.id, frozenset({entry.id}))
-        for trigger_id in entry.input_endpoint_ids:
+    for base_entry in input_methods[resume_from_entry:]:
+        component = component_by_method.get(base_entry.id, frozenset({base_entry.id}))
+        for trigger_id in base_entry.input_endpoint_ids:
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
+            entry, entry_class = trigger_entry(base_entry, trigger)
             # A state carries whether every hop so far runs on ``this``: the
             # entry-subtype restriction holds only then (BL-47).
             search = deque[tuple[
@@ -1808,6 +1831,7 @@ def materialize_call_graph_flows(
                     and dispatch_matches_entry(
                         entry, current, target, call,
                         route_on_this and call_graph.on_this(current.id, call, target.id),
+                        entry_class,
                     )
                 ), key=lambda item: (
                     item[1].caller_path, item[1].call_line, item[0].id,

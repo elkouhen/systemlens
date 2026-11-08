@@ -3,7 +3,7 @@
 import hashlib
 import json
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from collections.abc import Callable, Sequence
 from pathlib import Path
 
@@ -11,7 +11,7 @@ import yaml
 from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
-from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.code_flows import IntegrationMethod, inherited_method_anchor
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
@@ -631,6 +631,30 @@ def materialize_integration_methods(
         for method in methods
         for endpoint_id in (*method.input_endpoint_ids, *method.output_endpoint_ids)
     }
+    # ADR-88: a route inherited and not overridden sits on the inheritor's
+    # declaration; the inherited method owns it. Only a unique method
+    # declared at the marked line is an owner.
+    methods_by_start: dict[tuple[str, int], list[int]] = defaultdict(list)
+    for index, method in enumerate(methods):
+        if not is_initializer(method.qualified_method):
+            methods_by_start[(method.path, method.start_line)].append(index)
+    for endpoint in endpoints:
+        if (
+            endpoint.id in endpoint_ids_with_method
+            or endpoint.source != "code"
+            or (endpoint.system, endpoint.role) != ("rest", "serve")
+        ):
+            continue
+        declared_at = inherited_method_anchor(endpoint.snippet)
+        owners = methods_by_start.get(declared_at, []) if declared_at is not None else []
+        if len(owners) != 1:
+            continue
+        inherited = methods[owners[0]]
+        methods[owners[0]] = replace(
+            inherited,
+            input_endpoint_ids=tuple(sorted((*inherited.input_endpoint_ids, endpoint.id))),
+        )
+        endpoint_ids_with_method.add(endpoint.id)
     for endpoint in endpoints:
         if (
             endpoint.id in endpoint_ids_with_method

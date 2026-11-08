@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v28-inherited-mappings-gateway-filters"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v29-inherited-methods-rabbit-jms"
 
 
 def current_endpoint_inventory_signature() -> str:
