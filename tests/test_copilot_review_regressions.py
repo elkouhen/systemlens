@@ -320,3 +320,53 @@ def test_profile_conflicting_properties_stay_dynamic(tmp_path: Path) -> None:
             ("same-topic", False),
             ("base-topic", False),
         }, repo.name
+
+
+def test_a_value_field_resolves_only_in_its_declaring_class(tmp_path: Path) -> None:
+    """BC-32: the repository-wide ``@Value`` table borrowed names.
+
+    A plain ``topic`` field took another class's ``@Value`` topic, and a
+    test's ``@Value`` beat a same-file constant. A field the class declares
+    resolves from its file only; test sources are not in the table.
+    """
+    repo = _service(tmp_path, {
+        "src/main/java/demo/A.java": KAFKA_IMPORTS + (
+            'public class A { @Value("${kafka.orders}") String topic; }\n'
+        ),
+        "src/main/java/demo/B.java": KAFKA_IMPORTS + (
+            "public class B {\n"
+            "  private final String topic;\n"
+            "  private KafkaTemplate<String, String> kafkaTemplate;\n"
+            "  B(String t) { this.topic = t; }\n"
+            '  void send() { kafkaTemplate.send(topic, "x"); }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/C.java": KAFKA_IMPORTS + (
+            "public class C {\n"
+            '  private static final String PAYTOPIC = "constant-topic";\n'
+            "  private KafkaTemplate<String, String> kafkaTemplate;\n"
+            '  void send() { kafkaTemplate.send(PAYTOPIC, "x"); }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/D.java": KAFKA_IMPORTS + (
+            "public class D {\n"
+            "  private KafkaTemplate<String, String> kafkaTemplate;\n"
+            '  void send() { kafkaTemplate.send(topic, "x"); }\n'
+            "}\n"
+        ),
+        "src/test/java/demo/T.java": KAFKA_IMPORTS + (
+            'public class T { @Value("${kafka.pay}") String PAYTOPIC; }\n'
+        ),
+        "src/main/resources/application.yml": (
+            "kafka:\n  orders: orders-topic\n  pay: payments-topic\n"
+        ),
+    })
+
+    produced = {
+        (topic, dynamic) for role, _, topic, dynamic in _ports(repo) if role == "produce"
+    }
+
+    # B declares ``topic``; D does not, so it may use A's declaration.
+    assert produced == {
+        ("<dynamic>", True), ("constant-topic", False), ("orders-topic", False),
+    }

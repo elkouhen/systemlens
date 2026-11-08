@@ -113,15 +113,16 @@ def _kafka_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path
             if resolved_local is not None:
                 return _topic_from_literal(resolved_local, repo_root, rel_path)
             return "<dynamic>", True
+        if identifier.isupper():
+            # A same-file constant comes first (BC-32).
+            resolved_local = local_string(source, value_node)
+            if resolved_local is not None:
+                return _topic_from_literal(resolved_local, repo_root, rel_path)
         resolved = _resolve_value_annotated_variable(
             repo_root, rel_path, identifier
         )
         if resolved is not None:
             return (resolved, True) if "${" in resolved else (resolved, False)
-        if identifier.isupper():
-            resolved_local = local_string(source, value_node)
-            if resolved_local is not None:
-                return _topic_from_literal(resolved_local, repo_root, rel_path)
         return "<dynamic>", True
     # A method call, lambda or any other expression computes its topic at
     # runtime: a literal somewhere inside it is not the topic.

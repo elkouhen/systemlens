@@ -36,6 +36,7 @@ from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
     _load_spring_property_documents,
+    _declared_field_names,
     _load_value_annotated_fields,
     _load_unique_value_annotated_fields,
     _local_spring_application_names,
@@ -115,6 +116,7 @@ def clear_analysis_caches() -> None:
     _load_flat_spring_properties.cache_clear()
     _load_spring_property_documents.cache_clear()
     _load_value_annotated_fields.cache_clear()
+    _declared_field_names.cache_clear()
     _load_unique_value_annotated_fields.cache_clear()
     _openapi_generator_contract_for_source.cache_clear()
     _strategy1_openapi_operations.cache_clear()

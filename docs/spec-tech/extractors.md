@@ -41,7 +41,8 @@ explicit contract relation, not route-based service discovery. The match is acce
 remains after HTTP method and route checks; otherwise the call remains
 unresolved. A `@Value` field used by a REST client may be resolved across Java
 files when its field name maps to one property key across the repository.
-Conflicting declarations remain dynamic.
+Conflicting declarations remain dynamic. The table skips `src/test`, and a
+name the referencing file declares as a field never reaches it (BC-32).
 
 Strategy1 configured-client extraction indexes `HubRestApi` enum pairs such as
 `DOMAIN_CLIENT("domain-client")`. It accepts the corresponding static constant

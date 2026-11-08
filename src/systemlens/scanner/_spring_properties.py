@@ -427,6 +427,31 @@ def _load_value_annotated_fields(path_str: str) -> dict[str, str]:
     return fields
 
 
+@lru_cache(maxsize=512)
+def _declared_field_names(path_str: str) -> frozenset[str]:
+    """Names of every field a Java source file declares, annotated or not."""
+    try:
+        source = Path(path_str).read_bytes()
+    except OSError:
+        return frozenset()
+    root = java_parser.java_parser("value_fields").parse(source).root_node
+    names: set[str] = set()
+    for node in java_parser.walk(root):
+        if node.type not in {"field_declaration", "constant_declaration"}:
+            continue
+        for declarator in node.children:
+            if declarator.type != "variable_declarator":
+                continue
+            name_node = declarator.child_by_field_name("name")
+            if name_node is not None:
+                names.add(java_parser.node_text(source, name_node))
+    return frozenset(names)
+
+
+def _is_test_source(parts: tuple[str, ...]) -> bool:
+    return any(parts[index:index + 2] == ("src", "test") for index in range(len(parts) - 1))
+
+
 @lru_cache(maxsize=64)
 def _load_unique_value_annotated_fields(repo_root_str: str) -> dict[str, str | None]:
     """Index globally unique ``@Value`` field names for cross-file lookup.
@@ -436,6 +461,8 @@ def _load_unique_value_annotated_fields(repo_root_str: str) -> dict[str, str | N
     one bean and consumed in another.  A name is usable only when every source
     declaration found for it resolves to the same property key.  Conflicting
     declarations remain unresolved rather than selecting one by filename.
+    Test sources are left out: a test's ``@Value`` never configures the
+    application (BC-32).
     """
     repo_root = Path(repo_root_str)
     candidates: dict[str, set[str]] = {}
@@ -444,7 +471,7 @@ def _load_unique_value_annotated_fields(repo_root_str: str) -> dict[str, str | N
             relative = path.relative_to(repo_root)
         except ValueError:
             continue
-        if {"target", "build"}.intersection(relative.parts):
+        if {"target", "build"}.intersection(relative.parts) or _is_test_source(relative.parts):
             continue
         for name, property_key in _load_value_annotated_fields(str(path)).items():
             candidates.setdefault(name, set()).add(property_key)
@@ -457,9 +484,17 @@ def _load_unique_value_annotated_fields(repo_root_str: str) -> dict[str, str | N
 def _resolve_value_annotated_variable(
     repo_root: Path, source_path: str, var_name: str
 ) -> str | None:
-    fields = _load_value_annotated_fields(str(repo_root / source_path))
+    """Resolve ``var_name`` as an ``@Value`` field of ``source_path``.
+
+    A field the file declares is resolved from that file only: a plain
+    field, or a constant, never borrows another class's ``@Value`` of the
+    same name (BC-32). Only a name the file does not declare, such as a
+    field of a configuration bean, may use the repository-wide table.
+    """
+    path_str = str(repo_root / source_path)
+    fields = _load_value_annotated_fields(path_str)
     property_key = fields.get(var_name)
-    if property_key is None:
+    if property_key is None and var_name not in _declared_field_names(path_str):
         property_key = _load_unique_value_annotated_fields(str(repo_root.resolve())).get(var_name)
     if property_key is None:
         return None

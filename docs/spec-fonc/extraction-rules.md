@@ -23,12 +23,16 @@ names. Route similarity alone never identifies a service.
 
 A `@Value` field declared in another Java file is usable only when its name has
 one unambiguous property key across the indexed repository; conflicting
-declarations stay unresolved. A name declared by the enclosing method, lambda
-or constructor as a parameter, local, loop variable, resource or catch
-parameter is never resolved by name against a field or another file: it is
-dynamic unless the lexical resolver proves its value. A property value that
-still contains a `${...}` placeholder after bounded expansion, or a
-placeholder embedded in a longer literal that cannot be resolved, is dynamic.
+declarations stay unresolved. It is never used when the file of the
+reference declares a field of that name: that field, or a same-file
+constant, decides alone. Test sources declare no such field.
+
+A name declared by the enclosing method, lambda or constructor as a
+parameter, local, loop variable, resource or catch parameter is never
+resolved by name against a field or another file: it is dynamic unless the
+lexical resolver proves its value. A property value that still contains a
+`${...}` placeholder after bounded expansion, or a placeholder embedded in
+a longer literal that cannot be resolved, is dynamic.
 
 A key declared with different values by several profiles, and by no base
 document, is dynamic too, even when its placeholder has a default: the
