@@ -218,10 +218,14 @@ below when the persisted flow includes the required evidence. Source indexing
 supplies action, canonical resource identity, raw key expressions for supported
 `*ById` calls, and a trigger-derived branch. It derives key identity for exact
 Java literals. CodeQL-derived flows also trace unmodified scalar parameters
-through resolved calls and final scalar local aliases. The indexer does not
-resolve mutable aliases, fields, or serialized payload values. It also does not
-infer transaction scope, modified fields, value dependencies, isolation, or
-scheduler concurrency.
+through resolved calls and final scalar local aliases. An alias counts only
+when it is declared at or before the operation's line. A caller matches a call
+row by its source name, so an engine's `Outer$Inner.m` matches
+`Outer.Inner.m`.
+
+The indexer does not resolve mutable aliases, fields, or serialized payload
+values. It also does not infer transaction scope, modified fields, value
+dependencies, isolation, or scheduler concurrency.
 
 Source-indexed flows therefore abstain from the advanced detectors. Direct flow
 manifests can carry reviewed evidence for those fields.

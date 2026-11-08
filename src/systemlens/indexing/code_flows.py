@@ -1858,6 +1858,7 @@ def materialize_call_graph_flows(
                             key_identity_base(
                                 operation.resource_identity, operation.key_property,
                             ),
+                            usage_line=operation.line,
                         )
                         if repo_root is not None else None
                     )

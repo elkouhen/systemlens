@@ -7,11 +7,13 @@ fixture indexed with the ``source`` engine, or on the join directly.
 from dataclasses import replace
 from pathlib import Path
 
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.callgraph.model import MethodCall
+from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
 from systemlens.indexing.code_flows import (
     _deduplicate_code_flows,
     materialize_call_graph_flows,
 )
+from systemlens.indexing.java_value_origins import trace_scalar_key_identity
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
 from systemlens.storage.sqlite import Store
@@ -208,7 +210,6 @@ def test_a_data_flow_id_survives_line_movement(tmp_path: Path) -> None:
     assert after["Order"][1] == before["Order"][1] + 1
     assert after["Order"][0] == before["Order"][0]
 
-
 def test_twin_operations_keep_distinct_ids_across_line_movement(tmp_path: Path) -> None:
     """BC-25: twins, one call twice in a method, are numbered by their order.
 
@@ -230,3 +231,71 @@ def test_twin_operations_keep_distinct_ids_across_line_movement(tmp_path: Path) 
     assert [flow_id for _line, flow_id in before] == [flow_id for _line, flow_id in after]
     assert len({flow_id for _line, flow_id in before}) == 2
     assert not any("-" in flow_id for _line, flow_id in before)
+
+
+
+ORDER = "jpa:orders:example.Order"
+
+
+def test_a_local_declared_after_the_operation_is_not_its_key(tmp_path: Path) -> None:
+    """BC-26: the usage line is the operation's line, not the method's end.
+
+    A ``final String key = "x"`` declared after ``findById(key)`` shadowed
+    the field ``key`` and gave the read a literal identity.
+    """
+    path = "src/Adapter.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package example; class Adapter {\n"
+        "  String key;\n"
+        "  void load() {\n"
+        "    repository.findById(key);\n"
+        "    final String key = \"x\";\n"
+        "    System.out.println(key);\n"
+        "  }\n}\n",
+        encoding="utf-8",
+    )
+    method = IntegrationMethod("m", "orders", "example.Adapter.load", path, 3, 7, (), ())
+
+    assert trace_scalar_key_identity(
+        tmp_path, [], method, method, "key", ORDER, usage_line=4,
+    ) is None
+    assert trace_scalar_key_identity(
+        tmp_path, [], method, method, "key", ORDER, usage_line=6,
+    ) == f"{ORDER}:literal:\"x\""
+
+
+def test_a_nested_engine_caller_traces_its_key(tmp_path: Path) -> None:
+    """BC-26: an engine names a nested caller ``Entry$In.handle``.
+
+    The raw name was compared with the dotted source name, so the key was
+    traced from the source engine's rows and not from CodeQL's.
+    """
+    entry_path, adapter_path = "src/Entry.java", "src/Adapter.java"
+    (tmp_path / "src").mkdir()
+    (tmp_path / entry_path).write_text(
+        "package example; class Entry { static class In { void handle(String id) { "
+        "new Adapter().load(id); } } }\n",
+        encoding="utf-8",
+    )
+    (tmp_path / adapter_path).write_text(
+        "package example; class Adapter { void load(String key) { "
+        "repository.findById(key); } }\n",
+        encoding="utf-8",
+    )
+    entry = IntegrationMethod("entry", "orders", "example.Entry.In.handle", entry_path, 1, 1, (), ())
+    adapter = IntegrationMethod("ad", "orders", "example.Adapter.load", adapter_path, 1, 1, (), ())
+    identities = {
+        trace_scalar_key_identity(
+            tmp_path,
+            [(adapter, MethodCall(
+                caller=caller, caller_path=entry_path, caller_line=1,
+                callee=adapter.qualified_method, callee_path=adapter_path,
+                callee_line=1, call_line=1,
+            ), False)],
+            entry, adapter, "key", ORDER, usage_line=1,
+        )
+        for caller in ("example.Entry.In.handle", "example.Entry$In.handle")
+    }
+
+    assert identities == {f"{ORDER}:parameter:entry:0"}

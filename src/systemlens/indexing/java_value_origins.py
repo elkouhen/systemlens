@@ -143,6 +143,12 @@ def _call_argument(
     return parser.node_text(source, candidates[0][index]).strip()
 
 
+def _method_name(name: str) -> str:
+    """A method name as source declares it: an engine writes ``Outer$Inner.m``."""
+    name = name.replace("$", ".").lstrip(".")
+    return name.split("(", 1)[0]
+
+
 def trace_scalar_key_identity(
     repo_root: Path,
     route: Sequence[tuple[IntegrationMethod, MethodCall, bool]],
@@ -150,8 +156,13 @@ def trace_scalar_key_identity(
     current: IntegrationMethod,
     expression: str | None,
     resource_identity: str | None,
+    usage_line: int | None = None,
 ) -> str | None:
-    """Trace a scalar parameter through unique resolved calls to its entry."""
+    """Trace a scalar parameter through unique resolved calls to its entry.
+
+    ``usage_line`` is the operation's line: a local declared after it
+    cannot be the key (BC-26). Without it the method's last line is used.
+    """
     if not expression or not resource_identity:
         return None
     key_expression = expression.strip()
@@ -165,7 +176,10 @@ def trace_scalar_key_identity(
     method_node = _method_node(source, root, current)
     if method_node is None:
         return None
-    origin = _expression_origin(source, method_node, key_expression, current.end_line)
+    origin = _expression_origin(
+        source, method_node, key_expression,
+        current.end_line if usage_line is None else usage_line,
+    )
     if origin is None:
         return None
     if origin[0] == "literal":
@@ -181,7 +195,7 @@ def trace_scalar_key_identity(
             return None
         caller = entry if index == 0 else route[index - 1][0]
         if (
-            call.caller != caller.qualified_method
+            _method_name(call.caller) != _method_name(caller.qualified_method)
             or call.caller_path.replace("\\", "/").removeprefix("./")
             != caller.path.replace("\\", "/").removeprefix("./")
             or not caller.start_line <= call.call_line <= caller.end_line
