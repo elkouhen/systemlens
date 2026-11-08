@@ -2,11 +2,13 @@
 
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
-owner, who asked for it to be implemented. All items are `open`. Lot
-order: 0, 1, 4, 3, 2. Decision records an item depends on are written
-and accepted under the product owner's mandate, to be confirmed by them.
-Owner: SystemLens implementer. Reviewer: product owner. Baseline:
-`main` at `b8f23a0`.
+owner, who asked for it to be implemented. Delivered on 2026-11-08:
+BL-33 and BL-34; each Delivery line names its commit and tests. The
+other items are `open`. Lot order: 0, 1, 4, 3, 2.
+
+Decision records an item depends on are written and accepted under the
+product owner's mandate, to be confirmed by them. Owner: SystemLens
+implementer. Reviewer: product owner. Baseline: `main` at `b8f23a0`.
 
 The previous backlog (BL-21 to BL-32, source-vs-CodeQL alignment) is
 fully delivered and lives in Git at `f3a94e5`. Item IDs continue its
@@ -82,8 +84,8 @@ defect in the join is visible in a test). A target is never invented
 
 | ID | Title | Priority | Status |
 |---|---|---|---|
-| [BL-33](#bl-33) | Make every review gap a visible parity or flow test | P1 | `open` |
-| [BL-34](#bl-34) | Fix the documentation drifts the review found | P2 | `open` |
+| [BL-33](#bl-33) | Make every review gap a visible parity or flow test | P1 | `delivered` |
+| [BL-34](#bl-34) | Fix the documentation drifts the review found | P2 | `delivered` |
 | [BL-35](#bl-35) | Type the element of a container returned by a source method or held by `var` | P1 | `open` |
 | [BL-36](#bl-36) | Complete the JDK signature table | P1 | `open` |
 | [BL-37](#bl-37) | Type lambdas and method references from JDK functional types | P1 | `open` |
@@ -131,7 +133,28 @@ decision the owner has not taken.
   expected failures naming their item. `docs/spec-tech/indexing.md` adds
   the rows to the engine-parity table.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `tests/test_engine_parity.py` gains `REVIEW_FIXTURE`
+  with the 63 missing and differing cases of A.1 (D03 left out) and E02,
+  the B.4 generic return, owned by BL-35. Each is a strict expected
+  failure naming every owner from A.1's table; the `slow` CodeQL test
+  passes on all 64, except B23, which the join drops for both engines:
+  it fails there too, as a strict expected failure naming BL-39
+  (`codeql_item`). CodeQL's measured rows equal the review's on every
+  case. `tests/test_internal_flow_shapes.py` indexes the new fixture
+  `tests/fixtures/internal_flow_shapes` with `source` and checks each
+  entry for `index` and `flows calculate`: S24 (BL-47), inherited CRUD
+  route (BL-48), Rabbit, JMS, `@EventListener` and runner (BL-49), dead
+  end (BL-50), s3 and s4 (BL-45), s19 and s17 (BL-46) are strict
+  expected failures; a service chain, S25 and `@Scheduled(fixedDelay)`
+  are controls. With `source`, the rebuild equals the index, both
+  reaching the `plugin-lib` implementation (B.3, J2), so BL-51 shows
+  only in a `slow` CodeQL test, a strict expected failure. On the
+  fixture, CodeQL's persisted flows for s17 also include `XmlExporter`,
+  added by the join's expansion of the declared `Exporter.export` row
+  (J6); the case expects CodeQL's rows, without it. The engine-parity
+  table of `indexing.md` lists the new rows. No `src/` change, so the
+  reference projects' counts cannot move. Commit `6ca0239`.
 - **Why P1:** every other item is measured against these tests.
 
 <a id="bl-34"></a>
@@ -156,7 +179,20 @@ decision the owner has not taken.
   the network access and that offline runs may lose library-typed
   edges. No behavior change.
 - **Depends on:** none.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** the guide quotes the current counters, states that
+  ADR-84 removed the reachability pass and that the index log does not
+  report the hop bound, and points to `--show-call-chains`, whose stop
+  reasons are `limite de profondeur`, `aucun appelant indexé` and
+  `cycle détecté`; it no longer says an unavailable engine leaves only
+  same-method flows, since the index falls back to `source`. The
+  `@Scheduled` sentence names the three labels the code produces, and
+  `test_documented_scheduled_triggers_start_flows_with_their_label`
+  checks them against `scheduled_trigger_endpoints`. `cli.md` and
+  `indexing.md` state the CodeQL download, confirmed with CodeQL 2.27.3,
+  and replace the "offline indexing" sentence. Not changed: ADR-36 and
+  the PRD still call indexing network-independent, a decision the owner
+  takes. Commit `37c26c3`.
 - **Why P2:** wrong contract in the documentation, no wrong fact in the
   index.
 
