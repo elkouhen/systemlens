@@ -263,7 +263,9 @@ def _visual_graph_edges(
             visual_edges.append(
                 ("microservice", edge.from_service, "microservice", edge.to_service, "HTTP")
             )
-        else:
+        elif edge.kind == "kafka":
+            # The export draws Kafka topics only; a RabbitMQ or JMS channel
+            # stays in the persisted topology (PDR-16, known limit).
             topic = edge.from_endpoint.topic
             # Kafka communication is mediated by the concrete topic. The
             # static graph must not imply a direct service-to-service call.

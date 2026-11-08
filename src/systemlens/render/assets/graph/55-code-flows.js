@@ -53,6 +53,8 @@
         http_entry: "Entrée HTTP",
         message_entry: "Entrée message",
         cron_entry: "Déclencheur Cron",
+        startup_entry: "Déclencheur de démarrage",
+        event_entry: "Écouteur d’événement",
         http_call: "Appel HTTP",
         method_call: "Appel de méthode",
         message_publish: "Publication message",
@@ -157,7 +159,7 @@
       if (!trigger || !effect) return flow.reason || "Flux potentiel détecté à partir des preuves indexées.";
       const triggerVerb = trigger.kind === "message_entry"
         ? "consomme"
-        : trigger.kind === "cron_entry"
+        : ["cron_entry", "startup_entry", "event_entry"].includes(trigger.kind)
           ? "est déclenché par"
           : "reçoit";
       const dataVerb = ({
@@ -1050,6 +1052,8 @@
             http_entry: ["HTTP", "is-http"],
             message_entry: ["Kafka", "is-kafka"],
             cron_entry: ["Cron", "is-cron"],
+            startup_entry: ["Démarrage", "is-cron"],
+            event_entry: ["Événement", "is-cron"],
           })[treeTrigger.kind] || ["Déclencheur", "is-cron"];
           const triggerBadge = document.createElement("span");
           triggerBadge.className = `graph-node-trigger-badge ${triggerKind[1]}`;
@@ -1985,6 +1989,8 @@
         return /^[A-Z]+$/.test(verb) ? { label: verb, className: "is-http", name: String(trigger.name).slice(verb.length).trim() } : { label: "HTTP", className: "is-http", name: trigger.name };
       }
       if (trigger?.kind === "cron_entry") return { label: "Cron", className: "is-cron", name: trigger.name };
+      if (trigger?.kind === "startup_entry") return { label: "Démarrage", className: "is-cron", name: trigger.name };
+      if (trigger?.kind === "event_entry") return { label: "Événement", className: "is-cron", name: trigger.name };
       if (trigger?.kind === "message_entry") return { label: "Kafka", className: "is-kafka", name: trigger.name };
       return { label: codeFlowStepLabel(trigger?.kind), className: "", name: trigger?.name || "Déclencheur inconnu" };
     }

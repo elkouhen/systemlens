@@ -171,11 +171,17 @@ Interpret the result as follows:
 - zero `Inter-service flows` with many internal flows means the flows cross
   Java methods but not microservice boundaries.
 
-An internal flow currently means a source-evidenced path from an indexed HTTP
-or Kafka input, or a `@Scheduled` method, to a distinct indexed HTTP, Kafka
-or data output in the same service. A business-only chain such as `Controller -> Service -> Repository`,
-without indexed integration endpoints, is not represented as an internal code
-flow.
+An internal flow means a source-evidenced path from a trigger to an effect
+in the same service (PDR-15). A trigger is an indexed HTTP, Kafka, RabbitMQ
+or JMS input, a `@Scheduled` method, startup code (`CommandLineRunner.run`,
+`ApplicationRunner.run`, `@PostConstruct`) or an `@EventListener` method
+(PDR-16). An effect is a distinct HTTP call, message publication or data
+operation. `publishEvent` is not an effect: the flow continues into the
+event's listeners.
+
+A route whose call tree reaches no effect, such as `Controller -> Service
+-> helper`, is not a flow. The flow diagnostic below reports it as an
+input endpoint with no indexed output.
 
 Useful fields in `flows.json` are:
 

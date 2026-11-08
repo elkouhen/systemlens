@@ -1,5 +1,8 @@
 """RabbitMQ and JMS message ports from the Java AST (PDR-15, PDR-16).
 
+``@RabbitListener`` and ``@JmsListener`` methods are ``consume`` endpoints
+named by their ``queues`` or ``destination`` value.
+
 A publication through ``RabbitTemplate``, its interface ``AmqpTemplate`` or
 ``JmsTemplate`` is a ``produce`` endpoint. Its channel is named as a Kafka
 topic is: a literal, a source-local constant or a resolvable property;
@@ -133,6 +136,52 @@ def _jms_channels(
     return _channels(arguments, source, repo_root, rel_path)
 
 
+# Listener annotation -> (system, framework, channel attribute, handler).
+_LISTENERS = {
+    "RabbitListener": (RABBIT_SYSTEM, "spring-amqp", "queues", "RabbitHandler"),
+    "JmsListener": (JMS_SYSTEM, "spring-jms", "destination", None),
+}
+
+
+def _listener_endpoints(
+    repo_root: Path, rel_path: str, source: bytes, root: Node,
+) -> list[MessageEndpoint]:
+    """Consume endpoints of ``@RabbitListener`` and ``@JmsListener`` (PDR-16).
+
+    The channel is the ``queues`` or ``destination`` value, resolved as a
+    Kafka topic is; a listener without it, such as one declaring its
+    bindings, is dynamic. A class-level ``@RabbitListener`` sits on the
+    class; each of its ``@RabbitHandler`` methods receives it.
+    """
+    found: list[MessageEndpoint] = []
+    for declaration in java_parser.walk(root):
+        if declaration.type not in {"method_declaration", "class_declaration"}:
+            continue
+        for annotation in java_parser.annotations_of(declaration):
+            listener = _LISTENERS.get(java_parser.annotation_name(annotation, source) or "")
+            if listener is None:
+                continue
+            system, framework, attribute, handler = listener
+            if declaration.type == "class_declaration" and handler is None:
+                continue
+            value = java_parser.annotation_argument(annotation, source, attribute)
+            if value is None and attribute == "queues":
+                value = java_parser.annotation_argument(annotation, source)
+            channels = (
+                _kafka_topics_from_value(value, source, repo_root, rel_path)
+                if value is not None else [(DYNAMIC_CHANNEL, True)]
+            )
+            end_node = declaration if declaration.type == "method_declaration" else None
+            found.extend(
+                _endpoint(
+                    repo_root, rel_path, source, annotation, "consume", system, framework,
+                    channel, dynamic, end_node=end_node,
+                )
+                for channel, dynamic in channels
+            )
+    return found
+
+
 def infer_broker_endpoints(repo_root: Path, files: list[str]) -> list[MessageEndpoint]:
     """Rabbit and JMS message ports of the given Java files."""
     endpoints: dict[str, MessageEndpoint] = {}
@@ -142,6 +191,9 @@ def infer_broker_endpoints(repo_root: Path, files: list[str]) -> list[MessageEnd
             continue
         source, root = parsed
         text = source.decode("utf-8", errors="replace")
+        if any(annotation in text for annotation in _LISTENERS):
+            for endpoint in _listener_endpoints(repo_root, rel_path, source, root):
+                endpoints[endpoint.id] = endpoint
         has_rabbit = any(kind in text for kind in _RABBIT_TEMPLATES)
         has_jms = any(kind in text for kind in _JMS_TEMPLATES)
         if not (has_rabbit or has_jms):

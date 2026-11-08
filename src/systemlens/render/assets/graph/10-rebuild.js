@@ -851,6 +851,8 @@
               http_entry: "Entrée HTTP",
               message_entry: "Entrée message",
               cron_entry: "Déclencheur Cron",
+              startup_entry: "Déclencheur de démarrage",
+              event_entry: "Écouteur d’événement",
             })[trigger?.kind] || "Déclencheur";
             flowTrigger.hidden = !trigger;
             flowTrigger.textContent = trigger
@@ -1073,8 +1075,10 @@
           if (trigger?.name) {
             const triggerBadge = document.createElement("span");
             const isHttpTrigger = trigger.kind === "http_entry";
-            const isCronTrigger = trigger.kind === "cron_entry";
-            const triggerLabel = isCronTrigger ? "Cron" : isHttpTrigger ? "HTTP" : "Kafka";
+            // Startup and event triggers are transient like a schedule (PDR-16).
+            const transientLabel = ({ cron_entry: "Cron", startup_entry: "Démarrage", event_entry: "Événement" })[trigger.kind];
+            const isCronTrigger = Boolean(transientLabel);
+            const triggerLabel = transientLabel || (isHttpTrigger ? "HTTP" : "Kafka");
             triggerBadge.className = `graph-node-trigger-badge ${isCronTrigger ? "is-cron" : isHttpTrigger ? "is-http" : "is-kafka"}`;
             triggerBadge.textContent = `${triggerLabel} · ${trigger.name}`;
             triggerBadge.title = "Déclencheur de l’arbre d’appel sélectionné";

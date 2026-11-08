@@ -1440,7 +1440,7 @@ def test_placeholder_methods_carry_the_discovered_module_identity(tmp_path: Path
 def test_flow_stage_parses_each_java_file_once_beyond_the_default_cache(tmp_path: Path, monkeypatch):
     from systemlens.discovery.java import parser
     from systemlens.indexing.code_flows import materialize_code_flows
-    from systemlens.indexing.integration_methods import scheduled_trigger_endpoints
+    from systemlens.indexing.integration_methods import transient_trigger_endpoints
 
     sources = {f"app/p/C{index}.java": f"package p; class C{index} {{ void m() {{}} }}" for index in range(6)}
     modules = [DiscoveredModule("app", tmp_path / "app", "maven", None, "application", True, "")]
@@ -1461,7 +1461,7 @@ def test_flow_stage_parses_each_java_file_once_beyond_the_default_cache(tmp_path
     def run_flow_stage() -> int:
         parsed.clear()
         paths = list(sources)
-        triggers = scheduled_trigger_endpoints(tmp_path, paths, [], modules)
+        triggers = transient_trigger_endpoints(tmp_path, paths, [], modules)
         methods = materialize_integration_methods(tmp_path, triggers, paths, modules)
         JavaSymbols(tmp_path, methods, paths)
         materialize_code_flows(tmp_path, triggers, modules)

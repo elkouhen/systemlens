@@ -9,7 +9,7 @@ import time
 from collections.abc import Callable
 from typing import Literal
 
-from systemlens.domain.models import ArchitectureRelation, GraphFact, MessageEndpoint
+from systemlens.domain.models import BROKER_SYSTEMS, ArchitectureRelation, GraphFact, MessageEndpoint
 from systemlens.domain.message_types import message_types_conflict
 
 
@@ -41,7 +41,7 @@ DEFAULT_REST_TARGET_POLICY = RestTargetPolicy(external_service=_explicit_externa
 
 @dataclass(frozen=True)
 class GraphEdge:
-    kind: str  # Literal["rest", "kafka"]
+    kind: str  # Literal["rest", "kafka", "rabbitmq", "jms"]
     from_service: str
     to_service: str
     from_endpoint: MessageEndpoint  # site d'appel (call) ou de production (produce)
@@ -652,6 +652,25 @@ def build_graph(
                 seen.add(key)
                 edges.append(GraphEdge("kafka", produce_service, consume_service, produce, consume))
 
+    # A RabbitMQ or JMS channel pairs a publication and a consumer of the
+    # same system and the same concrete name (PDR-16). Neither side has a
+    # payload type, and a dynamic name never pairs.
+    broker_consumers: dict[tuple[str, str], list[tuple[str, MessageEndpoint]]] = {}
+    for service, endpoint in all_endpoints:
+        if endpoint.system in BROKER_SYSTEMS and endpoint.role == "consume" and not endpoint.topic_dynamic:
+            broker_consumers.setdefault((endpoint.system, endpoint.topic), []).append((service, endpoint))
+    for produce_service, produce in all_endpoints:
+        if produce.system not in BROKER_SYSTEMS or produce.role != "produce" or produce.topic_dynamic:
+            continue
+        for consume_service, consume in broker_consumers.get((produce.system, produce.topic), ()):
+            if produce_service == consume_service:
+                continue
+            key = (produce.system, produce_service, consume_service, produce.id, consume.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            edges.append(GraphEdge(produce.system, produce_service, consume_service, produce, consume))
+
     return edges
 
 
@@ -762,7 +781,7 @@ def graph_edges_from_relations(
         for endpoint in service_endpoints
     ]
     source_index: dict[tuple[str, str | None, int | None, str], list[MessageEndpoint]] = {}
-    consumers_index: dict[tuple[str, str], list[MessageEndpoint]] = {}
+    consumers_index: dict[tuple[str, str, str], list[MessageEndpoint]] = {}
     serves_index: dict[str, list[MessageEndpoint]] = {}
     for endpoint in endpoints:
         if endpoint.module is None:
@@ -770,8 +789,10 @@ def graph_edges_from_relations(
         source_index.setdefault(
             (endpoint.module, endpoint.path, endpoint.start_line, endpoint.role), []
         ).append(endpoint)
-        if endpoint.system == "kafka" and endpoint.role == "consume":
-            consumers_index.setdefault((endpoint.module, endpoint.topic), []).append(endpoint)
+        if endpoint.system in {"kafka", *BROKER_SYSTEMS} and endpoint.role == "consume":
+            consumers_index.setdefault(
+                (endpoint.system, endpoint.module, endpoint.topic), [],
+            ).append(endpoint)
         elif endpoint.system == "rest" and endpoint.role == "serve":
             serves_index.setdefault(endpoint.module, []).append(endpoint)
 
@@ -785,11 +806,13 @@ def graph_edges_from_relations(
         site, so an export sees the site the index reconciled against.
         """
         if kind == "kafka":
-            consumers = consumers_index.get((target_service, source_endpoint.topic), [])
+            consumers = consumers_index.get(("kafka", target_service, source_endpoint.topic), [])
             return [
                 consumer for consumer in consumers
                 if not message_types_conflict(source_endpoint.message_type, consumer.message_type)
             ]
+        if kind in BROKER_SYSTEMS:
+            return consumers_index.get((kind, target_service, source_endpoint.topic), [])
         return select_matching_routes(
             source_endpoint.topic, serves_index.get(target_service, [])
         )
@@ -803,8 +826,7 @@ def graph_edges_from_relations(
             or relation.relation not in {"calls_service", "publishes_to"}
         ):
             continue
-        kind = "rest" if relation.relation == "calls_service" else "kafka"
-        role = "call" if kind == "rest" else "produce"
+        role = "call" if relation.relation == "calls_service" else "produce"
         candidates = source_index.get(
             (relation.source_name, relation.path, relation.start_line, role), []
         )
@@ -814,6 +836,12 @@ def graph_edges_from_relations(
             # relation and the next index will restore an atomic snapshot.
             continue
         for source_endpoint in candidates:
+            # A publication's relation is a Kafka or a broker channel (PDR-16).
+            kind = (
+                "rest" if role == "call"
+                else source_endpoint.system if source_endpoint.system in BROKER_SYSTEMS
+                else "kafka"
+            )
             targets: list[MessageEndpoint | None] = list(
                 target_endpoints(kind, relation.target_name, source_endpoint)
             ) or [None]

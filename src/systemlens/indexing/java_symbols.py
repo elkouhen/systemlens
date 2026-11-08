@@ -466,6 +466,11 @@ def _is_anonymous_body(node: Node) -> bool:
 
 
 _CALL_SITES = {"method_invocation", "method_reference"}
+# In-process events (PDR-16): a listener annotation and a publisher type.
+_EVENT_LISTENERS = frozenset({"EventListener", "TransactionalEventListener"})
+_EVENT_PUBLISHERS = frozenset({
+    "ApplicationEventPublisher", "ApplicationContext", "ConfigurableApplicationContext",
+})
 # Scopes that can introduce a pattern variable into one of their children.
 _PATTERN_SCOPES = {
     "if_statement", "while_statement", "ternary_expression", "binary_expression", "switch_rule",
@@ -4066,6 +4071,94 @@ class JavaSymbols:
             for node in parser.walk(context)
             if node.type in _CALL_SITES | _CONSTRUCTOR_SITES and _call_context(node) == context
         ]
+
+    def _listened_event_types(self, info: _Method) -> list[str]:
+        """The event types an ``@EventListener`` method receives (PDR-16).
+
+        The ``classes`` or ``value`` attribute names them; without it the
+        single parameter does. A class literal that does not resolve adds
+        no type.
+        """
+        source = self.units[info.method.path].source
+        types: list[str] = []
+        for annotation in parser.annotations_of(info.node):
+            if parser.annotation_name(annotation, source) not in _EVENT_LISTENERS:
+                continue
+            value = (
+                parser.annotation_argument(annotation, source, "classes")
+                or parser.annotation_argument(annotation, source, "value")
+                or parser.annotation_argument(annotation, source)
+            )
+            literals = [
+                node.named_children[0] for node in parser.walk(value)
+                if node.type == "class_literal" and node.named_children
+            ] if value is not None else []
+            if literals:
+                types.extend(
+                    resolved for node in literals
+                    if (resolved := self.resolve(
+                        info.method.path, parser.node_text(source, node), info.owner, at=node,
+                    )) is not None
+                )
+            elif len(info.erased) == 1 and info.erased[0] is not None:
+                types.append(info.erased[0])
+        return types
+
+    def _type_module(self, qualified: str, path: str) -> str | None:
+        candidates = self._type_candidates(qualified, path)
+        return self.path_modules.get(candidates[0][0]) if len(candidates) == 1 else None
+
+    def event_dispatch_calls(self) -> list[MethodCall]:
+        """``publishEvent(x)`` calls to the listeners of ``x``'s type (PDR-16).
+
+        The receiver must be typed as an ``ApplicationEventPublisher`` or an
+        ``ApplicationContext``. A listener receives the event when its event
+        type is the static type of ``x`` or one of that type's source
+        ancestors. Spring dispatches through a runtime registry and listener
+        conditions, so every call is ``possible``. An untyped ``x`` adds none.
+        """
+        listeners: list[tuple[_Method, str]] = [
+            (info, event)
+            for info in self.methods.values()
+            if info.concrete and info.node.type == "method_declaration"
+            and b"EventListener" in self.units[info.method.path].source
+            for event in self._listened_event_types(info)
+        ]
+        if not listeners:
+            return []
+        calls: list[MethodCall] = []
+        for info in self.methods.values():
+            source = self.units[info.method.path].source
+            if not info.concrete or b"publishEvent" not in source:
+                continue
+            for invocation, _context in self._call_sites(info):
+                if invocation.type != "method_invocation":
+                    continue
+                receiver, name, arguments = parser.invocation_parts(invocation, source)
+                if name != "publishEvent" or len(arguments) != 1:
+                    continue
+                publisher = self.receiver_type(info, receiver, invocation)
+                if publisher is None or publisher.rsplit(".", 1)[-1] not in _EVENT_PUBLISHERS:
+                    continue
+                event = self.expression_type(info, arguments[0], invocation)
+                if event is None:
+                    continue
+                module = self._type_module(event, info.method.path)
+                received = {event} | (
+                    {owner for owner, _module in self.ancestors(event, module)}
+                    if module is not None else set()
+                )
+                line = invocation.start_point.row + 1
+                calls.extend(
+                    MethodCall(
+                        info.method.qualified_method, info.method.path, info.method.start_line,
+                        listener.method.qualified_method, listener.method.path,
+                        listener.method.start_line, line, "possible",
+                    )
+                    for listener, listened in listeners
+                    if listened in received
+                )
+        return calls
 
     def receiver_sites(self, method_id: str) -> dict[tuple[int, str], bool]:
         """Whether each ``(line, name)`` call site of a method may run on ``this``.

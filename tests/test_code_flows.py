@@ -44,7 +44,7 @@ from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
 from systemlens.indexing.integration_methods import (
     materialize_integration_methods,
-    scheduled_trigger_endpoints,
+    transient_trigger_endpoints,
 )
 from systemlens.indexing import call_graph_stage
 from systemlens.infrastructure.config import Config
@@ -656,7 +656,7 @@ class Publisher {
         qualified_name="com.example.Publisher",
     )
 
-    triggers = scheduled_trigger_endpoints(
+    triggers = transient_trigger_endpoints(
         tmp_path, [scheduler_path, publisher_path], [producer], [module],
     )
     methods = materialize_integration_methods(
@@ -725,7 +725,9 @@ def test_scheduled_methods_keep_data_access_with_and_without_publication(tmp_pat
             ("cron_entry", None), ("message_publish", None),
             ("data_write", "create_or_update"),
         ],
-        "cleanup": [("cron_entry", None), ("data_write", "delete")],
+        # A trigger whose effects are data operations only is named by its
+        # lexical owner, not by its bare method name (BL-49).
+        "ScheduledPublisher.cleanup": [("cron_entry", None), ("data_write", "delete")],
     }
 
 
@@ -3298,7 +3300,7 @@ class Publisher {
         qualified_name="com.example.Publisher",
     )
     paths = [scheduler_path, publisher_path]
-    triggers = scheduled_trigger_endpoints(tmp_path, paths, [producer], [module])
+    triggers = transient_trigger_endpoints(tmp_path, paths, [producer], [module])
     methods = materialize_integration_methods(tmp_path, [producer, *triggers], paths, [module])
 
     flows = materialize_call_graph_flows(

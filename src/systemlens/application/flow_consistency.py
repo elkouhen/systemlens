@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import asdict, dataclass, replace
 from typing import Iterable, Mapping, cast
 
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep
+from systemlens.domain.code_flows import TRIGGER_STEP_KINDS, CodeFlow, CodeFlowStep
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,7 @@ def _causal(flow: CodeFlow, write: CodeFlowStep, read: CodeFlowStep) -> tuple[bo
     if write.causal_id and read.causal_id and write.causal_id == read.causal_id:
         return True, "identifiant causal partagé"
     trigger = next((step for step in flow.steps if (
-        step.kind in {"http_entry", "message_entry", "cron_entry"}
+        step.kind in TRIGGER_STEP_KINDS
         and step.order < write.order and step.order < read.order
     )), None)
     if trigger is not None and not write.causal_id and not read.causal_id:

@@ -88,14 +88,27 @@ CASES = [
     _case("inherited-crud-route-sibling", "POST /users/crud", None,
           _flow("medium", "PaymentClient.charge", "POST /payments"),
           _flow("low", "UserController.afterCreate", *_TO_PUBLISHER)),
-    _case("rabbit-listener", f"{_ORDERS}MessagingEntries.onRabbit", "BL-49",
+    # PDR-16: Rabbit and JMS listeners are consume endpoints; event
+    # listeners and startup code are transient triggers.
+    _case("rabbit-listener", f"{_ORDERS}MessagingEntries.onRabbit", None,
           _flow("medium", *_TO_PUBLISHER)),
-    _case("jms-listener", f"{_ORDERS}MessagingEntries.onJms", "BL-49",
+    _case("jms-listener", f"{_ORDERS}MessagingEntries.onJms", None,
           _flow("medium", *_TO_PUBLISHER)),
-    _case("event-listener", f"{_ORDERS}OrderCreatedListener.onCreated", "BL-49",
+    _case("event-listener", f"{_ORDERS}OrderCreatedListener.onCreated", None,
           _flow("medium", *_TO_PUBLISHER)),
-    _case("command-line-runner", f"{_ORDERS}StartupRunner.run", "BL-49",
+    _case("transactional-event-listener", f"{_ORDERS}AuditListener.audit", None,
+          _flow("medium", "audit-events")),
+    _case("command-line-runner", f"{_ORDERS}StartupRunner.run", None,
           _flow("medium", *_TO_PUBLISHER)),
+    _case("application-runner", f"{_ORDERS}CacheWarmer.run", None,
+          _flow("medium", *_TO_PUBLISHER)),
+    _case("post-construct", f"{_ORDERS}CacheWarmer.warm", None,
+          _flow("medium", *_TO_PUBLISHER)),
+    # PDR-16: publishEvent continues the flow into every listener of the
+    # event's static type, through a possible edge.
+    _case("event-publication", f"{_ORDERS}EventController.create", None,
+          _flow("low", "OrderCreatedListener.onCreated", *_TO_PUBLISHER),
+          _flow("low", "AuditListener.audit", "audit-events")),
     # PDR-15: Rabbit and JMS publications are effects. The default
     # exchange names the queue; a named exchange keeps exchange/routing-key.
     _case("rabbit-publication", f"{_ORDERS}BrokerController.rabbit", None,

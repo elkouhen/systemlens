@@ -914,6 +914,25 @@ call leaves `this` when its receiver is another expression, or when it
 has no receiver and its target is outside the caller's class hierarchy,
 such as an outer-class method or a static import.
 
+`transient_trigger_endpoints` in `integration_methods.py` builds the
+triggers that are never persisted: schedules, startup code and event
+listeners (PDR-16). `transient_trigger_labels` reads them from one method
+declaration. Each gets an ID `scheduler:`, `startup:` or `event:` plus
+module, path and line, which persisted integration methods keep, so
+`flows calculate` re-reads only those files. A runner is a method `run`
+in a class whose `implements` clause names `CommandLineRunner` or
+`ApplicationRunner`.
+
+`JavaSymbols.event_dispatch_calls` pairs each `publishEvent(x)` call with
+the event listeners. The receiver must type as `ApplicationEventPublisher`,
+`ApplicationContext` or `ConfigurableApplicationContext`, and `x` must have
+a static type. A listener receives it when its event type is that type or
+one of its source ancestors. `_build_call_graph` adds each pair, within
+the caller's visible modules (ADR-71), as an inferred `possible` edge with
+`other_receiver` set, so the ADR-43 entry restriction does not reach into
+the listener. The pass costs one walk of the call sites of the files that
+contain `publishEvent`, times the listener count.
+
 An inherited route sets the entry class itself (ADR-88). The endpoint
 snippet carries `systemlens-inherited-method:<path>:<line>`, and
 `materialize_integration_methods` gives the route to the one method
@@ -1400,8 +1419,7 @@ engine, then `flows calculate` on the persisted index, and checks the
 flows of each entry in both results.
 
 A shape whose gap an open item owns is a strict expected failure naming
-it: the Rabbit, JMS, `@EventListener` and `CommandLineRunner` entries
-(BL-49), the dispatch a generic type argument decides (BL-45), and the
+it: the dispatch a generic type argument decides (BL-45), and the
 ternary and call-context dispatch (BL-46).
 
 Controls pass today: a controller-service-client chain, a job calling its
@@ -1411,6 +1429,10 @@ two controllers inherit from one base method (BL-48): each route reaches
 its own controller's hook only. Rabbit and JMS publications end their
 routes' flows (BL-50), and `GET /ping`, which reaches no effect, has no
 flow and the diagnostic status `entry_method_without_external_effect`.
+Rabbit and JMS listeners, `@EventListener` and `@TransactionalEventListener`
+methods, `CommandLineRunner`, `ApplicationRunner` and `@PostConstruct`
+start flows, and `POST /events` reaches both listeners of its event
+through `publishEvent` (BL-49).
 A `slow` test checks both template shapes with CodeQL.
 
 The rebuild reproduces the indexed flows with `source`, and a `slow` test

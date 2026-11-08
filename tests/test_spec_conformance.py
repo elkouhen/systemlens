@@ -285,7 +285,7 @@ def test_documented_scheduled_triggers_start_flows_with_their_label(tmp_path: Pa
     """extraction-rules.md names the ``@Scheduled`` arguments that label a
     trigger; each one, and a schedule without any, must start a flow."""
     from systemlens.domain.module_inventory import DiscoveredModule
-    from systemlens.indexing.integration_methods import scheduled_trigger_endpoints
+    from systemlens.indexing.integration_methods import transient_trigger_endpoints
 
     prose = FENCED_BLOCK.sub("", (SPEC_FONC / "extraction-rules.md").read_text(encoding="utf-8"))
     keys = {
@@ -313,5 +313,5 @@ def test_documented_scheduled_triggers_start_flows_with_their_label(tmp_path: Pa
         name="app", path=tmp_path / "app", build_system="maven", version=None,
         kind="application", starts_application=True, configuration_example="",
     )
-    triggers = scheduled_trigger_endpoints(tmp_path, [path], [], [module])
+    triggers = transient_trigger_endpoints(tmp_path, [path], [], [module])
     assert sorted(trigger.topic for trigger in triggers) == sorted({*labels, "@Scheduled"})

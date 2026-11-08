@@ -8,7 +8,7 @@ from typing import Iterator, cast
 
 import networkx as nx
 
-from systemlens.domain.code_flows import CodeFlow
+from systemlens.domain.code_flows import TRIGGER_STEP_KINDS, CodeFlow
 from systemlens.domain.graph import GraphEdge
 from systemlens.domain.models import MessageEndpoint
 
@@ -142,7 +142,7 @@ def _index_call_graph_inputs(
     for output_id in edges_by_output:
         edges_by_output[output_id].sort(key=edge_sort_key)
 
-    trigger_kinds = {"http_entry", "message_entry", "cron_entry"}
+    trigger_kinds = TRIGGER_STEP_KINDS
     trigger_flow_ids_by_endpoint: dict[str, list[str]] = {}
     trigger_flow_ids: set[str] = set()
     triggers: dict[str, list[dict[str, object]]] = {}

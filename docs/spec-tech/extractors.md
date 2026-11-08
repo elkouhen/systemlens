@@ -169,6 +169,13 @@ the default exchange: the routing key names the queue. Three or more
 other arguments are `(exchange, routingKey, ...)`; the empty exchange is
 the default one, and a named exchange gives `exchange/routing-key`.
 
+`@RabbitListener` and `@JmsListener` give `consume` endpoints (PDR-16),
+named by the `queues` or `destination` value through the same resolver.
+A listener without that attribute, such as one declaring its `bindings`,
+is dynamic. A class-level `@RabbitListener` sits on the class, and
+`materialize_integration_methods` gives it to each `@RabbitHandler`
+method, as it does for `@KafkaHandler`.
+
 A JMS call names its destination by its first argument. One argument, or
 `convertAndSend(message, postProcessor)`, uses the default destination and
 is dynamic. In `send(destination, creator)` a lambda is the message creator.

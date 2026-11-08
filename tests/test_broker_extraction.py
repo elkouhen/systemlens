@@ -90,3 +90,58 @@ class Mailer {
 }
 """)
     assert _ports(tmp_path, path) == []
+
+
+def test_rabbit_and_jms_listeners_are_consumers(tmp_path: Path) -> None:
+    path = _write(tmp_path, "Listeners.java", """
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.jms.annotation.JmsListener;
+
+class Listeners {
+    @RabbitListener(queues = {"orders", "refunds"})
+    void onOrder(String body) {}
+
+    @RabbitListener(bindings = @QueueBinding(value = @Queue("bound")))
+    void onBinding(String body) {}
+
+    @JmsListener(destination = "audit-queue")
+    void onAudit(String body) {}
+
+    // @RabbitListener(queues = "commented")
+}
+""")
+    assert _ports(tmp_path, path) == sorted([
+        ("rabbitmq", "consume", "orders", False),
+        ("rabbitmq", "consume", "refunds", False),
+        ("rabbitmq", "consume", "<dynamic>", True),
+        ("jms", "consume", "audit-queue", False),
+    ])
+
+
+def test_class_level_rabbit_listener_reaches_its_handlers(tmp_path: Path) -> None:
+    from systemlens.indexing.integration_methods import materialize_integration_methods
+
+    path = _write(tmp_path, "Handlers.java", """
+import org.springframework.amqp.rabbit.annotation.RabbitHandler;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+
+@RabbitListener(queues = "orders")
+class Handlers {
+    @RabbitHandler
+    void onText(String body) {}
+
+    @RabbitHandler
+    void onBytes(byte[] body) {}
+
+    void helper() {}
+}
+""")
+    endpoints = [
+        endpoint.__class__(**{**endpoint.__dict__, "module": "app"})
+        for endpoint in infer_broker_endpoints(tmp_path, [path])
+    ]
+    methods = materialize_integration_methods(tmp_path, endpoints, [path], [])
+    inputs = {method.qualified_method: method.input_endpoint_ids for method in methods}
+    assert inputs["example.Handlers.onText"] == (endpoints[0].id,)
+    assert inputs["example.Handlers.onBytes"] == (endpoints[0].id,)
+    assert inputs["example.Handlers.helper"] == ()

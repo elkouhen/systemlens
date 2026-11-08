@@ -17,14 +17,14 @@ from systemlens.indexing.code_flows import (
     materialize_code_flows,
     reconcile_code_flows,
 )
-from systemlens.domain.code_flows import IntegrationMethod
+from systemlens.domain.code_flows import TRANSIENT_ENTRY_KINDS, IntegrationMethod
 from systemlens.domain.data_operation_projection import data_operations_from_modules
 from systemlens.domain.data_operations import DataOperation
 from systemlens.domain.models import MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 from systemlens.indexing.integration_methods import (
-    SCHEDULER_TRIGGER_PREFIX,
-    scheduled_trigger_endpoints,
+    TRANSIENT_TRIGGER_PREFIXES,
+    transient_trigger_endpoints,
 )
 from systemlens.infrastructure.config import Config, config_path, load_config
 from systemlens.scanner import local_spring_application_names
@@ -51,7 +51,8 @@ def load_persisted_flow_inputs(store: Store) -> PersistedFlowInputs:
     """Read the flow-construction inputs of a persisted index.
 
     ``flow_endpoints`` adds the transient scheduler triggers, recovered by
-    re-reading only the Java files of persisted methods that reference one.
+    re-reading only the Java files of persisted methods that reference one
+    (schedules, startup code and event listeners, PDR-16).
     """
     endpoints = store.all_endpoints()
     modules = store.all_modules()
@@ -61,14 +62,14 @@ def load_persisted_flow_inputs(store: Store) -> PersistedFlowInputs:
         store.repo_root, modules,
     )
     methods = store.all_integration_methods()
-    scheduler_paths = sorted({
+    trigger_paths = sorted({
         method.path for method in methods
-        if any(item.startswith(SCHEDULER_TRIGGER_PREFIX) for item in method.input_endpoint_ids)
+        if any(item.startswith(TRANSIENT_TRIGGER_PREFIXES) for item in method.input_endpoint_ids)
     })
     flow_endpoints = [
         *endpoints,
-        *scheduled_trigger_endpoints(store.repo_root, scheduler_paths, endpoints, modules),
-    ] if scheduler_paths else endpoints
+        *transient_trigger_endpoints(store.repo_root, trigger_paths, endpoints, modules),
+    ] if trigger_paths else endpoints
     return PersistedFlowInputs(
         endpoints=endpoints, flow_endpoints=flow_endpoints, methods=methods,
         modules=modules, operations=operations,
@@ -160,7 +161,7 @@ def calculate_persisted_flows(
         )
         and (
             any(step.endpoint_id is not None for step in flow.steps)
-            or (bool(flow.steps) and flow.steps[0].kind == "cron_entry")
+            or (bool(flow.steps) and flow.steps[0].kind in TRANSIENT_ENTRY_KINDS)
         )
     ]
     flows = _ensure_unique_code_flow_ids(_deduplicate_code_flows(

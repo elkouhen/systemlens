@@ -7,6 +7,11 @@ from dataclasses import dataclass, replace
 # Step kinds that reference a persisted data operation. ``data_access`` is an
 # operation whose effect the source does not establish.
 DATA_STEP_KINDS = frozenset({"data_read", "data_write", "data_access"})
+# First-step kinds of a transient trigger: a schedule, startup code or an
+# in-process event listener. They name no endpoint (PDR-16).
+TRANSIENT_ENTRY_KINDS = frozenset({"cron_entry", "startup_entry", "event_entry"})
+# Every first-step kind that starts a flow.
+TRIGGER_STEP_KINDS = frozenset({"http_entry", "message_entry", *TRANSIENT_ENTRY_KINDS})
 
 
 # An inherited route's snippet names the method that declares it, as

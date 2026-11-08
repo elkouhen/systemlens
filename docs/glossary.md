@@ -39,7 +39,7 @@ documentation, CLI, and generated graph exports.
 | Route | HTTP endpoint identified by a method and path, such as `POST /orders`. | `route` |
 | Producer | Microservice or endpoint that publishes a message to a topic. | `producteur` |
 | Consumer | Microservice or endpoint that consumes a message from a topic. | `consommateur` |
-| Trigger | Event that starts a flow, such as an HTTP request, Kafka message, or scheduled execution. | `déclencheur` |
+| Trigger | Event that starts a flow, such as an HTTP request, a Kafka, RabbitMQ or JMS message, a scheduled execution, startup code (`démarrage`) or an in-process event (`événement`). | `déclencheur` |
 | Module | Logical code or deployment grouping. | `module` |
 | Layer | Architectural level or level in the corresponding visualization. | `couche` |
 

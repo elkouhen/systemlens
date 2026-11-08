@@ -48,7 +48,7 @@ from systemlens.indexing.dto_inventory import materialize_kafka_dto_definitions
 from systemlens.indexing.integration_methods import (
     materialize_integration_methods,
     path_module_resolver,
-    scheduled_trigger_endpoints,
+    transient_trigger_endpoints,
 )
 from systemlens.indexing.relations import build_architecture_relations
 from systemlens.infrastructure.config import Config
@@ -266,13 +266,13 @@ def run_call_graph_stage(
     timer.begin("flows", "→ Indexation : matérialisation des flux de code...")
     all_endpoints = store.all_endpoints()
     _mark_flow_snapshot_in_progress(store, current_hashes, all_endpoints)
-    scheduler_triggers = scheduled_trigger_endpoints(
+    transient_triggers = transient_trigger_endpoints(
         repo_root, list(current_hashes), all_endpoints, relation_modules
     )
 
     def flow_endpoints() -> list[MessageEndpoint]:
-        # Scheduler triggers only seed flows; they are never persisted.
-        return [*all_endpoints, *scheduler_triggers]
+        # Transient triggers only seed flows; they are never persisted.
+        return [*all_endpoints, *transient_triggers]
 
     methods = materialize_integration_methods(
         repo_root, flow_endpoints(), list(current_hashes), relation_modules

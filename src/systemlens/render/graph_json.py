@@ -114,6 +114,10 @@ def _graph_edges(edges: list[GraphEdge]) -> list[GraphEdgeInfo]:
                 )
             )
             continue
+        if edge.kind != "kafka":
+            # The graph draws Kafka topics only; a RabbitMQ or JMS channel
+            # stays in the persisted topology (PDR-16, known limit).
+            continue
 
         topic = edge.from_endpoint.topic
         rendered_edges.append(

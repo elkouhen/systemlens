@@ -427,6 +427,35 @@ routing key, the queue name. One to a named exchange is named
 `exchange/routing-key` and pairs with no queue, since exchange bindings
 are not read. A JMS publication is named by its destination.
 
+A flow starts at a trigger (PDR-16). Besides REST routes, Kafka
+consumers and `@Scheduled` methods, the triggers are:
+
+- `@RabbitListener` and `@JmsListener` methods, consume endpoints named by
+  their `queues` or `destination` value, resolved as a Kafka topic is. A
+  class-level `@RabbitListener` gives its endpoint to each `@RabbitHandler`
+  method. A Rabbit or JMS consumer pairs with a publication of the same
+  system and channel name in another module, as a `publishes_to`
+  relation; a dynamic name never pairs.
+- `CommandLineRunner.run`, `ApplicationRunner.run` and `@PostConstruct`
+  methods, with a `Déclencheur de démarrage` step named after them.
+- `@EventListener` and `@TransactionalEventListener` methods, with an
+  `Écouteur d'événement` step named after the event types, such as
+  `@EventListener(OrderCreatedEvent)`.
+
+Startup and event triggers, like schedules, add no topology endpoint.
+An event stays in-process: `publishEvent(x)` on an
+`ApplicationEventPublisher` or an `ApplicationContext` is a `possible`
+call to each listener whose event type is the static type of `x` or one
+of its ancestors. The event type is the `classes` or `value` attribute,
+else the single parameter. The publisher's flow continues through the
+listener, with low confidence; an untyped `x` gives no call.
+
+`main`, `@SqsListener`, Spring Cloud Stream functional beans,
+`RouterFunction` handlers, `@MessageMapping`, gRPC services, Spring Batch
+and Quartz jobs start no flow. The HTML architecture graph draws Kafka
+topics only: a Rabbit or JMS relation is in the persisted topology and
+the CLI, and its steps appear in the flows.
+
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service edge requires the same
 concrete topic, while two known and different Java message types prevent the

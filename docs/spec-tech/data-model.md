@@ -336,9 +336,10 @@ that graph.
 render ports and edge labels.
 
 `triggers` maps each participating service to the flow entries that can start
-the propagation. A trigger kind is one of `http_entry`, `message_entry` or
-`cron_entry`. The `flow_id` links to `code_flows` or `supporting_code_flows`;
-`endpoint_id` may be null for a scheduled trigger without an endpoint fact.
+the propagation. A trigger kind is one of `http_entry`, `message_entry`,
+`cron_entry`, `startup_entry` or `event_entry`. The `flow_id` links to
+`code_flows` or `supporting_code_flows`; `endpoint_id` is null for a
+transient trigger, which has no endpoint fact.
 The graph description retains cycles and fan-out without merging distinct
 flows. A graph with no zero-indegree service uses all participating services as
 the deterministic root set.
@@ -389,10 +390,12 @@ so `--root-path` opens the file for a nested module too.
 
 `CodeFlow` is a persisted, ordered potential path through one Java method or a
 chain of Java methods resolved by the selected method-call engine. Its first
-`CodeFlowStep` is an indexed HTTP/Kafka entry point or a source-evidenced
-`@Scheduled` trigger, named by its schedule, such as
-`@Scheduled(cron=0 * * * * *)` or `@Scheduled(fixedRate=5000)`.
-Later steps are HTTP calls, Kafka publications, or MongoDB/JPA reads and writes in
+`CodeFlowStep` is an indexed HTTP, Kafka, RabbitMQ or JMS entry point, or
+a source-evidenced transient trigger. A `@Scheduled` trigger is named by
+its schedule, such as `@Scheduled(cron=0 * * * * *)`. A startup trigger is
+named `CommandLineRunner.run`, `ApplicationRunner.run` or `@PostConstruct`,
+and an event trigger `@EventListener(OrderCreated)` (PDR-16).
+Later steps are HTTP calls, message publications, or MongoDB/JPA reads and writes in
 the entry method or a reachable method. Steps retain relative evidence paths and
 line ranges.
 
@@ -543,6 +546,9 @@ annotated with `@Scheduled` is an entry like an HTTP route or a Kafka
 listener: interprocedural construction starts there, and its first step is
 `cron_entry`. Its schedule names the step, such as
 `@Scheduled(cron=${order.cron})`; the step carries no `endpoint_id`.
+Startup code and event listeners are entries the same way, with a
+`startup_entry` or `event_entry` first step (PDR-16). A transient
+trigger is identified by its kind, path and line.
 Known message types must match when both endpoints provide one. Missing type
 evidence does not prevent the topology relation, while conflicting known types
 prevent it.
@@ -550,7 +556,7 @@ prevent it.
 The exported flow-graph projection builds directed candidate edges from the
 flow-associated OUT ports, identifies trigger flows with no incoming flow
 edge as roots, and traverses those flows in breadth-first order. A trigger is only
-an `http_entry`, `message_entry`, or `cron_entry` first step; a publication or
+an `http_entry`, `message_entry` or transient-trigger first step; a publication or
 HTTP call is an internal output. For each visited module, the traversal follows
 only its flow-associated OUT ports and valid output-to-input topology edges,
 then visits the flow whose trigger is the target IN port.

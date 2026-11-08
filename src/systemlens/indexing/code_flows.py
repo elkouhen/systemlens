@@ -12,6 +12,7 @@ from tree_sitter import Node
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import (
     DATA_STEP_KINDS,
+    TRANSIENT_ENTRY_KINDS,
     entry_dispatch_allowed,
     inherited_method_anchor,
     CodeFlow,
@@ -29,10 +30,11 @@ from systemlens.domain.models import MESSAGE_SYSTEMS, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.integration_methods import (
-    SCHEDULER_TRIGGER,
+    TRANSIENT_TRIGGERS,
     is_initializer,
     path_module_resolver,
-    scheduled_trigger_label,
+    qualified_method_owner,
+    transient_trigger_labels,
 )
 from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.indexing.java_value_origins import trace_scalar_key_identity
@@ -43,7 +45,7 @@ from systemlens.storage.persisted_names import (
 
 
 CODE_FLOW_SIGNATURE = "code-flow-v56-inherited-routes-and-triggers"
-_TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
+_TRIGGER_ROLES = {("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS)}
 _EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
 
@@ -51,13 +53,13 @@ CallEdgeEntry = tuple[IntegrationMethod, MethodCall, bool]
 
 
 def _anchor_steps(flow: CodeFlow) -> list[CodeFlowStep]:
-    """Steps that identify a flow's ends: endpoints and scheduler triggers.
+    """Steps that identify a flow's ends: endpoints and transient triggers.
 
-    A scheduler trigger is transient and carries no endpoint ID, so its
+    A transient trigger, such as a schedule, carries no endpoint ID, so its
     source location is its identity. Without it, two schedulers reaching
     the same publication would share one deduplication key.
     """
-    return [step for step in flow.steps if step.endpoint_id or step.kind == "cron_entry"]
+    return [step for step in flow.steps if step.endpoint_id or step.kind in TRANSIENT_ENTRY_KINDS]
 
 
 def _step_anchor(step: CodeFlowStep) -> str:
@@ -317,11 +319,11 @@ def combine_code_flows(
 
 
 def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
-    if (endpoint.system, endpoint.role) == SCHEDULER_TRIGGER:
-        # Scheduler triggers are transient, so the step names no endpoint.
+    if endpoint.role == "trigger" and endpoint.system in TRANSIENT_TRIGGERS:
+        # Transient triggers are never persisted: the step names no endpoint.
         return CodeFlowStep(
-            order=order, kind="cron_entry", name=endpoint.topic, path=endpoint.path,
-            start_line=endpoint.start_line, end_line=endpoint.end_line,
+            order=order, kind=TRANSIENT_TRIGGERS[endpoint.system][0], name=endpoint.topic,
+            path=endpoint.path, start_line=endpoint.start_line, end_line=endpoint.end_line,
         )
     if endpoint.system in MESSAGE_SYSTEMS:
         kind = {"consume": "message_entry", "produce": "message_publish"}[endpoint.role]
@@ -394,22 +396,22 @@ def _operation_sort_key(operation: DataOperation) -> tuple[int, str]:
     return operation.line, f"{operation.technology}:{operation.operation}:{operation.resource or ''}"
 
 
-def _scheduled_trigger_step(
+def _transient_trigger_steps(
     method_node: Node, source: bytes, path: str
-) -> CodeFlowStep | None:
-    """Return a source-evidenced cron trigger for a scheduled Java method."""
-    for annotation in java_parser.annotations_of(method_node):
-        if java_parser.annotation_name(annotation, source) != "Scheduled":
-            continue
-        return CodeFlowStep(
-            order=1,
-            kind="cron_entry",
-            name=scheduled_trigger_label(annotation, source),
-            path=path,
-            start_line=method_node.start_point.row + 1,
-            end_line=method_node.start_point.row + 1,
+) -> list[CodeFlowStep]:
+    """Source-evidenced transient trigger steps of a Java method.
+
+    A schedule gives a ``cron_entry``, startup code a ``startup_entry`` and
+    an event listener an ``event_entry`` (PDR-16).
+    """
+    line = method_node.start_point.row + 1
+    return [
+        CodeFlowStep(
+            order=1, kind=TRANSIENT_TRIGGERS[system][0], name=label,
+            path=path, start_line=line, end_line=line,
         )
-    return None
+        for system, label in transient_trigger_labels(method_node, source)
+    ]
 
 
 def _after_commit_lines(repo_root: Path, path: str) -> list[tuple[int, int]]:
@@ -546,7 +548,7 @@ def materialize_code_flows(
                     for node in java_parser.walk(method_node)
                 )
             )
-            scheduled_trigger = _scheduled_trigger_step(method_node, source, path)
+            transient_triggers = _transient_trigger_steps(method_node, source, path)
             for trigger in triggers:
                 assert trigger.module is not None
                 effects: list[tuple[int, str, MessageEndpoint | DataOperation]] = [
@@ -601,7 +603,7 @@ def materialize_code_flows(
                     ),
                     steps=tuple(steps),
                 ))
-            if scheduled_trigger is not None:
+            for scheduled_trigger in transient_triggers:
                 operation_modules = operation_modules_by_path_and_method.get(
                     (path, method_name), set()
                 )
@@ -611,11 +613,13 @@ def materialize_code_flows(
                 )
                 if owner_module is None:
                     continue
-                qualified_method = (
-                    f"{producer.qualified_name}.{method_name}"
-                    if producer is not None and producer.qualified_name
-                    else method_name
+                # Without a producer, the method's lexical owner names it: a
+                # trigger whose effects are data operations only.
+                owner = (
+                    producer.qualified_name if producer is not None and producer.qualified_name
+                    else qualified_method_owner(method_node, root, source)
                 )
+                qualified_method = f"{owner}.{method_name}" if owner else method_name
                 scheduled_effects: list[tuple[int, str, MessageEndpoint | DataOperation]] = [
                     (endpoint.start_line, endpoint.id, endpoint)
                     for endpoint in endpoint_effects
@@ -640,7 +644,7 @@ def materialize_code_flows(
                 flows.append(CodeFlow(
                     id=compute_code_flow_id(
                         owner_module, path, qualified_method,
-                        "cron_entry", scheduled_trigger.name,
+                        scheduled_trigger.kind, scheduled_trigger.name,
                     ),
                     module=owner_module,
                     method=qualified_method,
@@ -652,6 +656,9 @@ def materialize_code_flows(
                     reason=(
                         "A scheduled Java method has source-backed effects; "
                         "the scheduler is the flow trigger."
+                        if scheduled_trigger.kind == "cron_entry" else
+                        "A Java method run at startup or on an in-process event has "
+                        "source-backed effects; that trigger starts the flow."
                     ),
                     steps=tuple(steps),
                 ))
@@ -1176,6 +1183,19 @@ def _build_call_graph(
                 call.dispatch_confidence != "exact" and not declared_contract,
             )
 
+    # An in-process event leaves the publisher for its listeners: a possible,
+    # inferred edge on another receiver than the caller's ``this`` (PDR-16).
+    event_sites: set[tuple[str, int, str]] = set()
+    if symbols is not None:
+        for call in symbols.event_dispatch_calls():
+            caller = locate_caller(call)
+            listener = locate(call.callee, call.callee_path, call.callee_line)
+            if caller is None or listener is None or not visible(caller, listener[0]):
+                continue
+            synthetic_calls.add(call)
+            add_edge(caller, listener[0], call, True)
+            event_sites.add((caller.id, call.call_line, listener[0].id))
+
     # The witness hop is the declared edge to the interface method. Its
     # expansion to an implementation the site already reaches through a
     # declared edge adds no route, only a second search state (review A4).
@@ -1202,7 +1222,8 @@ def _build_call_graph(
         methods=method_facts(graph_methods_by_id),
         symbols=symbols,
         other_receiver_sites=(
-            other_receiver_sites(symbols, adjacency) if symbols is not None else frozenset()
+            other_receiver_sites(symbols, adjacency) | event_sites
+            if symbols is not None else frozenset()
         ),
     )
 

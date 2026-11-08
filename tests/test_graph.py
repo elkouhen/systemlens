@@ -538,3 +538,37 @@ def test_build_graph_works_from_module_grouped_endpoints() -> None:
     assert edges[0].from_service == "order-service"
     assert edges[0].to_service == "payment-service"
     assert edges[0].kind == "kafka"
+
+
+def test_broker_channels_pair_by_system_and_name() -> None:
+    # PDR-16: a Rabbit or JMS publication pairs with a consumer of the same
+    # system and the same concrete channel in another module; a dynamic
+    # name, another system and the same module never pair.
+    sender = make_endpoint("produce", "email", "a/Send.java", system="rabbitmq", module="preserve")
+    receiver = make_endpoint("consume", "email", "b/Receive.java", system="rabbitmq", module="notify")
+    jms_receiver = make_endpoint("consume", "email", "c/Jms.java", system="jms", module="audit")
+    dynamic = make_endpoint("produce", "<dynamic>", "a/Dyn.java", system="rabbitmq", module="preserve")
+    dynamic = replace(dynamic, topic_dynamic=True)
+    local = make_endpoint("consume", "email", "a/Local.java", system="rabbitmq", module="preserve")
+    edges = build_graph(group_endpoints_by_module([sender, receiver, jms_receiver, dynamic, local]))
+    assert [(edge.kind, edge.from_service, edge.to_service, edge.to_endpoint) for edge in edges] == [
+        ("rabbitmq", "preserve", "notify", receiver),
+    ]
+
+
+def test_broker_relation_is_rebuilt_from_persisted_relations() -> None:
+    # The persisted publishes_to relation of a Rabbit pair comes back as a
+    # rabbitmq edge, never as a Kafka one.
+    from systemlens.domain.graph import graph_edges_from_relations
+    from systemlens.indexing.relations import build_architecture_relations
+
+    sender = make_endpoint("produce", "email", "a/Send.java", system="rabbitmq", module="preserve")
+    receiver = make_endpoint("consume", "email", "b/Receive.java", system="rabbitmq", module="notify")
+    relations = build_architecture_relations([], [sender, receiver], [])
+    assert {(item.relation, item.target_kind) for item in relations if item.source_name == "preserve"} >= {
+        ("publishes", "channel"), ("publishes_to", "microservice"),
+    }
+    edges = graph_edges_from_relations(relations, group_endpoints_by_module([sender, receiver]))
+    assert [(edge.kind, edge.from_service, edge.to_service, edge.to_endpoint) for edge in edges] == [
+        ("rabbitmq", "preserve", "notify", receiver),
+    ]

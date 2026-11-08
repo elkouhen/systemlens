@@ -15,9 +15,15 @@ from systemlens.domain.code_flows import IntegrationMethod, inherited_method_anc
 from systemlens.domain.models import MESSAGE_SYSTEMS, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
-# A scheduler trigger is transient: it exists only while flows are built.
+# A transient trigger exists only while flows are built (PDR-16): a
+# schedule, startup code or an in-process event listener.
 SCHEDULER_TRIGGER = ("scheduler", "trigger")
-_INPUT_ROLES = {("rest", "serve"), ("kafka", "consume"), SCHEDULER_TRIGGER}
+STARTUP_TRIGGER = ("startup", "trigger")
+EVENT_TRIGGER = ("event", "trigger")
+_INPUT_ROLES = {
+    ("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS),
+    SCHEDULER_TRIGGER, STARTUP_TRIGGER, EVENT_TRIGGER,
+}
 _OUTPUT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
 # ADR-75: a constructor is ``Owner.<init>``, a type's static initializer
@@ -255,6 +261,9 @@ def _qualified_method_owner(declaration, root, source: bytes) -> str | None:
     return ".".join(parts)
 
 
+qualified_method_owner = _qualified_method_owner
+
+
 def _path_module(repo_root: Path, path: str, modules: Sequence[DiscoveredModule]) -> str | None:
     """Return the innermost discovered module containing a repository path."""
     return path_module_resolver(repo_root, modules)(path)
@@ -292,6 +301,17 @@ def path_module_resolver(
 
 
 SCHEDULER_TRIGGER_PREFIX = "scheduler:"
+# Transient trigger system -> (step kind, endpoint ID prefix, framework).
+TRANSIENT_TRIGGERS = {
+    SCHEDULER_TRIGGER[0]: ("cron_entry", SCHEDULER_TRIGGER_PREFIX, "spring-scheduling"),
+    STARTUP_TRIGGER[0]: ("startup_entry", "startup:", "spring-boot"),
+    EVENT_TRIGGER[0]: ("event_entry", "event:", "spring-events"),
+}
+TRANSIENT_TRIGGER_PREFIXES = tuple(prefix for _kind, prefix, _framework in TRANSIENT_TRIGGERS.values())
+_EVENT_LISTENERS = frozenset({"EventListener", "TransactionalEventListener"})
+_RUNNERS = frozenset({"CommandLineRunner", "ApplicationRunner"})
+# Text one of the transient trigger shapes needs in a source file.
+_TRIGGER_MARKERS = (b"Scheduled", b"EventListener", b"PostConstruct", b"Runner")
 
 
 def scheduled_trigger_label(annotation: Node, source: bytes) -> str:
@@ -309,18 +329,89 @@ def scheduled_trigger_label(annotation: Node, source: bytes) -> str:
     return "@Scheduled"
 
 
-def scheduled_trigger_endpoints(
+def _simple_type(text: str) -> str:
+    """``java.util.List<Order>`` -> ``List``: the erased simple name."""
+    return text.split("<", 1)[0].strip().rsplit(".", 1)[-1]
+
+
+def _event_listener_label(name: str, annotation: Node, declaration: Node, source: bytes) -> str:
+    """``@EventListener(OrderCreated)``: the event types the listener takes.
+
+    The ``classes`` or ``value`` attribute names them; without it the single
+    parameter does. A listener whose type is not written keeps the bare
+    annotation name.
+    """
+    value = (
+        java_parser.annotation_argument(annotation, source, "classes")
+        or java_parser.annotation_argument(annotation, source, "value")
+        or java_parser.annotation_argument(annotation, source)
+    )
+    types: list[str] = []
+    if value is not None and value.type != "string_literal":
+        types = [
+            _simple_type(java_parser.node_text(source, node.named_children[0]))
+            for node in java_parser.walk(value)
+            if node.type == "class_literal" and node.named_children
+        ]
+    if not types:
+        parameters = declared_parameter_types(declaration, source) or ()
+        types = [_simple_type(parameters[0])] if len(parameters) == 1 else []
+    return f"@{name}({', '.join(types)})" if types else f"@{name}"
+
+
+def _implements_runner(declaration: Node, source: bytes) -> str | None:
+    """The runner interface whose ``run`` a method implements, if any."""
+    if java_parser.declaration_name(declaration, source) != "run":
+        return None
+    owner = java_parser.enclosing(declaration, "class_declaration", "enum_declaration", "record_declaration")
+    interfaces = next(
+        (child for child in owner.named_children if child.type == "super_interfaces"), None,
+    ) if owner is not None else None
+    if interfaces is None:
+        return None
+    written = {
+        _simple_type(java_parser.node_text(source, node))
+        for node in java_parser.walk(interfaces)
+        if node.type in {"type_identifier", "scoped_type_identifier", "generic_type"}
+    }
+    return next((runner for runner in sorted(_RUNNERS) if runner in written), None)
+
+
+def transient_trigger_labels(declaration: Node, source: bytes) -> list[tuple[str, str]]:
+    """``(system, step name)`` of each transient trigger a method declares.
+
+    A ``@Scheduled`` method is a scheduler trigger. ``CommandLineRunner.run``,
+    ``ApplicationRunner.run`` and a ``@PostConstruct`` method are startup
+    triggers, and an ``@EventListener`` or ``@TransactionalEventListener``
+    method is an event trigger (PDR-16). None is a topology endpoint.
+    """
+    labels: list[tuple[str, str]] = []
+    for annotation in java_parser.annotations_of(declaration):
+        name = java_parser.annotation_name(annotation, source)
+        if name == "Scheduled":
+            labels.append((SCHEDULER_TRIGGER[0], scheduled_trigger_label(annotation, source)))
+        elif name == "PostConstruct":
+            labels.append((STARTUP_TRIGGER[0], "@PostConstruct"))
+        elif name in _EVENT_LISTENERS:
+            labels.append((EVENT_TRIGGER[0], _event_listener_label(name, annotation, declaration, source)))
+    runner = _implements_runner(declaration, source)
+    if runner is not None:
+        labels.append((STARTUP_TRIGGER[0], f"{runner}.run"))
+    return labels
+
+
+def transient_trigger_endpoints(
     repo_root: Path,
     java_paths: list[str],
     endpoints: list[MessageEndpoint],
     modules: list[DiscoveredModule],
 ) -> list[MessageEndpoint]:
-    """Return transient triggers for Spring ``@Scheduled`` methods.
+    """Return the transient triggers of the given Java files.
 
-    They let interprocedural flow construction start at a scheduler, like an
-    HTTP route or a Kafka listener. They are never persisted as endpoints, so
-    the architecture topology is unchanged; flow steps built from them carry
-    no endpoint ID.
+    They let interprocedural flow construction start at a schedule, startup
+    code or an event listener, like an HTTP route or a Kafka listener. They
+    are never persisted as endpoints, so the architecture topology is
+    unchanged; flow steps built from them carry no endpoint ID.
     """
     module_by_path = {
         endpoint.path: endpoint.module for endpoint in endpoints
@@ -331,31 +422,29 @@ def scheduled_trigger_endpoints(
         if not path.endswith(".java"):
             continue
         parsed = java_parser.parse_java(str(repo_root.resolve()), path)
-        if parsed is None or b"Scheduled" not in parsed[0]:
+        if parsed is None or not any(marker in parsed[0] for marker in _TRIGGER_MARKERS):
             continue
         source, root = parsed
         for declaration in java_parser.walk(root):
             if declaration.type != "method_declaration" or java_parser.is_anonymous_member(declaration):
                 continue
-            annotation = next((
-                item for item in java_parser.annotations_of(declaration)
-                if java_parser.annotation_name(item, source) == "Scheduled"
-            ), None)
-            if annotation is None:
+            labels = transient_trigger_labels(declaration, source)
+            if not labels:
                 continue
             module = module_by_path.get(path) or _path_module(repo_root, path, modules)
             if module is None:
                 continue
-            schedule = scheduled_trigger_label(annotation, source)
             line = declaration.start_point.row + 1
-            triggers.append(MessageEndpoint(
-                id=f"{SCHEDULER_TRIGGER_PREFIX}{module}:{path}:{line}",
-                role=SCHEDULER_TRIGGER[1], system=SCHEDULER_TRIGGER[0],
-                topic=schedule, topic_dynamic=False, source="code",
-                framework="spring-scheduling", path=path, start_line=line, end_line=line,
-                snippet="", module=module,
-                qualified_name=_qualified_method_owner(declaration, root, source),
-            ))
+            for system, label in labels:
+                _kind, prefix, framework = TRANSIENT_TRIGGERS[system]
+                triggers.append(MessageEndpoint(
+                    id=f"{prefix}{module}:{path}:{line}",
+                    role="trigger", system=system,
+                    topic=label, topic_dynamic=False, source="code",
+                    framework=framework, path=path, start_line=line, end_line=line,
+                    snippet="", module=module,
+                    qualified_name=_qualified_method_owner(declaration, root, source),
+                ))
     return triggers
 
 
@@ -413,18 +502,25 @@ def _innermost_declaring_spans(
     return owners
 
 
+# A class-level listener dispatches to these handler methods.
+_CLASS_LISTENER_HANDLERS = {"kafka": "KafkaHandler", "rabbitmq": "RabbitHandler"}
+
+
 def _class_listener_handler_spans(
     root, source: bytes, endpoints: list[MessageEndpoint], owned: dict[str, tuple[int, int]],
 ) -> dict[str, set[tuple[int, int]]]:
-    """Map a class-level ``@KafkaListener`` endpoint to its handler methods.
+    """Map a class-level ``@KafkaListener`` or ``@RabbitListener`` endpoint
+    to its handler methods.
 
     The listener annotation sits on the class, outside every method; Spring
-    dispatches each record to one of the class's ``@KafkaHandler`` methods,
-    so each of them receives the consume endpoint.
+    dispatches each message to one of the class's ``@KafkaHandler`` or
+    ``@RabbitHandler`` methods, so each of them receives the consume
+    endpoint.
     """
     pending = [
         endpoint for endpoint in endpoints
-        if endpoint.id not in owned and (endpoint.system, endpoint.role) == ("kafka", "consume")
+        if endpoint.id not in owned and endpoint.role == "consume"
+        and endpoint.system in _CLASS_LISTENER_HANDLERS
     ]
     if not pending:
         return {}
@@ -444,7 +540,8 @@ def _class_listener_handler_spans(
             if member.type == "method_declaration"
             and java_parser.enclosing(member, "class_declaration") == owner
             and any(
-                java_parser.annotation_name(annotation, source) == "KafkaHandler"
+                java_parser.annotation_name(annotation, source)
+                == _CLASS_LISTENER_HANDLERS[endpoint.system]
                 for annotation in java_parser.annotations_of(member)
             )
         }
