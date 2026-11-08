@@ -249,6 +249,12 @@ _GENERIC_CONTAINERS: dict[str, tuple[str, int]] = {
     "java.util.function.BiFunction": ("bifunction", 3),
     "java.util.function.UnaryOperator": ("unaryoperator", 1),
     "java.util.function.BinaryOperator": ("binaryoperator", 1),
+    # BL-43, ADR-90: Spring types whose type argument types the value they
+    # return, documented with their versions in indexing.md.
+    "org.springframework.data.domain.Page": ("page", 1),
+    "org.springframework.data.domain.Slice": ("page", 1),
+    "org.springframework.http.ResponseEntity": ("entity", 1),
+    "org.springframework.http.HttpEntity": ("entity", 1),
 }
 _ELEMENT_CALLBACKS = (
     "filter", "map", "flatMap", "forEach", "forEachOrdered", "peek", "anyMatch", "allMatch",
@@ -304,6 +310,8 @@ _GENERIC_CALLS: dict[tuple[str, str, int], tuple[str, tuple[int, ...]]] = {
     # BL-36, quoted with their Java SE signatures in indexing.md.
     ("stream", "toList", 0): ("iterable", (0,)),
     ("stream", "reduce", 1): ("optional", (0,)),
+    # BL-43, ADR-90: ``List<T> getContent()`` of ``Page<T>`` and ``Slice<T>``.
+    ("page", "getContent", 0): ("iterable", (0,)),
 }
 # Calls whose function argument gives the container's new element (BL-40):
 # (receiver kind, method name) -> whether the function returns the element
@@ -357,6 +365,9 @@ _ELEMENT_ACCESSORS: dict[tuple[str, str, int], int] = {
     ("bifunction", "apply", 2): 2,
     ("unaryoperator", "apply", 1): 0,
     ("binaryoperator", "apply", 2): 0,
+    # BL-43, ADR-90: ``T getBody()`` of ``HttpEntity<T>``, inherited by
+    # ``ResponseEntity<T>``.
+    ("entity", "getBody", 0): 0,
 }
 # Static JDK factories (BL-36): (owner, name) -> (result kind, rule). The
 # rule reads the arguments: ``elements``, one known type shared by every
@@ -386,8 +397,42 @@ _JDK_FACTORIES: dict[tuple[str, str], tuple[str, str]] = {
     )},
     ("java.util.Arrays", "stream"): ("stream", "array"),
     ("java.util.Objects", "requireNonNull"): ("", "argument"),
+    # BL-43, ADR-90: ``static <T> ResponseEntity<T> ok(T body)``.
+    ("org.springframework.http.ResponseEntity", "ok"): ("entity", "elements"),
 }
 _ACCESSOR_CALLS = {(name, count) for _kind, name, count in _ELEMENT_ACCESSORS}
+
+
+# Members a source type inherits from a Spring Data repository interface
+# (BL-43, ADR-90), stable across Spring Data 2.x and 3.x and documented in
+# indexing.md: (interface, name, arity) -> (returned type, the interface's
+# type arguments it holds). ``None`` returns the type argument itself;
+# ``_SAVED`` returns the argument's type, else the type argument
+# (``<S extends T> S save(S entity)``). ``findOne`` (Spring Data 1.x) and
+# the same-arity ``findAll`` overloads are left out.
+_SAVED = "<S extends T> S"
+_CRUD_REPOSITORY = "org.springframework.data.repository.CrudRepository"
+_LIST_CRUD_REPOSITORY = "org.springframework.data.repository.ListCrudRepository"
+_JPA_REPOSITORY = "org.springframework.data.jpa.repository.JpaRepository"
+_REPOSITORY_RETURNS: dict[tuple[str, str, int], tuple[str | None, tuple[int, ...]]] = {
+    **{(interface, member, arity): returned for interface in (
+        _CRUD_REPOSITORY, _LIST_CRUD_REPOSITORY, _JPA_REPOSITORY,
+    ) for member, arity, returned in (
+        ("findById", 1, ("java.util.Optional", (0,))),
+        ("save", 1, (_SAVED, (0,))),
+    )},
+    (_CRUD_REPOSITORY, "findAll", 0): ("java.lang.Iterable", (0,)),
+    (_CRUD_REPOSITORY, "findAllById", 1): ("java.lang.Iterable", (0,)),
+    **{(interface, member, arity): ("java.util.List", (0,)) for interface in (
+        _LIST_CRUD_REPOSITORY, _JPA_REPOSITORY,
+    ) for member, arity in (("findAll", 0), ("findAllById", 1))},
+}
+_REPOSITORY_ARITIES = {_CRUD_REPOSITORY: 2, _LIST_CRUD_REPOSITORY: 2, _JPA_REPOSITORY: 2}
+# Declared returns of the table that are more specific than another one:
+# a repository extending two kinds takes the most specific (ADR-90).
+_RETURN_SUPERTYPES: dict[str, frozenset[str]] = {
+    "java.util.List": frozenset({"java.lang.Iterable"}),
+}
 
 
 class _Nested(NamedTuple):
@@ -3078,8 +3123,9 @@ class JavaSymbols:
                 return self._factory_view(info, node, jdk_owner, name, arguments, depth + 1)
             inner = self._generic_view(info, receiver, node, depth + 1)
             if inner is None:
-                # ``catalog.list()``: a source method's declared return.
-                return self._returned_view(info, node, depth + 1)
+                # ``catalog.list()``: a source method's declared return, or
+                # ``repo.findAll()`` inherited from Spring Data (BL-43).
+                return self._returned_view(info, node, depth + 1) or self._repository_view(info, node, depth + 1)
             if inner[0] == "stream" and name == "collect" and len(arguments) == 1 and (
                 self._collects_to_collection(info, arguments[0])
             ):
@@ -3741,6 +3787,10 @@ class JavaSymbols:
         if not declarations:
             declarations = [candidate for base, base_module in self.ancestors(owner, module)
                             for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        if not declarations and (inherited := self._repository_return(info, receiver, depth + 1)) is not None:
+            # ``repo.save(o)``, ``repo.findAll()`` inherited from Spring
+            # Data: the type the signature table gives (BL-43, ADR-90).
+            return inherited[0] if inherited[0] is not None else inherited[1][0]
         if not declarations and locations[0][1].type == "enum_declaration" and (
             (name, len(arguments)) in {("valueOf", 1), ("values", 0)}
         ):
@@ -3903,6 +3953,117 @@ class JavaSymbols:
                 for argument in written_arguments
             )))
         return views.pop() if len(views) == 1 else None
+
+    def _repository_supertypes(
+        self, owner: str, module: str, env: _Env, depth: int = 0,
+    ) -> set[tuple[str, tuple[str | None, ...]]]:
+        """The Spring Data repository interfaces of ``_REPOSITORY_RETURNS``
+        that the source type ``owner`` extends, with their type arguments
+        (BL-43, ADR-90).
+
+        Read through the written ``extends`` and ``implements`` clauses of
+        ``owner`` and of its source ancestors, each argument substituted by
+        the arguments of the type that writes it (BL-26). A raw interface
+        or an argument count mismatch gives nothing.
+        """
+        found: set[tuple[str, tuple[str | None, ...]]] = set()
+        if depth > 16:
+            return found
+        for path, declaration in self._module_locations(owner, module):
+            source = self.units[path].source
+            for clause in declaration.named_children:
+                if clause.type not in _TYPE_CLAUSES:
+                    continue
+                for type_node in clause.named_children:
+                    for candidate in type_node.named_children if type_node.type == "type_list" else [type_node]:
+                        parameterized = self._parameterized(path, candidate, owner, env)
+                        if parameterized is not None:
+                            base, base_env = parameterized
+                            found |= self._repository_supertypes(
+                                base, self._module_of(base, path), base_env, depth + 1,
+                            )
+                            continue
+                        if candidate.type != "generic_type":
+                            continue
+                        name_node = candidate.named_children[0]
+                        interface = self.resolve(
+                            path, parser.node_text(source, name_node), owner, allow_ambiguous=True, at=name_node,
+                        )
+                        written = parser.child_by_type(candidate, "type_arguments")
+                        if (
+                            interface not in _REPOSITORY_ARITIES or interface in self.types or written is None
+                            or len(written.named_children) != _REPOSITORY_ARITIES[interface]
+                        ):
+                            continue
+                        found.add((interface, tuple(
+                            self._type_argument_value(path, argument, owner, env)
+                            for argument in written.named_children
+                        )))
+        return found
+
+    def _repository_return(
+        self, info: _Method, invocation: Node, depth: int,
+    ) -> tuple[str | None, tuple[str | None, ...]] | None:
+        """The return of a call to a member a source receiver inherits from
+        a Spring Data repository interface (BL-43, ADR-90): a JDK container
+        and its type arguments, or ``(None, (T,))`` for a plain type.
+
+        A source declaration of the name and arity, on the receiver or a
+        source ancestor, wins: the table only fills a missing one. When the
+        receiver extends several interfaces of the table, the most specific
+        declared return wins (``List<T>`` over ``Iterable<T>``); when none
+        is more specific than every other, the call gets nothing.
+        """
+        source = self.units[info.method.path].source
+        parent_receiver, name, arguments = parser.invocation_parts(invocation, source)
+        if not any(key[1:] == (name, len(arguments)) for key in _REPOSITORY_RETURNS):
+            return None
+        context = self._receiver_env(info, parent_receiver, invocation, depth + 1)
+        if context is None or context[0] not in self.types:
+            return None
+        owner, env = context
+        locations = self._type_candidates(owner, info.method.path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        if self.by_owner.get((owner, name, len(arguments), module)) or any(
+            self.by_owner.get((base, name, len(arguments), base_module))
+            for base, base_module in self.ancestors(owner, module)
+        ):
+            return None
+        results: set[tuple[str | None, tuple[str | None, ...]]] = set()
+        for interface, written in self._repository_supertypes(owner, module, env):
+            entry = _REPOSITORY_RETURNS.get((interface, name, len(arguments)))
+            if entry is None:
+                continue
+            returned, indices = entry
+            values = tuple(written[index] for index in indices)
+            if returned == _SAVED:
+                # ``<S extends T> S save(S entity)``: the argument's type.
+                typed = self.expression_type(info, arguments[0], invocation, depth + 1)
+                if typed is not None and typed not in _PRIMITIVES and not typed.endswith("[]"):
+                    values = (typed,)
+                returned = None
+            results.add((returned, values))
+        if len(results) == 1:
+            return results.pop()
+        specific = [
+            (returned, values) for returned, values in results
+            if all(
+                (other, other_values) == (returned, values) or other_values == values
+                and returned is not None and other in _RETURN_SUPERTYPES.get(returned, frozenset())
+                for other, other_values in results
+            )
+        ]
+        return specific[0] if len(specific) == 1 else None
+
+    def _repository_view(self, info: _Method, invocation: Node, depth: int) -> _View | None:
+        """The JDK container view of an inherited repository member
+        (BL-43): ``repo.findById(id)`` gives ``Optional<T>``."""
+        found = self._repository_return(info, invocation, depth)
+        if found is None or found[0] is None or found[0] not in _GENERIC_CONTAINERS:
+            return None
+        return _GENERIC_CONTAINERS[found[0]][0], found[1]
 
     def _call_env(
         self, info: _Method, declaration: _Method, context: tuple[str, _Env], invocation: Node,

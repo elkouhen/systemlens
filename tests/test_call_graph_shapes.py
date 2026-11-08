@@ -3537,6 +3537,130 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Svc.run", {"OrderRepo.findByOrderId": "possible"}),
+    Shape("W9", """
+        import java.util.List;
+        import org.springframework.data.domain.Slice;
+        import org.springframework.data.jpa.repository.JpaRepository;
+        import org.springframework.data.repository.CrudRepository;
+        import org.springframework.http.HttpEntity;
+        import org.springframework.http.ResponseEntity;
+        class Order {
+          void m01() {} //@Order.m01
+          void m02() {} //@Order.m02
+          void m03() {} //@Order.m03
+          void m04() {} //@Order.m04
+          void m05() {} //@Order.m05
+          void m06() {} //@Order.m06
+          void m07() {} //@Order.m07
+          void m08() {} //@Order.m08
+        }
+        class Special extends Order {
+          void special() {} //@Special.special
+        }
+        class Line {
+          void qty() {} //@Line.qty
+        }
+        interface BaseRepo<E> extends JpaRepository<E, Long> {}
+        interface OrderRepo extends BaseRepo<Order> {}
+        interface BothRepo extends CrudRepository<Order, Long>, JpaRepository<Order, Long> {}
+        interface CrudOrders extends CrudRepository<Order, Long> {}
+        interface LineRepo extends JpaRepository<Order, Long> {
+          List<Line> findAll(); //@LineRepo.findAll
+        }
+        class Use {
+          OrderRepo repo;
+          BothRepo both;
+          CrudOrders crud;
+          LineRepo lines;
+          Slice<Order> slice;
+          HttpEntity<Order> entity;
+          void run(Long id, Order o, Special s) { //@Use.run
+            repo.findById(id).get().m01();
+            repo.findAll().get(0).m02();
+            both.findAll().get(0).m03();
+            crud.findAll().forEach(x -> x.m04());
+            repo.save(s).special();
+            slice.getContent().get(0).m05();
+            entity.getBody().m06();
+            ResponseEntity.ok(o).getBody().m07();
+            crud.findAllById(List.of(id)).iterator().next().m08();
+            lines.findAll().get(0).qty();
+          }
+        }
+        """, "Use.run", {
+            "Order.m01": "exact", "Order.m02": "exact", "Order.m03": "exact", "Order.m04": "exact",
+            "Special.special": "exact", "Order.m05": "exact", "Order.m06": "exact", "Order.m07": "exact",
+            "Order.m08": "exact", "LineRepo.findAll": "possible", "Line.qty": "exact",
+        },
+        note="BL-43: Spring Data members through a generic source base, the most specific findAll, "
+             "save of a typed argument, Page/Slice, HttpEntity and ResponseEntity; a source "
+             "declaration wins over the table"),
+    Shape("W9-unproven", """
+        import org.springframework.data.jpa.repository.JpaRepository;
+        import org.springframework.data.repository.CrudRepository;
+        class Order {
+          void ship() {} //@Order.ship
+        }
+        class Line {
+          void qty() {} //@Line.qty
+        }
+        interface RawRepo extends JpaRepository {}
+        interface LineRepo extends JpaRepository<Line, Long> {}
+        interface MixedRepo extends CrudRepository<Order, Long>, LineRepo {}
+        interface OrderRepo extends JpaRepository<Order, Long> {}
+        class Use {
+          RawRepo raw;
+          MixedRepo mixed;
+          OrderRepo repo;
+          void run(Long id, Object unknown) { //@Use.run
+            repo.getReferenceById(id).ship();
+            repo.findOne(id).ship();
+            raw.findAll().get(0).ship();
+            raw.save(unknown).ship();
+            mixed.findAll().iterator().next().ship();
+            mixed.findAll().iterator().next().qty();
+            repo.save(missing()).ship();
+          }
+        }
+        """, "Use.run", {"Order.ship": "exact"},
+        note="BL-43: a member absent from the table, a raw JpaRepository and two findAll returns "
+             "of different elements stay untyped; save with an untyped argument returns T"),
+    Shape("W10", """
+        import org.springframework.beans.factory.BeanFactory;
+        import org.springframework.context.ApplicationContext;
+        class OrderService {
+          void place() {} //@OrderService.place
+          void cancel() {} //@OrderService.cancel
+        }
+        class Use {
+          ApplicationContext ctx;
+          BeanFactory factory;
+          void run(Class<OrderService> type) { //@Use.run
+            ctx.getBean(OrderService.class).place();
+            factory.getBean("orders", OrderService.class).cancel();
+            ctx.getBean(type).place();
+          }
+        }
+        """, "Use.run", {"OrderService.place": "exact", "OrderService.cancel": "exact"},
+        pending="BL-44", note="BL-44: a class literal or a written Class<T> types getBean"),
+    Shape("W10-unproven", """
+        import org.modelmapper.ModelMapper;
+        import org.springframework.context.ApplicationContext;
+        class OrderService {
+          void place() {} //@OrderService.place
+        }
+        class Use {
+          ApplicationContext ctx;
+          ModelMapper mapper;
+          void run(Object src, Class<?> any, Object name) { //@Use.run
+            ctx.getBean("orders").place();
+            ctx.getBean(any).place();
+            ctx.getBean(name, OrderService.class).place();
+            mapper.map(src, OrderService.class).place();
+          }
+        }
+        """, "Use.run", {},
+        note="BL-44: getBean(String), a wildcard Class, an untyped name and ModelMapper stay untyped"),
     Shape("W8", """
         import org.mapstruct.Mapper;
         class Order {}

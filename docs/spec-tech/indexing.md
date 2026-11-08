@@ -159,7 +159,9 @@ guesses library dependencies from the `import` lines of the projection,
 downloads their jars from Maven Central, and types library signatures
 from them. SystemLens does not configure or restrict this download.
 An offline run may lose the edges that need a library type; the engine
-parity cases of the A family depend on those jars.
+parity cases of the A family depend on those jars. The `source` engine
+reads no jar: it types the Spring signatures of its own table offline
+(ADR-90).
 
 The database is cached in `.systemlens/codeql/java-database` with
 `java-database.fingerprint` beside it (ADR-84). The fingerprint hashes every
@@ -644,6 +646,47 @@ with `Map<String, List<T>> groups()` on a `Repo<Circle>`,
 `repo.groups().get(k).get(0)` is a `Circle`. Where a type name is read,
 for a lambda parameter, a method's type variable or a `var` loop
 variable, a nested value gives its container type only.
+
+BL-43 adds a hand-kept table of Spring signatures (ADR-90). It gives
+the `source` engine, offline, the library return types CodeQL reads from
+the jars it downloads. Each entry names the interface, the member, its
+arity, and its return type in terms of the interface's type parameters.
+
+The table holds for Spring Data 2.x and 3.x and Spring Web 5.x and 6.x:
+it keeps only entries whose return type is the same in all of them.
+`findOne` (Spring Data 1.x) and the same-arity `findAll(Sort)`,
+`findAll(Pageable)` and `findAll(Example)` overloads are left out. A
+member absent from the table keeps today's behavior: no type, no edge.
+
+| Owner | Spring signature | Result |
+|---|---|---|
+| `CrudRepository<T, ID>` | `Optional<T> findById(ID id)` | `Optional<T>` |
+| `CrudRepository<T, ID>` | `Iterable<T> findAll()`, `Iterable<T> findAllById(Iterable<ID> ids)` | `Iterable<T>` |
+| `CrudRepository<T, ID>` | `<S extends T> S save(S entity)` | the argument's type, else `T` |
+| `ListCrudRepository<T, ID>` (3.x), `JpaRepository<T, ID>` | `List<T> findAll()`, `List<T> findAllById(Iterable<ID> ids)` | `List<T>` |
+| `ListCrudRepository<T, ID>` (3.x), `JpaRepository<T, ID>` | `findById` and `save`, as `CrudRepository` | as `CrudRepository` |
+| `Page<T>`, `Slice<T>` | `List<T> getContent()` | `List<T>` |
+| `HttpEntity<T>`, `ResponseEntity<T>` | `T getBody()` | `T` |
+| `ResponseEntity` | `static <T> ResponseEntity<T> ok(T body)` | `ResponseEntity<T>` |
+
+A repository member applies to a source type that extends the interface,
+directly or through source ancestors (`OrderRepo extends
+BaseRepo<Order>`, `BaseRepo<E> extends JpaRepository<E, Long>`). Its
+type arguments come from the written `extends` and `implements` clauses,
+substituted as for source generics (BL-26). A raw interface gives
+nothing. A receiver typed by the interface itself is not read.
+
+A source declaration of the same name and arity, on the receiver or a
+source ancestor, wins over the table. A repository extending two
+interfaces of the table takes the most specific declared return:
+`List<T>` over `Iterable<T>` with the same `T`. Returns with different
+type arguments leave the call untyped.
+
+`save` returns the argument's type when the pass types the argument, so
+`repo.save(special)` is a `Special`; otherwise it returns `T`. `Page`,
+`Slice`, `HttpEntity` and `ResponseEntity` are views like the JDK
+containers above: a written variable, a source method's return, or
+`ResponseEntity.ok(o)` gives their type argument.
 
 The source-generics model below keeps flat arguments: a type variable
 bound to a container, as `T` in `Box<List<Circle>>`, stays untyped.
@@ -1318,6 +1361,8 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | W6 | Entry points: `@PostConstruct`, `CommandLineRunner`, `ApplicationRunner` | `covered` as calls; no flow root | not planned |
 | W7 | Spring Data derived query | `covered` | |
 | W8 | Generated implementation (MapStruct, OpenAPI client) | `covered` | |
+| W9 | Spring signature table: Spring Data repository members through a source `extends` clause, `Page`/`Slice` content, `HttpEntity`/`ResponseEntity` body; a member absent from the table, a raw repository, a `findAll` conflict and an untyped `save` argument | `covered` (BL-43) | |
+| W10 | `getBean(Class<T>)` typed by a class literal or a written `Class<T>`; `getBean(String)` and ModelMapper stay untyped | `missing` | BL-44 |
 | X1 | Reflection, `ServiceLoader`, `Class.forName` | `out of scope`: a dynamic target is never guessed | |
 | X2 | AOP advice and proxies (`@Transactional`, aspects) | `out of scope`: the advised method is already the target | |
 | X3 | HTTP and Kafka between services | `out of scope`: flow transitions built by the extractors | |
@@ -1376,18 +1421,18 @@ shapes from the jars it fetches while it builds its database.
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 | B6 | Implementor without a written body: record accessor, Lombok member, body inherited from an external class or `Object`; one complete implementor set stays `exact` (ADR-81 rule 1) | `covered` | BL-32 |
-| A01 | `repo.findById(id).orElseThrow().getName()` through `extends JpaRepository<Order, Long>` | `missing` | BL-43 |
-| A02 | `repo.findById(id).get().getName()` | `missing` | BL-43 |
-| A04 | `repo.findById(id).ifPresent(o -> o.ship())` | `missing` | BL-43 |
-| A05 | `repo.findAll().get(0).ship()` | `missing` | BL-43 |
-| A06 | `repo.findAll().forEach(o -> o.ship())` | `missing` | BL-43 |
-| A07 | `repo.findAll().stream().map(o -> o.getName())` | `missing` | BL-43 |
-| A08 | `repo.save(order).ship()` | `missing` | BL-43 |
-| A09 | `repo.findAllById(ids).get(0).ship()` | `missing` | BL-43 |
+| A01 | `repo.findById(id).orElseThrow().getName()` through `extends JpaRepository<Order, Long>` | `covered` | BL-43 |
+| A02 | `repo.findById(id).get().getName()` | `covered` | BL-43 |
+| A04 | `repo.findById(id).ifPresent(o -> o.ship())` | `covered` | BL-43 |
+| A05 | `repo.findAll().get(0).ship()` | `covered` | BL-43 |
+| A06 | `repo.findAll().forEach(o -> o.ship())` | `covered` | BL-43 |
+| A07 | `repo.findAll().stream().map(o -> o.getName())` | `covered` | BL-43 |
+| A08 | `repo.save(order).ship()` | `covered` | BL-43 |
+| A09 | `repo.findAllById(ids).get(0).ship()` | `covered` | BL-43 |
 | A10 | Source `Optional<Order> findByName(..)`, then `.orElseThrow().ship()` | `covered` | BL-35 |
-| A11 | Source `Page<Order> findAll(Pageable)`, then `.getContent().get(0).ship()` | `missing` | BL-43 |
-| A12 | `ResponseEntity<Order> r = client.get(); r.getBody().ship()` | `missing` | BL-43 |
-| A13 | `ResponseEntity.ok(order).getBody().ship()` | `missing` | BL-43 |
+| A11 | Source `Page<Order> findAll(Pageable)`, then `.getContent().get(0).ship()` | `covered` | BL-43 |
+| A12 | `ResponseEntity<Order> r = client.get(); r.getBody().ship()` | `covered` | BL-43 |
+| A13 | `ResponseEntity.ok(order).getBody().ship()` | `covered` | BL-43 |
 | A15 | `m.computeIfAbsent(k, x -> new Order()).ship()` | `covered` | BL-36 |
 | A16 | `m.getOrDefault(k, other).ship()` | `covered` | BL-36 |
 | A18 | `stream().map(Order::getLine).toList().get(0).qty()` | `covered` | BL-40 |
@@ -1403,10 +1448,10 @@ shapes from the jars it fetches while it builds its database.
 | A32 | `ctx.getBean(OrderService.class).place()` | `missing` | BL-44 |
 | A33 | `Objects.requireNonNull(order).ship()` | `covered` | BL-36 |
 | A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
-| A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-43; BL-35 typed the `var` and the source return |
+| A38 | `var list = repo.findAll(); list.get(0).ship()` | `covered` | BL-43; BL-35 typed the `var` and the source return |
 | A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `covered` | BL-41 |
 | A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `covered` | BL-40 |
-| A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-43; BL-35 typed the `var` and the source return |
+| A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `covered` | BL-43; BL-35 typed the `var` and the source return |
 | A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `covered` | BL-41 |
 | A44 | `var opt = Optional.of(order); opt.get().ship()` | `covered` | BL-36 (`Optional.of`); BL-35 typed the `var` |
 | A45 | `Stream.of(a, b).findFirst().get().ship()` | `covered` | BL-36 |
