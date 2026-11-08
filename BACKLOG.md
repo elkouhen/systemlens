@@ -87,8 +87,8 @@ defect in the join is visible in a test). A target is never invented
 | [BL-33](#bl-33) | Make every review gap a visible parity or flow test | P1 | `delivered` |
 | [BL-34](#bl-34) | Fix the documentation drifts the review found | P2 | `delivered` |
 | [BL-35](#bl-35) | Type the element of a container returned by a source method or held by `var` | P1 | `delivered` |
-| [BL-36](#bl-36) | Complete the JDK signature table | P1 | `open` |
-| [BL-37](#bl-37) | Type lambdas and method references from JDK functional types | P1 | `open` |
+| [BL-36](#bl-36) | Complete the JDK signature table | P1 | `delivered` |
+| [BL-37](#bl-37) | Type lambdas and method references from JDK functional types | P1 | `delivered` |
 | [BL-38](#bl-38) | Keep an overloaded call when one argument is untyped | P1 | `open` |
 | [BL-39](#bl-39) | Index record compact constructors as methods | P1 | `delivered` |
 | [BL-40](#bl-40) | Follow element-type transforms through `map` and `flatMap` | P2 | `open` |
@@ -273,8 +273,20 @@ decision the owner has not taken.
   constructor argument with a known view. `Objects.requireNonNull`
   returns its argument's type.
 - **Depends on:** BL-33.
-- **Status:** `open`.
-- **Why P1:** second most frequent family, pure table work.
+- **Status:** `delivered`.
+- **Delivery:** the view reads the `Map` accessors that return a value,
+  `Stream.toList`, `collect(Collectors.toList()/toSet())`, `reduce`, a
+  future's value and the result of `Supplier`, `Callable`, `Function`,
+  `BiFunction`, `UnaryOperator` and `BinaryOperator`.
+
+  Static factories (`List.of`, `Set.of`, `Map.of`, `Arrays.asList`,
+  `Arrays.stream`, `Stream.of`, `Optional.of`, `copyOf`,
+  `Collections.unmodifiable*`) are named through their type or one
+  unshadowed static import. An untyped, `null` or array argument also
+  stays untyped. `indexing.md` quotes every new signature.
+
+  All 17 cases pass; call shapes T16 add the negative ones. Train-ticket
+  and lab counts unchanged. Commit `dfeca0a`.
 
 <a id="bl-37"></a>
 ### BL-37. Type lambdas and method references from JDK functional types
@@ -301,7 +313,22 @@ decision the owner has not taken.
   proven parameter types and binds to the one matching overload; two
   matching overloads leave it unresolved.
 - **Depends on:** BL-33; BL-36 for the functional containers.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `_JDK_FUNCTIONAL_SIGNATURES` fixes the positions of the
+  nine types; `? extends X` and `? super X` give `X` (JLS 9.9). A lambda
+  is typed from a source parameter or a written variable, and a
+  future's `thenApply`, `thenAccept`, `thenCompose` type their lambda.
+
+  A generic method infers its result type variable from the lambda's
+  body or agreeing `return`s (`_lambda_result`, reusable by BL-40); an
+  implicit lambda no longer constrains its parameters' type variables.
+  A method reference passes its proven parameter types to overload
+  selection; equally specific overloads stay unresolved.
+
+  B29, B30, C09, C10, D05, D06 pass, and A27 too: the future's value
+  types `o` without a transform, so BL-40 no longer owns it. A04, A06
+  and A07 keep BL-43. Call shapes F6 add the negative cases. Train-ticket
+  and lab counts unchanged. Commit `3d7a562`.
 - **Why P1:** handler and callback code; completes the half-finished
   JDK functional typing.
 
