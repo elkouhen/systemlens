@@ -752,7 +752,10 @@ that name each other in a cycle get no type.
 Names resolve lexically, innermost scope first: the locals and parameters
 of every enclosing block, lambda and method, anonymous and local class
 methods included, then the fields of each enclosing class before those of
-its outer classes. A member inner class thus reads its outer class's
+its outer classes. A local declarator is in scope from its own start, so
+`Foo a = new Foo(), b = a.n()` reads the local `a`. A try-with-resources
+resource is in scope in the later resources and the try body, not in
+`catch` or `finally`. `Foo x[]` declares an array (BC-11). A member inner class thus reads its outer class's
 fields, and a local class the enclosing method's locals.
 An anonymous class's own fields come before those of its source
 supertype; an external supertype is assumed to declare none, a known
@@ -1364,11 +1367,11 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | G5 | Type-variable return or field substituted from a written type argument; raw, wildcard and nested arguments | `covered` (BL-26) | |
 | G6 | Generic method type argument, written or inferred from the arguments | `covered` (BL-26) | |
 | G7 | Implementor excluded when its clause's type argument contradicts the receiver's written one; related, raw, wildcard and type-variable arguments keep it | `covered` (BL-45) | |
-| T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
+| T1 | Cast, record accessor, Lombok getter, array element, C-style array declarator | `covered` (BC-11) | |
 | T2 | Pattern variable of `instanceof Circle c` | `covered` (BL-23) | |
 | T3 | Pattern variable of a `switch` pattern | `covered` (BL-23) | |
 | T4 | `var` initializer typed where it is written | `covered` | |
-| T5 | Names in anonymous, local and inner classes, innermost scope first; `this` in an anonymous class body | `covered` (BC-10) | |
+| T5 | Names in anonymous, local and inner classes, innermost scope first; `this` in an anonymous class body; declarator and resource scopes | `covered` (BC-10, BC-11) | |
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
 | T7 | A local class is visible only to the end of its block | `covered` | |
 | T8 | A type parameter hides a source type of the same simple name | `covered` | |
@@ -1539,6 +1542,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E08 | `f("x")` and `f(1)` with `f(int)` and `f(Object...)` | `covered` | BC-08 |
 | E09 | `x.before()` on a parameter that receives a lambda and a named `Hook09Impl`, with a `default` `before` the named class overrides | `covered` | BC-09 |
 | E10 | `register(this)` in an anonymous `Thread` and in its creating method, with `register(Runnable)` and `register(Anonymous10)` | `covered` | BC-10 |
+| E11 | `take(x)` with `Foo11 x[]`; `Foo11 a = new Foo11(), b = a.n()` beside a field `Bar11 a`; a resource `c` shadowing a field in the try body only | `covered` | BC-11 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

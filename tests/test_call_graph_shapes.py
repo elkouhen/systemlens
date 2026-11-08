@@ -1544,6 +1544,23 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Circle.area": "exact"}),
+    Shape("T1-c-style-array", """
+        class Foo {
+          void m() {} //@Foo.m
+        }
+        class Main {
+          Foo items[];
+          void take(Foo f) {} //@Main.take.Foo
+          void take(Foo[] f) {} //@Main.take.array
+          void run(Foo x[]) { //@Main.run
+            take(x);
+            Foo xs[] = new Foo[1];
+            xs[0].m();
+            take(items);
+          }
+        }
+        """, "Main.run", {"Main.take.array": "exact", "Foo.m": "exact"},
+        note="BC-11: Foo x[] declares an array, as a parameter, a local or a field"),
     Shape("T2", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -1828,6 +1845,38 @@ SHAPES: list[Shape] = [
         {"Main.register.Runnable": "exact", "Main.register.Task": "exact", "Main.register.Main": "exact"},
         note="BC-10: this in an anonymous class body is that instance, typed by its supertype; "
              "in a lambda it stays the enclosing class"),
+    Shape("T5-declarator-scope", """
+        class Foo {
+          void m() {} //@Foo.m
+          Foo n() { return this; } //@Foo.n
+        }
+        class Bar {
+          void m() {} //@Bar.m
+          Bar n() { return this; } //@Bar.n
+        }
+        class Conn implements AutoCloseable {
+          public void close() {}
+          void ping() {} //@Conn.ping
+        }
+        class Other implements AutoCloseable {
+          public void close() {}
+          void ping() {} //@Other.ping
+        }
+        class Main {
+          Bar a;
+          Conn c;
+          Other open() { return new Other(); } //@Main.open
+          void run() { //@Main.run
+            Foo a = new Foo(), b = a.n();
+            b.m();
+            try (Other c = open()) { c.ping(); } catch (Exception e) { c.ping(); } finally { c.ping(); }
+          }
+        }
+        """, "Main.run",
+        {"Foo.n": "exact", "Foo.m": "exact", "Main.open": "exact", "Other.ping": "exact", "Conn.ping": "exact"},
+        absent=("Bar.n", "Bar.m"),
+        note="BC-11: a declarator sees the earlier ones of its declaration; a resource is out of scope "
+             "in catch and finally"),
     Shape("T6", """
         class Service {
           void go() {} //@Service.go

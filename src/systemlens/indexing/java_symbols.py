@@ -495,6 +495,12 @@ def _written_type(source: bytes, parameter: Node) -> str:
     return text.rsplit(".", 1)[-1]
 
 
+def _dimensions(source: bytes, node: Node | None) -> int:
+    """The ``[]`` written after a declared name, as in ``Foo x[]``."""
+    dimensions = node.child_by_field_name("dimensions") if node is not None else None
+    return parser.node_text(source, dimensions).count("[") if dimensions is not None else 0
+
+
 def _spread_type(parameter: Node) -> Node | None:
     """The element type node of a ``T...`` parameter."""
     for child in parameter.named_children:
@@ -647,13 +653,16 @@ class _Declarator:
 
     ``value`` is the initializer of a ``var``; ``lambda_slot`` is
     ``(lambda, position, count)`` for an untyped lambda parameter;
-    ``element_of`` is the iterable of a ``var`` loop variable.
+    ``element_of`` is the iterable of a ``var`` loop variable;
+    ``dimensions`` counts the ``[]`` of ``Foo x[]``.
     """
 
     type_node: Node | None = None
     value: Node | None = None
     lambda_slot: tuple[Node, int, int] | None = None
     element_of: Node | None = None
+    # The ``[]`` a C-style declarator writes after its name (BC-11).
+    dimensions: int = 0
 
 
 class JavaSymbols:
@@ -2893,13 +2902,21 @@ class JavaSymbols:
             return declarator
         source = self.units[info.method.path].source
         for declaration in reversed(scope.named_children):
-            if declaration.type != "local_variable_declaration" or declaration.end_byte > invocation.start_byte:
+            if declaration.type != "local_variable_declaration" or declaration.start_byte > invocation.start_byte:
                 continue
             type_node = declaration.child_by_field_name("type")
+            # Each declarator is in scope from its own start: in
+            # ``Foo a = new Foo(), b = a.n();`` the second one sees ``a``
+            # (BC-11).
             for child in declaration.named_children:
                 ident = child.child_by_field_name("name")
-                if ident is not None and parser.node_text(source, ident) == name and type_node is not None:
-                    return _Declarator(type_node, child.child_by_field_name("value"))
+                if (
+                    ident is not None and parser.node_text(source, ident) == name and type_node is not None
+                    and child.start_byte <= invocation.start_byte
+                ):
+                    return _Declarator(
+                        type_node, child.child_by_field_name("value"), dimensions=_dimensions(source, child),
+                    )
         return None
 
     def _declarator_type(self, info: _Method, declarator: _Declarator) -> str | None:
@@ -2923,7 +2940,8 @@ class JavaSymbols:
             # ``var`` takes the type of its initializer.
             return self._initializer_type(info, declarator.value)
         # A local or parameter typed ``T`` takes the bound of ``T`` (BL-26).
-        return self._declared_type(path, type_node, info.owner)
+        declared = self._declared_type(path, type_node, info.owner)
+        return declared + "[]" * declarator.dimensions if declared is not None else None
 
     def _lambda_parameter_type(self, info: _Method, lambda_node: Node, position: int, count: int) -> str | None:
         """The type of an untyped lambda parameter, when its target proves it.
@@ -3583,7 +3601,7 @@ class JavaSymbols:
             if not field_only:
                 declarator = self._declarator(info, scope, name, invocation)
                 if declarator is not None:
-                    if declarator.type_node is None or declarator.lambda_slot is not None:
+                    if declarator.type_node is None or declarator.lambda_slot is not None or declarator.dimensions:
                         return None
                     return path, declarator.type_node, info.owner, None
             if _is_anonymous_body(scope):
@@ -3602,7 +3620,7 @@ class JavaSymbols:
                     ]
                     if found:
                         location, type_node, candidate = found[0]
-                        if len(found) != 1 or type_node is None:
+                        if len(found) != 1 or type_node is None or type_node.type == "dimensions":
                             return None
                         env = None if candidate == owner else self._inherited_env(owner, module, None, candidate)
                         return location, type_node, candidate, env
@@ -3705,14 +3723,24 @@ class JavaSymbols:
         self, path: str, declaration: Node, owner: str, name: str, env: _Env | None = None,
     ) -> set[str | None]:
         """Types of the fields ``name`` one type declaration writes."""
-        return {
-            owner if type_node is None else self._declared_type(path, type_node, owner, env)
-            for type_node in self._field_type_nodes(path, declaration, name)
-        }
+        found: set[str | None] = set()
+        for type_node in self._field_type_nodes(path, declaration, name):
+            if type_node is None:
+                found.add(owner)
+            elif type_node.type == "dimensions":
+                member = type_node.parent.parent if type_node.parent is not None else None
+                written = member.child_by_field_name("type") if member is not None else None
+                element = self._declared_type(path, written, owner, env) if written is not None else None
+                count = parser.node_text(self.units[path].source, type_node).count("[")
+                found.add(element + "[]" * count if element is not None else None)
+            else:
+                found.add(self._declared_type(path, type_node, owner, env))
+        return found
 
     def _field_type_nodes(self, path: str, declaration: Node, name: str) -> list[Node | None]:
         """Written types of the fields ``name`` one type declaration holds;
-        ``None`` stands for an enum constant, typed by the enum itself."""
+        ``None`` stands for an enum constant, typed by the enum itself, and
+        a ``dimensions`` node for a C-style array declarator."""
         source = self.units[path].source
         found: list[Node | None] = []
         if declaration.type == "record_declaration":
@@ -3733,7 +3761,8 @@ class JavaSymbols:
                 for child in member.named_children:
                     ident = child.child_by_field_name("name")
                     if ident is not None and type_node is not None and parser.node_text(source, ident) == name:
-                        found.append(type_node)
+                        # ``Foo x[]`` stands as its ``dimensions`` node (BC-11).
+                        found.append(child.child_by_field_name("dimensions") or type_node)
             elif member.type == "enum_constant" and declaration.type == "enum_declaration":
                 # Enum constants are fields of the enum type itself.
                 ident = member.child_by_field_name("name")
@@ -3782,7 +3811,7 @@ class JavaSymbols:
                 type_node = scope.child_by_field_name("type")
                 if type_node is not None and parser.node_text(source, type_node).strip() == "var":
                     return _Declarator(type_node, element_of=scope.child_by_field_name("value"))
-                return _Declarator(type_node)
+                return _Declarator(type_node, dimensions=_dimensions(source, scope))
         elif scope.type == "catch_clause":
             parameter = parser.child_by_type(scope, "catch_formal_parameter")
             if parameter is not None and named(parameter.child_by_field_name("name")):
@@ -3790,8 +3819,14 @@ class JavaSymbols:
                 alternatives = catch_type.named_children if catch_type is not None else []
                 return _Declarator(alternatives[0] if len(alternatives) == 1 else None)
         elif scope.type == "try_with_resources_statement":
+            # A resource is in scope in the later resources and the try
+            # body, never in ``catch`` or ``finally`` (JLS 14.20.3, BC-11).
             resources = parser.child_by_type(scope, "resource_specification")
-            for resource in resources.named_children if resources is not None else []:
+            body = scope.child_by_field_name("body")
+            in_scope = resources is not None and resources.start_byte <= invocation.start_byte < resources.end_byte or (
+                body is not None and body.start_byte <= invocation.start_byte < body.end_byte
+            )
+            for resource in resources.named_children if resources is not None and in_scope else []:
                 if (
                     resource.type == "resource"
                     and resource.end_byte <= invocation.start_byte
@@ -3809,7 +3844,9 @@ class JavaSymbols:
                     if parameter.type == "identifier" and named(parameter):
                         return _Declarator(lambda_slot=(scope, untyped.index(parameter), len(untyped)))
                     if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
-                        return _Declarator(parameter.child_by_field_name("type"))
+                        return _Declarator(
+                            parameter.child_by_field_name("type"), dimensions=_dimensions(source, parameter),
+                        )
         elif scope.type in _PATTERN_SCOPES:
             # A pattern variable where its ``instanceof`` is proven, or in
             # its ``switch`` case (JLS 6.3.1).
@@ -3826,7 +3863,9 @@ class JavaSymbols:
             parameters = declaration_parameters(scope)
             for parameter in parameters.named_children if parameters is not None else []:
                 if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
-                    return _Declarator(parameter.child_by_field_name("type"))
+                    return _Declarator(
+                        parameter.child_by_field_name("type"), dimensions=_dimensions(source, parameter),
+                    )
                 if parameter.type == "spread_parameter" and any(
                     named(child.child_by_field_name("name"))
                     for child in parameter.named_children if child.type == "variable_declarator"

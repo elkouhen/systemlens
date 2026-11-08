@@ -960,6 +960,52 @@ class Anonymous10 {
     register(this); //@e10.self
   }
 }
+
+// E11: C-style arrays, declarator and resource scopes (BC-11).
+class Foo11 {
+  void m() {} //@Foo11.m
+
+  Foo11 n() { return this; } //@Foo11.n
+}
+
+class Bar11 {
+  void m() {} //@Bar11.m
+
+  Bar11 n() { return this; } //@Bar11.n
+}
+
+class Conn11 implements AutoCloseable {
+  public void close() {}
+
+  void ping() {} //@Conn11.ping
+}
+
+class Other11 implements AutoCloseable {
+  public void close() {}
+
+  void ping() {} //@Other11.ping
+}
+
+class Scopes11 {
+  Bar11 a;
+  Conn11 c;
+
+  void take(Foo11 f) {} //@Scopes11.takeOne
+
+  void take(Foo11[] f) {} //@Scopes11.takeArray
+
+  Other11 open() { return new Other11(); } //@Scopes11.open
+
+  void e11(Foo11 x[]) { //@E11
+    take(x); //@e11.array
+    Foo11 a = new Foo11(), b = a.n(); //@e11.declarator
+    try (Other11 c = open()) { //@e11.open
+      c.ping(); //@e11.resource
+    } catch (Exception e) {
+      c.ping(); //@e11.catch
+    }
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1224,6 +1270,10 @@ CASES: list[Case] = [
     _case("E10", "E10", None,
           ("e10.anonymous", "Anonymous10.registerRunnable", "exact"),
           ("e10.self", "Anonymous10.registerSelf", "exact")),
+    _case("E11", "E11", None,
+          ("e11.array", "Scopes11.takeArray", "exact"), ("e11.declarator", "Foo11.n", "exact"),
+          ("e11.open", "Scopes11.open", "exact"), ("e11.resource", "Other11.ping", "exact"),
+          ("e11.catch", "Conn11.ping", "exact")),
 ]
 
 
