@@ -1,7 +1,7 @@
 # Backlog: Copilot review of source indexing
 
 Status: written on 2026-11-08 and validated the same day by the product
-owner, who asked for it to be processed. Lots 1 and 2 (BC-01 to BC-16)
+owner, who asked for it to be processed. Lots 1 to 3 (BC-01 to BC-23)
 are `delivered`; the other items are `open`. Lot order: 1 to 6. A
 decision record an item depends on is written and accepted under the
 product owner's mandate, to be confirmed by them.
@@ -28,9 +28,10 @@ A typing item adds its shapes to `tests/test_call_graph_shapes.py` and
 `tests/test_engine_parity.py`, and bumps `CODE_FLOW_SIGNATURE`. A
 scanner item adds a fixture assertion on the persisted endpoint. Every
 item runs ruff, mypy and the default suite. It also keeps train-ticket
-at 447 flow pairs and 1712 edges and the lab at 25 flows and 105 edges,
-with `analyze compare-engines --engines source,codeql` at zero
-differences on both, unless its acceptance names the change.
+at 447 flow pairs and 1763 edges (1712 before BC-18) and the lab at 25
+flows and 105 edges, with `analyze compare-engines --engines
+source,codeql` at zero differences on both, unless its acceptance names
+the change.
 
 ## Summary
 
@@ -52,13 +53,13 @@ differences on both, unless its acceptance names the change.
 | [BC-14](#bc-14) | Scope enum-constant bodies and interface fields | S17 | low | `delivered` |
 | [BC-15](#bc-15) | Fix varargs overrides and Lombok boolean accessors | S18 | low | `delivered` |
 | [BC-16](#bc-16) | Resolve dotted type names and erase generics by depth | S19 | low | `delivered` |
-| [BC-17](#bc-17) | Type `this.a.b` receivers | S1 | med | `open` |
-| [BC-18](#bc-18) | Index enum-constant arguments as static initialisation | S3 | med | `open` |
-| [BC-19](#bc-19) | Resolve constructor references `Foo::new` | S4 | low-med | `open` |
-| [BC-20](#bc-20) | Disambiguate same-named local classes | S11 | low-med | `open` |
-| [BC-21](#bc-21) | Reach static imports from anonymous class bodies | S12 | low | `open` |
-| [BC-22](#bc-22) | Resolve qualified type receivers | S13 | low-med | `open` |
-| [BC-23](#bc-23) | Carry parameter types on source `MethodCall`s | S14 | low | `open` |
+| [BC-17](#bc-17) | Type `this.a.b` receivers | S1 | med | `delivered` |
+| [BC-18](#bc-18) | Index enum-constant arguments as static initialisation | S3 | med | `delivered` |
+| [BC-19](#bc-19) | Resolve constructor references `Foo::new` | S4 | low-med | `delivered` |
+| [BC-20](#bc-20) | Disambiguate same-named local classes | S11 | low-med | `delivered` |
+| [BC-21](#bc-21) | Reach static imports from anonymous class bodies | S12 | low | `delivered` |
+| [BC-22](#bc-22) | Resolve qualified type receivers | S13 | low-med | `delivered` |
+| [BC-23](#bc-23) | Carry parameter types on source `MethodCall`s | S14 | low | `delivered` |
 | [BC-24](#bc-24) | Persist the real `alternative_count` | F1, F5 | med | `open` |
 | [BC-25](#bc-25) | Identify data steps by operation, not by line | F2 | med | `open` |
 | [BC-26](#bc-26) | Fix key tracing's usage line and caller comparison | F3 | med | `open` |
@@ -417,6 +418,10 @@ a target.
   `client.api.call()` resolves.
 - **Fix:** take the `this.` branch only when `object` is `this` and
   `field` is an identifier.
+- **Status:** `delivered`.
+- **Delivery:** `74435b6`. Reproduced on `2cccab9`. A longer chain is
+  now a field access on `this.client`. Shape `S1-this-chain`, parity case
+  E16.
 
 <a id="bc-18"></a>
 ### BC-18. Index enum-constant arguments as static initialisation
@@ -426,6 +431,14 @@ a target.
   code to `Owner.<clinit>`.
 - **Fix:** treat `enum_constant` as a `<clinit>` member and emit its
   constructor edge.
+- **Status:** `delivered`.
+- **Delivery:** `27bb790`. Reproduced on `2cccab9`. An enum gets
+  `<clinit>` when a constant reaches a constructor node or its arguments
+  call something; a constant with a body reaches no constructor (ADR-62),
+  as in CodeQL. ADR-75 gains a delivery note within the decision. Shape
+  `S8-enum-constant`, a node test, parity case E17. A lambda in a
+  constant's arguments stays a `source`-only edge: the CodeQL join cannot
+  attribute its body below the type header.
 
 <a id="bc-19"></a>
 ### BC-19. Resolve constructor references `Foo::new`
@@ -435,6 +448,13 @@ a target.
   `Type::<T>m` is dropped for the same reason.
 - **Fix:** map `::new` to `_constructor_targets` by the target
   functional interface's arity.
+- **Status:** `delivered`.
+- **Delivery:** `3e410da`. Reproduced on `2cccab9` for `Foo::new`;
+  `Type::<T>m` did not reproduce and is pinned by `F1-type-arguments`.
+  CodeQL dropped the edge too: its implicit-`super()` filter removed the
+  `new Foo(..)` it synthesizes, so the query now filters `super(...)`
+  only. Overloads left open stay unresolved, as for a method reference.
+  Shape `S7-constructor-reference`, parity case E18.
 
 <a id="bc-20"></a>
 ### BC-20. Disambiguate same-named local classes
@@ -443,6 +463,10 @@ a target.
   the name `p.A.Helper`. Every call in and to both classes is lost.
 - **Fix:** key local types by their enclosing method or declaration
   offset.
+- **Status:** `delivered`.
+- **Delivery:** `64e61d8`. Reproduced on `2cccab9`. A same-named local
+  class takes the internal name `Helper~<offset>`; the index keeps the
+  shared name, as CodeQL does. Shape `T7-same-named`, parity cases E19.
 
 <a id="bc-21"></a>
 ### BC-21. Reach static imports from anonymous class bodies
@@ -452,6 +476,11 @@ a target.
   "the supertype may declare it" and "nobody declares it".
 - **Fix:** separate the two outcomes, and try the static import in the
   second.
+- **Status:** `delivered`.
+- **Delivery:** `8d71411`. Reproduced on `2cccab9`. `_lexical_lookup`
+  reports a blocked search apart from one that met no declaration; only
+  the latter reaches the import, consistent with BC-13. Shape
+  `S2-import-anonymous`, parity case E20.
 
 <a id="bc-22"></a>
 ### BC-22. Resolve qualified type receivers
@@ -461,6 +490,11 @@ a target.
   resolve.
 - **Fix:** resolve the dotted text as a source type first and treat it
   as a static receiver.
+- **Status:** `delivered`.
+- **Delivery:** `8d5356e`. Reproduced on `2cccab9`. The order follows
+  JLS 6.5.2 rather than "type first": a variable, then a field, then a
+  source type, so a variable `p` obscures the package `p`. Shapes
+  `S2-qualified-type` and `S2-qualified-type-variable`, parity case E21.
 
 <a id="bc-23"></a>
 ### BC-23. Carry parameter types on source `MethodCall`s
@@ -471,6 +505,34 @@ a target.
   same-name overloads share a line, so the edge is silently dropped.
 - **Fix:** pass `info.method.parameter_types` and
   `target.parameter_types`.
+- **Status:** `delivered`.
+- **Delivery:** `a52953a`. Proven on `2cccab9`: with `f(int)` and
+  `f(String)` on one line, the source join gave no edge where CodeQL
+  gave two, and calls from either overload were lost too. The pass sets
+  both types, and the join passes the callee's to `locate`. Test
+  `test_source_calls_reach_same_line_overloads`; the parity harness keys
+  rows by line, so it holds no case. This commit moves
+  `CODE_FLOW_SIGNATURE` to `code-flow-v60-lost-edges`.
+
+Lot 3 validation, on fresh scratch copies at `a52953a` against a
+`2cccab9` baseline: every finding reproduced except `Type::<T>m`
+(BC-19), and BC-23 was proven end to end. No accepted rule changed;
+ADR-75 gains a delivery note for BC-18. Each new parity case, E16 to
+E21, passes against CodeQL.
+
+Train-ticket gains 12 enum `<clinit>` nodes and 51 `exact` edges, each
+from an enum's `<clinit>` to its constructor at a constant's line
+(BC-18). No edge is removed and the flows are unchanged. The lab is
+unchanged. Train-ticket now has 447 flow pairs and 1763 edges, and the
+lab has 25 flows and 105 edges.
+
+`analyze compare-engines --engines source,codeql` reports zero
+differences on both, so CodeQL has every new edge. No `Foo::new`, local
+class, anonymous static import or qualified type receiver occurs there.
+
+Ruff, mypy, the default suite, the slow parity, internal-flow,
+code-flow and constructor-node tests, and
+`scripts/check_companion_contracts.py` pass.
 
 ## Lot 4: flow construction
 
