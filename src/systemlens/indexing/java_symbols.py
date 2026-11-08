@@ -34,6 +34,8 @@ from systemlens.callgraph.model import MethodCall
 _TYPES = {"class_declaration", "interface_declaration", "record_declaration", "enum_declaration"}
 # Nodes whose children are member or top-level types; a type declared
 # anywhere else is local to its block.
+# The ``~<offset>`` suffix of a same-named local class's internal name (BC-20).
+_LOCAL_KEY = re.compile(r"~\d+")
 _MEMBER_CONTAINERS = {"program", "class_body", "interface_body", "enum_body_declarations", "annotation_type_body"}
 _GENERIC_DECLARATIONS = {
     "method_declaration", "constructor_declaration", "class_declaration", "interface_declaration",
@@ -611,6 +613,13 @@ def _implicit_value(value: Node | None) -> bool:
     )
 
 
+def _is_local_type(node: Node) -> bool:
+    """Whether a type declaration is local: in a block or an anonymous body."""
+    return node.parent is not None and (
+        node.parent.type not in _MEMBER_CONTAINERS or _is_anonymous_body(node.parent)
+    )
+
+
 def _is_anonymous_body(node: Node) -> bool:
     return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
 
@@ -769,6 +778,13 @@ class JavaSymbols:
         self._bounds = True
         # Local classes: qualified name -> (path, declaration, enclosing block).
         self.local_types: dict[str, list[tuple[str, Node, Node]]] = defaultdict(list)
+        # Same-named local classes of one file, such as a ``class Helper``
+        # in two methods, share a qualified name. Each takes the internal
+        # name ``Helper~<offset>`` instead, by (path, start byte), and the
+        # shared name lists them (BC-20). Indexed methods keep the shared
+        # name; the declaration line tells them apart.
+        self._local_keys: dict[tuple[str, int], str] = {}
+        self.local_aliases: dict[str, list[str]] = defaultdict(list)
         self._levels: dict[tuple[str, str], list[list[tuple[str, str]]]] = {}
         # Types an anonymous class body extends or implements somewhere.
         self.anonymous_supertypes: set[str] = set()
@@ -840,12 +856,21 @@ class JavaSymbols:
             )
             self.path_modules.setdefault(path, self.path_modules.get(path, path.split("/", 1)[0] if "/" in path else ""))
             nodes = list(parser.walk(tree))
+            same_named: dict[str, list[Node]] = defaultdict(list)
+            for node in nodes:
+                if node.type in _TYPES and _is_local_type(node):
+                    same_named[self.owner(path, node)].append(node)
+            for shared, group in same_named.items():
+                if len(group) < 2:
+                    continue
+                for node in group:
+                    name = parser.declaration_name(node, source) or ""
+                    self._local_keys[(path, node.start_byte)] = f"{name}~{node.start_byte}"
+                    self.local_aliases[shared].append(self.owner(path, node))
             for node in nodes:
                 if node.type in _TYPES:
                     self.types[self.owner(path, node)].append((path, node))
-                    if node.parent is not None and (
-                        node.parent.type not in _MEMBER_CONTAINERS or _is_anonymous_body(node.parent)
-                    ):
+                    if _is_local_type(node):
                         self.local_types[self.owner(path, node)].append((path, node, node.parent))
                 elif node.type == "object_creation_expression" and parser.child_by_type(node, "class_body"):
                     type_node = node.child_by_field_name("type")
@@ -872,13 +897,17 @@ class JavaSymbols:
                 # An anonymous class method is no indexed method: its body
                 # belongs to the method creating the instance.
                 if node.type == "method_declaration" and not parser.is_anonymous_member(node):
-                    key = (self.owner(path, node), parser.declaration_name(node, source) or "", node.start_point.row + 1)
+                    key = (
+                        self.shared_name(self.owner(path, node)), parser.declaration_name(node, source) or "",
+                        node.start_point.row + 1,
+                    )
                     declarations[path][key].append(node)
             # Constructors and initializers (ADR-75); an implicit constructor
             # and ``<clinit>`` are keyed on their type declaration.
             for initializer in initializer_declarations(tree, source):
                 declarations[path][(
-                    self.owner(path, initializer.node), initializer.name, initializer.start_line,
+                    self.shared_name(self.owner(path, initializer.node)), initializer.name,
+                    initializer.start_line,
                 )].append(initializer.node)
         for owner, locations in self.types.items():
             for path, node in locations:
@@ -1345,13 +1374,24 @@ class JavaSymbols:
         return True
 
     def owner(self, path: str, node: Node) -> str:
+        """The internal qualified name of the type enclosing ``node``.
+
+        A same-named local class takes its ``Name~<offset>`` key (BC-20).
+        """
         names: list[str] = []
         current: Node | None = node
         while current is not None:
             if current.type in _TYPES:
-                names.append(parser.declaration_name(current, self.units[path].source) or "")
+                names.append(
+                    self._local_keys.get((path, current.start_byte))
+                    or parser.declaration_name(current, self.units[path].source) or ""
+                )
             current = current.parent
         return ".".join(filter(None, [self.units[path].package, *reversed(names)]))
+
+    def shared_name(self, owner: str) -> str:
+        """The qualified name the index gives an internal type name (BC-20)."""
+        return _LOCAL_KEY.sub("", owner) if self._local_keys else owner
 
     def _type_candidates(self, qualified_name: str, path: str) -> list[tuple[str, Node]]:
         """Return visible declarations, preferring the caller's build module.
@@ -1405,6 +1445,15 @@ class JavaSymbols:
             nested = f"{scope}.{text}"
             if nested in self.types and not self._hidden_local(nested, path, owner, at):
                 return nested if allow_ambiguous or len(self._type_candidates(nested, path)) == 1 else None
+            # A same-named local class: the one in scope here (BC-20).
+            head, _dot, tail = text.partition(".")
+            visible = [
+                key for key in self.local_aliases.get(f"{scope}.{head}", ())
+                if not self._hidden_local(key, path, owner, at)
+            ]
+            if len(visible) == 1:
+                found = f"{visible[0]}.{tail}" if tail else visible[0]
+                return found if found in self.types else None
             scope = scope.rpartition(".")[0]
         first, *rest = text.split(".")
         if first in unit.imports:

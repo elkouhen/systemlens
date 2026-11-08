@@ -1166,6 +1166,29 @@ class References18 {
     java.util.function.Function<String, String> same = Foo18::<String>id; //@e18.typed
   }
 }
+
+// E19: same-named local classes in two methods (BC-20).
+class Go19 {
+  void go() {} //@Go19.go
+
+  void stop() {} //@Go19.stop
+}
+
+class Locals19 {
+  void e19a(Go19 g) { //@E19.a
+    class Helper19 {
+      void h() { g.go(); } //@E19.helper
+    }
+    new Helper19().h(); //@e19.a
+  }
+
+  void e19b(Go19 g) { //@E19.b
+    class Helper19 {
+      void h() { g.stop(); } //@Helper19b.h
+    }
+    new Helper19().h(); //@e19.b
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1453,6 +1476,12 @@ CASES: list[Case] = [
     _case("E18", "E18", None,
           ("e18.map", "Foo18.newText", "exact"), ("e18.supplier", "Foo18.new", "exact"),
           ("e18.typed", "Foo18.id", "exact")),
+    _case("E19-a", "E19.a", None,
+          ("e19.a", "E19.helper", "exact")),
+    _case("E19-b", "E19.b", None,
+          ("e19.b", "Helper19b.h", "exact")),
+    _case("E19-helper", "E19.helper", None,
+          ("E19.helper", "Go19.go", "exact")),
 ]
 
 

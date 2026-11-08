@@ -2211,6 +2211,36 @@ SHAPES: list[Shape] = [
             """,
     }, "Use.first", {"Local.check": "exact"},
         note="inside its block, the local class shadows the import"),
+    Shape("T7-same-named", """
+        class Go {
+          void go() {} //@Go.go
+        }
+        class Stop {
+          void stop() {} //@Stop.stop
+        }
+        class Use {
+          void one() {
+            class Helper {
+              Helper() {} //@Helper1.new
+              void h() { new Go().go(); } //@Helper1.h
+              class Part { void p() {} } //@Helper1.Part
+            }
+            new Helper().h();
+          }
+          void two() { //@Use.two
+            class Helper {
+              Helper() {} //@Helper2.new
+              void h() { new Stop().stop(); } //@Helper2.h
+              class Part { void p() {} } //@Helper2.Part
+            }
+            Helper helper = new Helper();
+            helper.h();
+            Helper.Part part = null;
+            part.p();
+          }
+        }
+        """, "Use.two", {"Helper2.new": "exact", "Helper2.h": "exact", "Helper2.Part": "exact"},
+        note="BC-20: same-named local classes of two methods are told apart by their declaration"),
     Shape("T8", """
         class Order {
           void ship() {} //@Order.ship

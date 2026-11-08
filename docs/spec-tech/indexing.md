@@ -773,6 +773,11 @@ enclosing method or class hides any source type of the same simple name:
 the name has no type, in a receiver as in a dispatch signature. A local
 class is visible from its declaration to the end of its block and inside
 itself, never as a member type of the enclosing class.
+Two local classes of one file may share a qualified name, such as a
+`class Helper` in two methods. The symbol pass keys each one by its
+declaration offset and resolves the name to the one in scope; the index
+keeps the shared name, and the declaration line tells the methods apart
+(BC-20).
 An unqualified call binds to the innermost enclosing type, anonymous classes
 included, that declares or inherits the name at any arity; a named inner
 class thus reaches its outer type's methods. A scope with an external
@@ -1408,7 +1413,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T4 | `var` initializer typed where it is written | `covered` | |
 | T5 | Names in anonymous, local and inner classes, innermost scope first; `this` in an anonymous class body; declarator and resource scopes | `covered` (BC-10, BC-11) | |
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
-| T7 | A local class is visible only to the end of its block | `covered` | |
+| T7 | A local class is visible only to the end of its block; same-named local classes of one file stay apart | `covered` (BC-20) | |
 | T8 | A type parameter hides a source type of the same simple name | `covered` | |
 | T9 | `var` loop variable typed by the iterable's written type argument or an array's element | `covered` (BL-23, BL-42) | |
 | T10 | Ternary receiver whose branches share a type, or with one `null` branch | `covered` (BL-23, BL-42) | |
@@ -1585,6 +1590,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E16 | `this.client.api.call()` with `Client16.api` a field of type `Api16` | `covered` | BC-17 |
 | E17 | Enum constants `A(Seed17.helper())`, `B(new Part17())`, `C(..) { .. }` with a body and `D` without arguments | `covered` | BC-18 |
 | E18 | `map(Foo18::new)`, `Supplier<Foo18> make = Foo18::new` and `Foo18::<String>id` | `covered` | BC-19 |
+| E19 | A local `class Helper19` declaring `h()` in each of two methods, each calling its own | `covered` | BC-20 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
