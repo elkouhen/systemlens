@@ -126,11 +126,12 @@ CASES = [
     _case("s4-generic-field", f"{_ORDERS}HandlerController.field", None,
           _flow("medium", "TextHandler.handle", *_TO_PUBLISHER)),
     # s19: the private helper's only call passes a CsvExporter.
-    _case("s19-call-context", f"{_ORDERS}ExportController.helper", "BL-46",
+    _case("s19-call-context", f"{_ORDERS}ExportController.helper", None,
           _flow("medium", "ExportController.exportWith", "CsvExporter.export", "export-csv")),
     # s17: the ternary holds a CsvExporter or a JsonExporter, never an
-    # XmlExporter (CodeQL's rows).
-    _case("s17-ternary", f"{_ORDERS}ExportController.ternary", "BL-46",
+    # XmlExporter (CodeQL's rows). The declared row Exporter.export is left
+    # out: a rebuild would dispatch it to XmlExporter (BL-28, ADR-89).
+    _case("s17-ternary", f"{_ORDERS}ExportController.ternary", None,
           _flow("low", "CsvExporter.export", "export-csv"),
           _flow("low", "JsonExporter.export", "export-json")),
 ]

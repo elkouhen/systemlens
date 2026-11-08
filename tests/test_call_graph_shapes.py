@@ -2506,6 +2506,291 @@ SHAPES: list[Shape] = [
         """, "Use.run", {"Order.lines": "exact"}, partial=True, absent=("Line.qty",),
         note="BL-40: two declared arities, an untyped result, a block body or another kind "
              "for flatMap stay untyped"),
+    Shape("T19", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Factory {
+          Shape make() { //@Factory.make
+            if (Math.random() > 0.5) {
+              return new Circle();
+            }
+            Runnable task = () -> { return; };
+            return (new Circle());
+          }
+        }
+        class Use {
+          Factory factory;
+          void run() { //@Use.run
+            factory.make().area();
+            Shape local = factory.make();
+            local.area();
+          }
+        }
+        """, "Use.run", {"Factory.make": "exact", "Circle.area": "exact", "Shape.area": "possible"},
+        note="BL-46: a call to a method whose own returns all create one class dispatches on it; "
+             "a lambda's return is not the method's"),
+    Shape("T19-kept", """
+        interface Shape {
+          double area(); //@Shape.area
+        }
+        class Circle implements Shape {
+          public double area() { return 1; } //@Circle.area
+        }
+        class Square implements Shape {
+          public double area() { return 2; } //@Square.area
+        }
+        class Factory {
+          Shape mixed(boolean f) { if (f) return new Circle(); return new Square(); } //@Factory.mixed
+          Shape passed(Shape s) { return s; } //@Factory.passed
+          Shape overridden() { return new Circle(); } //@Factory.overridden
+        }
+        class SubFactory extends Factory {
+          Shape overridden() { return new Square(); } //@SubFactory.overridden
+        }
+        class Use {
+          Factory factory;
+          void run(Shape s) { //@Use.run
+            factory.mixed(true).area();
+            factory.passed(s).area();
+            factory.overridden().area();
+          }
+        }
+        """, "Use.run", {
+            "Factory.mixed": "exact", "Factory.passed": "exact",
+            "Factory.overridden": "possible", "SubFactory.overridden": "possible",
+            "Circle.area": "possible", "Square.area": "possible", "Shape.area": "possible",
+        },
+        note="BL-46: two created classes, a returned parameter and an overridden method keep "
+             "the declared return type"),
+    Shape("T20", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run(boolean flag) { //@Use.run
+            Exporter chosen = flag ? csv : json;
+            chosen.export();
+          }
+        }
+        """, "Use.run", {"Csv.export": "possible", "Json.export": "possible"},
+        absent=("Xml.export", "Exporter.export"),
+        note="BL-46: a ternary of two source types dispatches on their union; the declared row "
+             "is left out because its dispatch reaches Xml"),
+    Shape("T20-single", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run(boolean flag) { //@Use.run
+            Exporter created = flag ? new Csv() : null;
+            created.export();
+            Exporter same = (flag ? new Csv() : csv);
+            same.export();
+          }
+        }
+        """, "Use.run", {"Csv.export": "exact", "Exporter.export": "possible"},
+        note="BL-46: a null branch gives nothing; a union of one class is exact under ADR-81"),
+    Shape("T20-kept", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          Exporter any;
+          void run(boolean flag, Exporter param) { //@Use.run
+            Exporter wide = flag ? csv : param;
+            wide.export();
+            Exporter later = flag ? csv : json;
+            later = any;
+            later.export();
+          }
+        }
+        """, "Use.run", {
+            "Csv.export": "possible", "Json.export": "possible", "Xml.export": "possible",
+            "Exporter.export": "possible",
+        },
+        note="BL-46: a branch of the declared type and a reassigned local keep the declared type"),
+    Shape("T21", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run() {
+            send(csv);
+            send(new Csv());
+          }
+          private void send(Exporter exporter) { //@Use.send
+            exporter.export();
+            Runnable later = () -> exporter.export();
+          }
+        }
+        """, "Use.send", {"Csv.export": "exact", "Exporter.export": "possible"},
+        note="BL-46: every call site of a private method passes a Csv"),
+    Shape("T21-mixed", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run() {
+            send(csv);
+            send(json);
+          }
+          private void send(Exporter exporter) { //@Use.send
+            exporter.export();
+          }
+        }
+        """, "Use.send", {
+            "Csv.export": "possible", "Json.export": "possible", "Xml.export": "possible",
+            "Exporter.export": "possible",
+        },
+        note="BL-46: sites passing two classes keep the declared type"),
+    Shape("T21-public", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run() {
+            send(csv);
+          }
+          void send(Exporter exporter) { //@Use.send
+            exporter.export();
+          }
+        }
+        """, "Use.send", {
+            "Csv.export": "possible", "Json.export": "possible", "Xml.export": "possible",
+            "Exporter.export": "possible",
+        },
+        note="BL-46: a package method can be called from code outside the sources"),
+    Shape("T21-reference", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run() {
+            send(csv);
+            java.util.function.Consumer<Exporter> sink = this::send;
+          }
+          private void send(Exporter exporter) { //@Use.send
+            exporter.export();
+          }
+        }
+        """, "Use.send", {
+            "Csv.export": "possible", "Json.export": "possible", "Xml.export": "possible",
+            "Exporter.export": "possible",
+        },
+        note="BL-46: a method reference to the method is an unproven site"),
+    Shape("T21-reassigned", """
+        interface Exporter {
+          void export(); //@Exporter.export
+        }
+        class Csv implements Exporter {
+          public void export() {} //@Csv.export
+        }
+        class Json implements Exporter {
+          public void export() {} //@Json.export
+        }
+        class Xml implements Exporter {
+          public void export() {} //@Xml.export
+        }
+        class Use {
+          Csv csv;
+          Json json;
+          void run() {
+            send(csv);
+          }
+          private void send(Exporter exporter) { //@Use.send
+            exporter = json;
+            exporter.export();
+          }
+        }
+        """, "Use.send", {
+            "Csv.export": "possible", "Json.export": "possible", "Xml.export": "possible",
+            "Exporter.export": "possible",
+        },
+        note="BL-46: a reassigned parameter keeps its declared type"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area

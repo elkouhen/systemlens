@@ -835,6 +835,26 @@ indexed body for the call, such as a record accessor, the declared
 type's dispatch stands. The check walks the variable's block once per
 narrowed call site. Method references are not narrowed.
 
+Three rules extend that narrowing by type flow (ADR-89, BL-46). A call
+that reaches one source method, `exact` under ADR-81, holds `T` when
+every `return` of that method's own body is `new T(..)`. Returns in a
+lambda or a nested class body are skipped, and the result is cached per
+method. A ternary holds the union of its branches: a branch's created or
+returned class, else its static source type, and nothing for `null`.
+
+A parameter of a `private` method holds `T` when every call of that name
+and arity in its top-level class passes an argument held as, or typed,
+`T`. One walk of the top-level class per parameter, cached, finds the
+sites; a method reference to the name, a site outside an indexed method,
+or a parameter assigned in the body leaves it unproven. A site that
+recurses into the parameter being computed counts as unproven.
+
+The union's call reaches each type's dispatch targets, and is `exact`
+only when one target remains and the ADR-81 check holds on every type.
+A union containing the declared type does not narrow. The BL-28 declared
+row is still left out when its rebuilt dispatch would reach a body
+outside the union, as at shape s17.
+
 A receiver of a source generic type whose declaration writes a concrete
 type argument excludes the implementors that contradict it (ADR-81
 amendment, BL-45). The receiver's arguments are read strictly from a
@@ -1277,6 +1297,9 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T16 | Element from the BL-36 JDK signatures: `Map` accessors, stream results, static factories, creations, futures, functional results; a shadowed static import | `covered` (BL-36) | |
 | T17 | Element of a JDK container nested as a type argument, one level deep: written, returned with its type variable substituted, `entrySet()` and `var` loops | `covered` (BL-41) | |
 | T18 | Element changed by `map`, `flatMap`, `thenApply` or `thenCompose`: a single-arity method reference's return type, a typed lambda result | `covered` (BL-40) | |
+| T19 | Call to a source method whose own returns all create one class; mixed creations, a returned parameter and an overridden method keep the declared type | `covered` (BL-46) | |
+| T20 | Ternary of two source types dispatches on their union; a `null` branch gives nothing; a branch of the declared type keeps it | `covered` (BL-46) | |
+| T21 | Parameter of a private method whose every call site passes one class; mixed sites, a package method, a method reference or a reassigned parameter keep the declared type | `covered` (BL-46) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1330,8 +1353,9 @@ Rows A1 to B6 are the alignment shapes of BL-21 to BL-32. Two-digit rows
 (A01 to D06) are the cases of the 2026-11-08 review of internal flows,
 under the review's numbering. A missing number is a shape on which the
 engines already agree, or D03, which is invalid Java. E02 is the generic
-return of the review's Appendix B.4, and E03 the dispatch BL-45 filters
-by type argument. CodeQL types the A-family library
+return of the review's Appendix B.4, E03 the dispatch BL-45 filters by
+type argument, and E04 and E05 the ternary and call-context narrowing of
+BL-46. CodeQL types the A-family library
 shapes from the jars it fetches while it builds its database.
 
 | # | Shape | Status | Item |
@@ -1386,7 +1410,7 @@ shapes from the jars it fetches while it builds its database.
 | A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `covered` | BL-41 |
 | A44 | `var opt = Optional.of(order); opt.get().ship()` | `covered` | BL-36 (`Optional.of`); BL-35 typed the `var` |
 | A45 | `Stream.of(a, b).findFirst().get().ship()` | `covered` | BL-36 |
-| B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
+| B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `covered` | BL-46 |
 | B14 | `Status.valueOf(s).label()` | `covered` | BL-42 |
 | B15 | `Status.values()[0].label()` | `covered` | BL-42 |
 | B23 | Call in a record compact constructor, indexed as the canonical constructor | `covered` | BL-39 |
@@ -1395,7 +1419,7 @@ shapes from the jars it fetches while it builds its database.
 | B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `covered` | BL-36 |
 | B29 | `Predicate<Order> p = o -> o.ok()` | `covered` | BL-37 |
 | B30 | `Consumer<Order> c = o -> o.ship()` | `covered` | BL-37 |
-| B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
+| B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `covered` | BL-46 |
 | B44 | `for (var o : array)` over `Order[]` | `covered` | BL-42 |
 | B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `covered` | BL-36 |
 | C01 | Source `List<Order> list()`, then `.get(0).ship()` | `covered` | BL-35 |
@@ -1418,6 +1442,8 @@ shapes from the jars it fetches while it builds its database.
 | D07 | `taker.take(Collections.max(orders, cmp))`: the pass does not type the argument | `covered` | BL-38; D07 keeps both overloads `possible` where CodeQL selects one (ADR-87) |
 | E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |
 | E03 | `Codec<String> codec; codec.encode(..)` with `TextCodec implements Codec<String>` and `BinaryCodec implements Codec<byte[]>` | `covered` | BL-45 |
+| E04 | `Printer chosen = flag ? csv : json; chosen.print()` with a third `XmlPrinter` | `covered` | BL-46; E04 omits CodeQL's declared row `Printer.print`, whose rebuilt dispatch reaches `XmlPrinter` (ADR-89) |
+| E05 | `printer.print()` in a private `printWith(Printer)` whose one call passes a `CsvPrinter` field | `covered` | BL-46 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
@@ -1431,7 +1457,8 @@ to `code-flow-v55-entry-rule-on-this`, and BL-48 to BL-50 to
 `code-flow-v56-inherited-routes-and-triggers`. These three items also
 moved the endpoint inventory to
 `endpoint-inventory-v29-inherited-methods-rabbit-jms`, so the next
-`index` re-extracts every file.
+`index` re-extracts every file. BL-45 and BL-46 moved the code-flow
+signature to `code-flow-v57-dispatch-precision`.
 
 ### Internal-flow shapes
 
@@ -1441,10 +1468,12 @@ one entry per flow shape of the 2026-11-08 review. It runs the `source`
 engine, then `flows calculate` on the persisted index, and checks the
 flows of each entry in both results.
 
-A shape whose gap an open item owns is a strict expected failure naming
-it: the ternary and call-context dispatch (BL-46). Shapes s3 and s4
-dispatch `exact` to `TextHandler`, the one implementor whose type
-argument matches the receiver's (BL-45).
+Shapes s3 and s4 dispatch `exact` to `TextHandler`, the one implementor
+whose type argument matches the receiver's (BL-45). Shape s19 dispatches
+`exact` to `CsvExporter`, the one class the private helper's call site
+passes, and shape s17 reaches `CsvExporter` and `JsonExporter`, never
+`XmlExporter` (BL-46). An open item's shape would be a strict expected
+failure naming it; none is left.
 
 Controls pass today: a controller-service-client chain, a job calling its
 own inherited template method, a template method called on a sibling

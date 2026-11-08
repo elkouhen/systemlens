@@ -625,6 +625,10 @@ class JavaSymbols:
         self._functional_values: list[tuple[str, Node]] = []
         self._implicit: tuple[dict[str, set[tuple[str, int]]], set[str]] | None = None
         self._context_methods: dict[tuple[str, int, int], _Method] | None = None
+        # Narrowing by type flow (BL-46, ADR-89): the class a method's
+        # returns create, and the class a private parameter's sites pass.
+        self._creation_returns: dict[str, str | None] = {}
+        self._context_types: dict[tuple[str, int], str | None] = {}
         # Strict type arguments an implementor gives an ancestor (BL-45).
         self._implemented: dict[tuple[str, str, str], _Env | None] = {}
         self._by_name_arity: dict[tuple[str, int], list[_Method]] | None = None
@@ -2022,19 +2026,6 @@ class JavaSymbols:
             scope = scope.parent
         return None
 
-    def created_type(self, info: _Method, receiver: Node, invocation: Node) -> str | None:
-        """The named source class a variable always holds at ``invocation``.
-
-        A local assigned exactly once, at its declaration, with ``new T(...)``,
-        and a ``final`` field the enclosing class declares with the same
-        initializer hold a ``T`` (BL-29, ADR-86). A parameter, a field
-        without ``final``, an inherited field, any further assignment
-        (compound or ``++``/``--`` included), an anonymous class body and a
-        lambda keep the declared type: this returns ``None``.
-        """
-        created = self.created_value(info, receiver, invocation)
-        return self._creation(info.method.path, *created) if created is not None else None
-
     def created_value(self, info: _Method, receiver: Node, invocation: Node) -> tuple[Node, str] | None:
         """The one value a variable holds at ``invocation``, and the type
         whose scope it is written in: the initializer of a local assigned
@@ -2127,24 +2118,279 @@ class JavaSymbols:
         self, info: _Method, receiver: Node, invocation: Node, receiver_type: str,
         name: str, arity: int, argument_types: tuple[str | None, ...] | None,
         targets: list[IntegrationMethod],
-    ) -> tuple[str, list[IntegrationMethod], bool] | None:
-        """The dispatch on the type a variable always holds (BL-29), as
-        ``(type, targets, pruned)``, when it is a source subtype of the
-        declared receiver type, a source type or an external one (BL-31),
-        and its targets are among ``targets``."""
-        created = self.created_type(info, receiver, invocation)
-        if created is None or created == receiver_type:
+    ) -> tuple[tuple[str, ...], list[IntegrationMethod], bool] | None:
+        """The dispatch on the types a receiver always holds (BL-29, BL-46),
+        as ``(types, targets, pruned)``: the union of each type's targets,
+        when every type is a source subtype of the declared receiver type,
+        a source type or an external one (BL-31), and its targets are among
+        ``targets``."""
+        held = self._held_types(info, receiver, invocation)
+        if held is None or receiver_type in held:
             return None
-        module = self._receiver_module(created, info)
-        if not self._subtype_of(created, module, receiver_type):
-            return None
-        narrowed, pruned, _declaration = self._candidate_targets(
-            created, name, arity, info.module, info.method.path, argument_types=argument_types,
-        )
         reached = {target.id for target in targets}
-        if not narrowed or any(target.id not in reached for target in narrowed):
+        narrowed: dict[str, IntegrationMethod] = {}
+        pruned = False
+        for created in held:
+            module = self._receiver_module(created, info)
+            if not self._subtype_of(created, module, receiver_type):
+                return None
+            found, found_pruned, _declaration = self._candidate_targets(
+                created, name, arity, info.module, info.method.path, argument_types=argument_types,
+            )
+            if not found or any(target.id not in reached for target in found):
+                return None
+            narrowed.update((target.id, target) for target in found)
+            pruned = pruned or found_pruned
+        return held, list(narrowed.values()), pruned
+
+    def _held_types(
+        self, info: _Method, receiver: Node, invocation: Node, depth: int = 0,
+    ) -> tuple[str, ...] | None:
+        """The named source classes a receiver always holds an instance of,
+        or ``None`` when the sources do not prove them.
+
+        A variable holds what ADR-86 proves it was given once (a creation,
+        a returned creation or a ternary, BL-46); a parameter of a private
+        method, the one class its call sites pass (ADR-89 rule 3). Any
+        other receiver is read as a value (:meth:`_value_types`).
+        """
+        node = receiver
+        while node.type == "parenthesized_expression" and node.named_children:
+            node = node.named_children[0]
+        if node.type not in {"identifier", "field_access"}:
+            return self._value_types(info, node, info.owner, depth)
+        created = self.created_value(info, node, invocation)
+        if created is not None:
+            return self._value_types(info, created[0], created[1], depth)
+        if node.type != "identifier":
             return None
-        return created, narrowed, pruned
+        position = self._own_parameter(info, parser.node_text(self.units[info.method.path].source, node), invocation)
+        found = self._context_type(info, position, depth) if position is not None else None
+        return (found,) if found is not None else None
+
+    def _value_types(
+        self, info: _Method, value: Node | None, owner: str, depth: int = 0,
+    ) -> tuple[str, ...] | None:
+        """The named source classes an expression evaluates to (ADR-86,
+        ADR-89): ``new T(..)``; a call to a source method that returns only
+        ``new T(..)``; the union of a ternary's branches, each typed by its
+        own value or else its static source type, a ``null`` branch giving
+        nothing. A lambda, a method reference or an anonymous class is no
+        named class (ADR-72)."""
+        while value is not None and value.type == "parenthesized_expression" and value.named_children:
+            value = value.named_children[0]
+        if value is None or depth > 8 or _implicit_value(value):
+            return None
+        if value.type == "object_creation_expression":
+            created = self._creation(info.method.path, value, owner)
+            return (created,) if created is not None else None
+        if value.type == "method_invocation":
+            returned = self._returned_creation(info, value, depth + 1)
+            return (returned,) if returned is not None else None
+        if value.type != "ternary_expression":
+            return None
+        found: list[str] = []
+        for field in ("consequence", "alternative"):
+            branch = value.child_by_field_name(field)
+            while branch is not None and branch.type == "parenthesized_expression" and branch.named_children:
+                branch = branch.named_children[0]
+            if branch is None or _implicit_value(branch):
+                return None
+            if branch.type == "null_literal":
+                continue
+            types = (
+                self._held_types(info, branch, branch, depth + 1)
+                if branch.type in {"identifier", "field_access"}
+                else self._value_types(info, branch, owner, depth + 1)
+            )
+            if types is None:
+                static = self.expression_type(info, branch, branch)
+                types = (static,) if static is not None and static in self.types else None
+            if types is None:
+                return None
+            found.extend(found_type for found_type in types if found_type not in found)
+        return tuple(found) or None
+
+    def _returned_creation(self, info: _Method, call: Node, depth: int) -> str | None:
+        """The class ``T`` a call returns when it reaches one source method,
+        exact under ADR-81, whose every own ``return`` is ``new T(..)``
+        (ADR-89 rule 1)."""
+        if depth > 8:
+            return None
+        path = info.method.path
+        parent_receiver, name, arguments = parser.invocation_parts(call, self.units[path].source)
+        if parent_receiver is not None and parent_receiver.type == "super":
+            return None
+        owner = (
+            self._lexical_owner(info, name, call) if parent_receiver is None
+            else self.receiver_type(info, parent_receiver, call)
+        )
+        if owner is None or owner not in self.types:
+            return None
+        arity = len(arguments)
+        targets, pruned, declaration = self._candidate_targets(
+            owner, name, arity, info.module, path,
+            argument_types=tuple(self.expression_type(info, argument, call) for argument in arguments),
+        )
+        method = self.methods.get(targets[0].id) if len(targets) == 1 and not pruned else None
+        if method is None or not method.concrete:
+            return None
+        if not method.binds_statically and (
+            self._incomplete_implementors(owner, info, name, arity, targets)
+            or self._implicitly_implemented(owner, name, arity, declaration)
+        ):
+            return None
+        return self._creation_return(method)
+
+    def _creation_return(self, method: _Method) -> str | None:
+        """The one named source class every ``return`` of ``method``'s own
+        body creates, a subtype of its declared return type, if any."""
+        key = method.method.id
+        if key in self._creation_returns:
+            return self._creation_returns[key]
+        found: str | None = None
+        path = method.method.path
+        source = self.units[path].source
+        body = method.node.child_by_field_name("body")
+        type_node = method.node.child_by_field_name("type")
+        returns = [
+            node for node in parser.walk(body) if node.type == "return_statement"
+            and self._own_return(node, method.node)
+        ] if body is not None else []
+        created: set[str | None] = set()
+        for node in returns:
+            value = next((child for child in node.named_children if "comment" not in child.type), None)
+            while value is not None and value.type == "parenthesized_expression" and value.named_children:
+                value = value.named_children[0]
+            created.add(self._creation(path, value, method.owner))
+        if len(created) == 1 and type_node is not None:
+            single = created.pop()
+            declared = self.resolve(
+                path, parser.node_text(source, type_node), method.owner, allow_ambiguous=True, at=type_node,
+            )
+            if single is not None and declared is not None and (
+                single == declared or self._subtype_of(single, self._module_of(single, path), declared)
+            ):
+                found = single
+        self._creation_returns[key] = found
+        return found
+
+    @staticmethod
+    def _own_return(node: Node, method: Node) -> bool:
+        """Whether a ``return`` belongs to ``method`` itself, not to a lambda
+        or a nested class body inside it."""
+        current = node.parent
+        while current is not None and current != method:
+            if current.type in {"lambda_expression", "class_body"} or current.type in CONSTRUCTOR_DECLARATIONS:
+                return False
+            current = current.parent
+        return current is not None
+
+    def _own_parameter(self, info: _Method, name: str, invocation: Node) -> int | None:
+        """The position of the parameter of ``info`` that ``name`` denotes at
+        ``invocation``, when no inner declaration shadows it."""
+        if info.node.type != "method_declaration":
+            return None
+        scope = invocation.parent
+        while scope is not None and scope != info.node:
+            if self._declarator(info, scope, name, invocation) is not None:
+                return None
+            if scope.type in _TYPES or _is_anonymous_body(scope):
+                declared, _type = self._class_scope_field(info, scope, name)
+                if declared:
+                    return None
+            scope = scope.parent
+        if scope is None:
+            return None
+        source = self.units[info.method.path].source
+        parameters = declaration_parameters(info.node)
+        formals = [
+            parameter for parameter in (parameters.named_children if parameters is not None else [])
+            if parameter.type in {"formal_parameter", "spread_parameter"}
+        ]
+        for position, parameter in enumerate(formals):
+            ident = parameter.child_by_field_name("name")
+            if parameter.type == "formal_parameter" and ident is not None and parser.node_text(source, ident) == name:
+                return position
+        return None
+
+    def _context_type(self, info: _Method, position: int, depth: int) -> str | None:
+        """The one source class every call site of a private method passes
+        at ``position`` (ADR-89 rule 3), when it narrows the declared
+        parameter type. A site in progress counts as unproven."""
+        key = (info.method.id, position)
+        if key in self._context_types:
+            return self._context_types[key]
+        self._context_types[key] = None
+        found = self._call_context_type(info, position, depth)
+        self._context_types[key] = found
+        return found
+
+    def _call_context_type(self, info: _Method, position: int, depth: int) -> str | None:
+        if depth > 8 or info.varargs or "private" not in self._modifiers(info):
+            return None
+        path = info.method.path
+        source = self.units[path].source
+        parameters = declaration_parameters(info.node)
+        formals = [
+            parameter for parameter in (parameters.named_children if parameters is not None else [])
+            if parameter.type in {"formal_parameter", "spread_parameter"}
+        ]
+        body = info.node.child_by_field_name("body")
+        parameter = formals[position] if position < len(formals) else None
+        type_node = parameter.child_by_field_name("type") if parameter is not None else None
+        ident = parameter.child_by_field_name("name") if parameter is not None else None
+        if body is None or type_node is None or ident is None or _assigned(source, body, parser.node_text(source, ident)):
+            return None
+        declared = self._declared_type(path, type_node, info.owner)
+        top: Node | None = None
+        current: Node | None = info.node
+        while current is not None:
+            if current.type in _TYPES:
+                top = current
+            current = current.parent
+        if declared is None or top is None:
+            return None
+        name = info.method.qualified_method.rsplit(".", 1)[-1]
+        found: set[str] = set()
+        for node in parser.walk(top):
+            if node.type == "method_reference":
+                parts = node.named_children
+                if parts and parts[-1].type == "identifier" and parser.node_text(source, parts[-1]) == name:
+                    return None
+                continue
+            if node.type != "method_invocation":
+                continue
+            _receiver, called, arguments = parser.invocation_parts(node, source)
+            if called != name or len(arguments) != len(formals):
+                continue
+            caller = self._context_method(path, node)
+            if caller is None:
+                return None
+            argument = arguments[position]
+            types = self._held_types(caller, argument, node, depth + 1)
+            if types is None:
+                static = self.expression_type(caller, argument, node)
+                types = (static,) if static is not None else None
+            if types is None or len(types) != 1:
+                return None
+            found.add(types[0])
+        single = found.pop() if len(found) == 1 else None
+        if single is None or single == declared or single not in self.types:
+            return None
+        return single if self._subtype_of(single, self._module_of(single, path), declared) else None
+
+    def _context_method(self, path: str, node: Node) -> _Method | None:
+        """The indexed method or constructor whose code holds ``node``."""
+        context = _call_context(node)
+        if context is None:
+            return None
+        if self._context_methods is None:
+            self._context_methods = {
+                (info.method.path, info.node.start_byte, info.node.end_byte): info
+                for info in self.methods.values()
+            }
+        return self._context_methods.get((path, context.start_byte, context.end_byte))
 
     def _subtype_of(self, owner: str, module: str, supertype: str) -> bool:
         """Whether ``owner`` extends or implements ``supertype``, through its
@@ -2419,15 +2665,7 @@ class JavaSymbols:
     def _assigned_target(self, path: str, assignment: Node) -> set[str]:
         """The source type of the variable an assignment writes, read from
         the indexed method holding it."""
-        context = _call_context(assignment)
-        if context is None:
-            return set()
-        if self._context_methods is None:
-            self._context_methods = {
-                (info.method.path, info.node.start_byte, info.node.end_byte): info
-                for info in self.methods.values()
-            }
-        info = self._context_methods.get((path, context.start_byte, context.end_byte))
+        info = self._context_method(path, assignment)
         left = assignment.child_by_field_name("left")
         if info is None or left is None:
             return set()
@@ -4561,7 +4799,7 @@ class JavaSymbols:
                         self.expression_type(info, argument, invocation) for argument in arguments
                     )
                 arguments_count = arity
-                dispatch_type: str | None = None
+                dispatch_types: tuple[str, ...] = ()
                 pruned = False
                 external = False
                 declaration: _Method | None = None
@@ -4593,7 +4831,7 @@ class JavaSymbols:
                             argument_types, targets,
                         )
                         if narrowed is not None:
-                            dispatch_type, targets, pruned = narrowed
+                            dispatch_types, targets, pruned = narrowed
                         # An implementor whose type argument contradicts the
                         # receiver's cannot be its runtime type (BL-45). When
                         # it would exclude every target, the call keeps them.
@@ -4655,7 +4893,7 @@ class JavaSymbols:
                                 argument_types, targets,
                             )
                             if narrowed is not None:
-                                dispatch_type, targets, pruned = narrowed
+                                dispatch_types, targets, pruned = narrowed
                                 external = False
                     if not targets:
                         targets = self._unimplemented_contract(receiver_type, name, arguments_count, info)
@@ -4672,7 +4910,7 @@ class JavaSymbols:
                         info, implicit[0], implicit[1], receiver_type, name, arguments_count,
                         argument_types, declaration,
                     )
-                    dispatch_type, pruned, external = None, False, False
+                    dispatch_types, pruned, external = (), False, False
                     if (
                         not targets and declaration is not None
                         and self._declared_row_opens_no_route(declaration, [], info.module)
@@ -4686,19 +4924,24 @@ class JavaSymbols:
                     (info.method.id, line, target.id) in exact_sites for target in targets
                 ):
                     continue
-                runtime_type = dispatch_type or receiver_type
+                # A narrowed union is checked on each of its types (ADR-89).
+                runtime_types = dispatch_types or (receiver_type,)
                 statically_bound = any(
                     self.methods[target.id].binds_statically for target in targets if target.id in self.methods
                 )
-                incomplete = implicit_exact is None and virtual and runtime_type in self.types and not (
-                    statically_bound
-                ) and self._incomplete_implementors(
-                    runtime_type, info, name, arguments_count, targets, contradicted,
+                incomplete = implicit_exact is None and virtual and not statically_bound and any(
+                    runtime_type in self.types and self._incomplete_implementors(
+                        runtime_type, info, name, arguments_count, targets, contradicted,
+                    )
+                    for runtime_type in runtime_types
                 )
                 if (
                     closed_world and implicit_exact is None and virtual and not statically_bound
-                    and runtime_type in self.types
-                    and self._implicitly_implemented(runtime_type, name, arguments_count, declaration)
+                    and any(
+                        runtime_type in self.types
+                        and self._implicitly_implemented(runtime_type, name, arguments_count, declaration)
+                        for runtime_type in runtime_types
+                    )
                 ):
                     # A lambda, a method reference or an anonymous class
                     # can be the receiver: its body is no indexed method,
@@ -4725,7 +4968,10 @@ class JavaSymbols:
                 dispatch = (
                     "exact"
                     if len(targets) == 1 and not pruned and not external and not incomplete and (
-                        self._declared_concretely(targets[0], runtime_type, info)
+                        all(
+                            self._declared_concretely(targets[0], runtime_type, info)
+                            for runtime_type in runtime_types
+                        )
                         or closed_world and self._concrete(targets[0])
                     )
                     else "possible"

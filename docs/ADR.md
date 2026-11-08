@@ -2548,9 +2548,10 @@ as CodeQL does. Shape s17 gives `CsvExporter.export` and
 
 The declared row of ADR-70 (BL-28) is still left out at s17: a rebuild
 from persisted edges would dispatch it to `XmlExporter`. CodeQL reports
-that row, and its join expands it to `XmlExporter`, so its persisted
-flows keep the `export-xml` route. `source` keeps CodeQL's raw rows, and
-its fresh and rebuilt flows stay identical.
+that row (parity case E04), and its join expands it to `XmlExporter`, so
+its persisted flows keep the `export-xml` route. `source` keeps CodeQL's
+implementation rows without the declared row. Its fresh and rebuilt
+flows stay identical.
 
 Rule 2 does not compute a least upper bound. A ternary receiver whose
 branches have different types, with no declared variable to name the

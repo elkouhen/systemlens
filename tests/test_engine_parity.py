@@ -4,7 +4,7 @@ Two fixture files hold every shape the ``source`` engine and the CodeQL
 query were measured on: ``FIXTURE`` the alignment shapes (rows A1 to A10
 and B1 to B6 of the engine-parity table in ``docs/spec-tech/indexing.md``),
 ``REVIEW_FIXTURE`` the shapes of the 2026-11-08 review (two-digit rows such
-as A01 or C14, and E02, E03). They tag lines as
+as A01 or C14, and E02 to E05). They tag lines as
 ``tests/test_call_graph_shapes.py`` does, with a trailing ``//@Tag``
 comment: each caller's declaration line, each target's declaration line,
 and each call line.
@@ -387,8 +387,8 @@ class Implementors {
 
 # The shapes of the 2026-11-08 review of internal flows (BACKLOG.md,
 # Appendix A.1), under the review's case numbers, the generic return of
-# Appendix B.4 (E02), and the dispatch shape of BL-45 (E03). The file
-# shares package ``p`` with ``FIXTURE`` and reuses its ``Shape``, ``Circle`` and ``Box`` types. Its Spring and
+# Appendix B.4 (E02), and the dispatch shapes of BL-45 (E03) and BL-46
+# (E04, E05). The file shares package ``p`` with ``FIXTURE`` and reuses its ``Shape``, ``Circle`` and ``Box`` types. Its Spring and
 # ModelMapper imports let CodeQL type the library shapes from the jars it
 # fetches; the ``source`` engine reads only the sources.
 REVIEW_FIXTURE = """\
@@ -819,6 +819,42 @@ class CodecCases {
     codec.encode("x"); //@e03
   }
 }
+
+// E04, E05: a ternary of two source types, and a private helper's call
+// context (BL-46).
+interface Printer {
+  void print(); //@Printer.print
+}
+
+class CsvPrinter implements Printer {
+  public void print() {} //@CsvPrinter.print
+}
+
+class JsonPrinter implements Printer {
+  public void print() {} //@JsonPrinter.print
+}
+
+class XmlPrinter implements Printer {
+  public void print() {} //@XmlPrinter.print
+}
+
+class PrinterCases {
+  CsvPrinter csv;
+  JsonPrinter json;
+
+  void e04(boolean flag) { //@E04
+    Printer chosen = flag ? csv : json;
+    chosen.print(); //@e04
+  }
+
+  void e05() {
+    printWith(csv);
+  }
+
+  private void printWith(Printer printer) { //@E05
+    printer.print(); //@e05
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE}
@@ -992,7 +1028,7 @@ CASES: list[Case] = [
           ("a44", "Order.ship", "exact")),
     _case("A45", "A45", None,
           ("a45", "Order.ship", "exact")),
-    _case("B10", "B10", "BL-46",
+    _case("B10", "B10", None,
           ("b10", "OrderService.shape", "exact"), ("b10", "Circle.area", "exact"), ("b10", "Shape.area", "possible")),
     _case("B14", "B14", None,
           ("b14", "Status.label", "exact")),
@@ -1010,7 +1046,7 @@ CASES: list[Case] = [
           ("b29", "Order.ok", "exact")),
     _case("B30", "B30", None,
           ("b30", "Order.ship", "exact")),
-    _case("B39", "B39", "BL-46",
+    _case("B39", "B39", None,
           ("b39.shape", "OrderService.shape", "exact"), ("b39", "Circle.area", "exact"), ("b39", "Shape.area", "possible")),
     _case("B44", "B44", None,
           ("b44.all", "OrderService.all", "exact"), ("b44", "Order.ship", "exact")),
@@ -1059,6 +1095,15 @@ CASES: list[Case] = [
           ("e02", "OrderBoxes.wrap", "exact"), ("e02", "Box.get", "exact"), ("e02", "Order.ship", "exact")),
     _case("E03", "E03", None,
           ("e03", "TextCodec.encode", "exact"), ("e03", "Codec.encode", "possible")),
+    # ADR-89: CodeQL also reports the declared row Printer.print, which a
+    # rebuild from persisted edges would dispatch to XmlPrinter; the source
+    # engine leaves it out (ADR-70, BL-28 amendment).
+    _case("E04", "E04", None,
+          ("e04", "CsvPrinter.print", "possible"), ("e04", "JsonPrinter.print", "possible"),
+          ("e04", "Printer.print", "possible"),
+          deviation=[("e04", "CsvPrinter.print", "possible"), ("e04", "JsonPrinter.print", "possible")]),
+    _case("E05", "E05", None,
+          ("e05", "CsvPrinter.print", "exact"), ("e05", "Printer.print", "possible")),
 ]
 
 
