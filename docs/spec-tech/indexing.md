@@ -1043,7 +1043,7 @@ came from the call-graph coverage plan, in Git at `4a12ad5`.
 ### Engine parity
 
 `tests/test_engine_parity.py` measures the `source` engine against
-CodeQL on one fixture that holds every shape below. A case lists the
+CodeQL on two fixture files that hold every shape below. A case lists the
 `(call line, callee, confidence)` rows CodeQL gives from one caller, once
 the join has attributed anonymous and lambda callers to their creating
 method (ADR-62) and dropped callees that are not indexed methods.
@@ -1052,12 +1052,24 @@ The default test runs the symbol pass in a closed world and expects those
 rows. A case whose gap an open backlog item owns is a strict expected
 failure that names the item; the delivery of the item turns it into a
 pass. A case whose difference a decision record keeps lists the rows the
-`source` engine gives instead, and its item column names the case. A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
-`CallGraphSession.calls()` and expects the same rows from CodeQL.
+`source` engine gives instead, and its item column names the case.
+
+A `slow` test, skipped without the CodeQL CLI, reads the raw rows of
+`CallGraphSession.calls()` and expects the same rows from CodeQL. A gap
+of the join that both engines share, such as a caller missing from the
+method inventory, is a strict expected failure there too.
 
 The table uses the status values of the call shapes above; the item
 column names the owner of each case not yet aligned, or the item that
-aligned it.
+aligned it. When several items own a case, all are listed, and the case
+passes only once the last one is delivered.
+
+Rows A1 to B6 are the alignment shapes of BL-21 to BL-32. Two-digit rows
+(A01 to D06) are the cases of the 2026-11-08 review of internal flows,
+under the review's numbering. A missing number is a shape on which the
+engines already agree, or D03, which is invalid Java. E02 is the generic
+return of the review's Appendix B.4. CodeQL types the A-family library
+shapes from the jars it fetches while it builds its database.
 
 | # | Shape | Status | Item |
 |---|---|---|---|
@@ -1077,11 +1089,96 @@ aligned it.
 | B4 | Declared interface row beside two possible implementations | `covered` | BL-28 |
 | B5 | Generic implementation of a generic interface (G3) | `covered` | BL-26 |
 | B6 | Implementor without a written body: record accessor, Lombok member, body inherited from an external class or `Object`; one complete implementor set stays `exact` (ADR-81 rule 1) | `covered` | BL-32 |
+| A01 | `repo.findById(id).orElseThrow().getName()` through `extends JpaRepository<Order, Long>` | `missing` | BL-43 |
+| A02 | `repo.findById(id).get().getName()` | `missing` | BL-43 |
+| A04 | `repo.findById(id).ifPresent(o -> o.ship())` | `missing` | BL-43, BL-37 |
+| A05 | `repo.findAll().get(0).ship()` | `missing` | BL-43 |
+| A06 | `repo.findAll().forEach(o -> o.ship())` | `missing` | BL-43, BL-37 |
+| A07 | `repo.findAll().stream().map(o -> o.getName())` | `missing` | BL-43, BL-37 |
+| A08 | `repo.save(order).ship()` | `missing` | BL-43 |
+| A09 | `repo.findAllById(ids).get(0).ship()` | `missing` | BL-43 |
+| A10 | Source `Optional<Order> findByName(..)`, then `.orElseThrow().ship()` | `missing` | BL-35 |
+| A11 | Source `Page<Order> findAll(Pageable)`, then `.getContent().get(0).ship()` | `missing` | BL-43 |
+| A12 | `ResponseEntity<Order> r = client.get(); r.getBody().ship()` | `missing` | BL-43 |
+| A13 | `ResponseEntity.ok(order).getBody().ship()` | `missing` | BL-43 |
+| A15 | `m.computeIfAbsent(k, x -> new Order()).ship()` | `missing` | BL-36 |
+| A16 | `m.getOrDefault(k, other).ship()` | `missing` | BL-36 |
+| A18 | `stream().map(Order::getLine).toList().get(0).qty()` | `missing` | BL-40 |
+| A19 | `stream().collect(Collectors.toList()).get(0).ship()` | `missing` | BL-36 |
+| A24 | `Optional.ofNullable(o).map(Order::getLine).orElse(null).qty()` | `missing` | BL-40 |
+| A25 | `Optional.of(order).orElseGet(() -> other).ship()` | `missing` | BL-36 |
+| A26 | `CompletableFuture<Order> f; f.join().ship()` | `missing` | BL-36 |
+| A27 | `f.thenApply(o -> o.getName())` | `missing` | BL-37, BL-40 |
+| A28 | `List.of(a, b).get(0).ship()` | `missing` | BL-36 |
+| A29 | `Arrays.asList(a, b).get(0).ship()` | `missing` | BL-36 |
+| A30 | `Collections.unmodifiableList(orders).get(0).ship()` | `missing` | BL-36 |
+| A31 | `new ArrayList<>(orders).get(0).ship()` | `missing` | BL-36 |
+| A32 | `ctx.getBean(OrderService.class).place()` | `missing` | BL-44 |
+| A33 | `Objects.requireNonNull(order).ship()` | `missing` | BL-36 |
+| A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
+| A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-35, BL-43 |
+| A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `missing` | BL-41 |
+| A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `missing` | BL-40 |
+| A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-35, BL-43 |
+| A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `missing` | BL-41 |
+| A44 | `var opt = Optional.of(order); opt.get().ship()` | `missing` | BL-35 |
+| A45 | `Stream.of(a, b).findFirst().get().ship()` | `missing` | BL-36 |
+| B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
+| B14 | `Status.valueOf(s).label()` | `missing` | BL-42 |
+| B15 | `Status.values()[0].label()` | `missing` | BL-42 |
+| B23 | Call in a record compact constructor: no indexed caller for either engine | `missing` | BL-39 |
+| B26 | `Supplier<Order> s; s.get().ship()` | `missing` | BL-36 |
+| B27 | `Function<String, Order> f; f.apply(k).ship()` | `missing` | BL-36 |
+| B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `missing` | BL-36 |
+| B29 | `Predicate<Order> p = o -> o.ok()` | `missing` | BL-37 |
+| B30 | `Consumer<Order> c = o -> o.ship()` | `missing` | BL-37 |
+| B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
+| B44 | `for (var o : array)` over `Order[]` | `missing` | BL-42 |
+| B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `missing` | BL-36 |
+| C01 | Source `List<Order> list()`, then `.get(0).ship()` | `missing` | BL-35 |
+| C02 | Source `Optional<Order> maybe()`, then `.get().ship()` | `missing` | BL-35 |
+| C03 | Source `Map<String, Order> index()`, then `.get(k).ship()` | `missing` | BL-35 |
+| C04 | Static source `List<Order> all()`, then `.get(0).ship()` | `missing` | BL-35 |
+| C05 | `catalog.list().forEach(o -> o.ship())` | `missing` | BL-35, BL-37 |
+| C06 | `for (var o : catalog.list())` | `missing` | BL-35 |
+| C07 | `var list = orders; list.get(0).ship()` | `missing` | BL-35 |
+| C08 | `var s = orders.stream(); s.findFirst().get().ship()` | `missing` | BL-35 |
+| C09 | Lambda passed to a source `each(Consumer<Order>)` | `missing` | BL-37 |
+| C10 | Lambda passed to a source `<R> R apply(Function<Order, R>)` | `missing` | BL-37 |
+| C11 | `(flag ? order : null).ship()` | `missing` | BL-42 |
+| C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `missing` | BL-35 |
+| C14 | `var l = catalog.list(); l.get(0).ship()` | `missing` | BL-35 |
+| D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `missing` | BL-35, BL-38 |
+| D04 | `new ArrayList<Order>(orders).get(0).ship()` | `missing` | BL-36 |
+| D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `missing` | BL-35, BL-37 |
+| D06 | `orders.forEach(taker::take)`, overloaded `take` | `missing` | BL-37 |
+| E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `missing` | BL-35 |
 
-The items of this table change the edges of unchanged sources. The
+Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
 them, so the next `index` of an existing index re-runs the call-graph
 stage and rebuilds its edges and flows without `--full`.
+
+### Internal-flow shapes
+
+`tests/test_internal_flow_shapes.py` indexes
+`tests/fixtures/internal_flow_shapes`, a three-module Maven project with
+one entry per flow shape of the 2026-11-08 review. It runs the `source`
+engine, then `flows calculate` on the persisted index, and checks the
+flows of each entry in both results.
+
+A shape whose gap an open item owns is a strict expected failure naming
+it: the sibling template method (BL-47), the route inherited from a base
+controller (BL-48), the Rabbit, JMS, `@EventListener` and
+`CommandLineRunner` entries (BL-49), the route that reaches no
+integration point (BL-50), the dispatch a generic type argument decides
+(BL-45), and the ternary and call-context dispatch (BL-46).
+
+Controls pass today: a controller-service-client chain, a job calling its
+own inherited template method, and a `@Scheduled(fixedDelay = ...)`
+entry. The rebuild reproduces the indexed flows with `source`. A `slow`
+test runs the same check with CodeQL; it is a strict expected failure
+until BL-51 applies the ADR-71 module check to the rebuild.
 
 ## Build layout
 

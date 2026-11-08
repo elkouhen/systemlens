@@ -1,8 +1,10 @@
 """Engine parity: the ``source`` engine against CodeQL on the alignment shapes.
 
-One fixture holds every shape the ``source`` engine and the CodeQL query
-were measured on (rows A1 to A10 and B1 to B6 of the engine-parity table in
-``docs/spec-tech/indexing.md``). It tags lines as
+Two fixture files hold every shape the ``source`` engine and the CodeQL
+query were measured on: ``FIXTURE`` the alignment shapes (rows A1 to A10
+and B1 to B6 of the engine-parity table in ``docs/spec-tech/indexing.md``),
+``REVIEW_FIXTURE`` the shapes of the 2026-11-08 review (two-digit rows such
+as A01 or C14, and E02). They tag lines as
 ``tests/test_call_graph_shapes.py`` does, with a trailing ``//@Tag``
 comment: each caller's declaration line, each target's declaration line,
 and each call line.
@@ -18,6 +20,7 @@ difference a decision record keeps lists the rows the ``source`` engine
 gives instead, as its ``deviation``. The ``slow`` test
 reads the raw rows of ``CallGraphSession.calls()`` and expects the same
 rows from CodeQL, so the expectations stay measured rather than assumed.
+A gap of the join both engines share names its item as ``codeql_item``.
 """
 
 from collections.abc import Iterable, Iterator
@@ -37,6 +40,7 @@ from systemlens.indexing.integration_methods import materialize_integration_meth
 from systemlens.indexing.java_symbols import JavaSymbols
 
 _PATH = "app/src/main/java/p/Shapes.java"
+_REVIEW_PATH = "app/src/main/java/p/Review.java"
 _TAG = re.compile(r"//@([\w.]+)\s*$")
 
 FIXTURE = """\
@@ -381,6 +385,418 @@ class Implementors {
 }
 """
 
+# The shapes of the 2026-11-08 review of internal flows (BACKLOG.md,
+# Appendix A.1), under the review's case numbers, and the generic return
+# of Appendix B.4 (E02). The file shares package ``p`` with ``FIXTURE`` and
+# reuses its ``Shape``, ``Circle`` and ``Box`` types. Its Spring and
+# ModelMapper imports let CodeQL type the library shapes from the jars it
+# fetches; the ``source`` engine reads only the sources.
+REVIEW_FIXTURE = """\
+package p;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import org.modelmapper.ModelMapper;
+import org.springframework.context.ApplicationContext;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.http.ResponseEntity;
+
+class Line {
+  public int qty() { return 1; } //@Line.qty
+}
+
+class Order {
+  public String getName() { return ""; } //@Order.getName
+  public Line getLine() { return new Line(); } //@Order.getLine
+  public boolean ok() { return true; } //@Order.ok
+  public void ship() {} //@Order.ship
+}
+
+interface OrderRepo extends JpaRepository<Order, Long> {
+  Optional<Order> findByName(String name); //@OrderRepo.findByName
+  Page<Order> findAll(Pageable pageable); //@OrderRepo.findAllPage
+}
+
+class OrderClient {
+  ResponseEntity<Order> get() { return null; } //@OrderClient.get
+}
+
+class OrderService {
+  void place() {} //@OrderService.place
+  Shape shape() { return new Circle(); } //@OrderService.shape
+  Order[] all() { return new Order[0]; } //@OrderService.all
+}
+
+// A: library and JDK generic signatures.
+class LibCases {
+  OrderRepo repo;
+  OrderClient client;
+  Map<String, Order> m;
+  Map<String, List<Order>> nested;
+  List<Order> orders;
+  CompletableFuture<Order> f;
+  ApplicationContext ctx;
+  ModelMapper mapper;
+  Order order;
+  Order other;
+
+  void a01(Long id) { //@A01
+    repo.findById(id).orElseThrow().getName(); //@a01
+  }
+
+  void a02(Long id) { //@A02
+    repo.findById(id).get().getName(); //@a02
+  }
+
+  void a04(Long id) { //@A04
+    repo.findById(id).ifPresent(o -> o.ship()); //@a04
+  }
+
+  void a05() { //@A05
+    repo.findAll().get(0).ship(); //@a05
+  }
+
+  void a06() { //@A06
+    repo.findAll().forEach(o -> o.ship()); //@a06
+  }
+
+  void a07() { //@A07
+    repo.findAll().stream().map(o -> o.getName()); //@a07
+  }
+
+  void a08() { //@A08
+    repo.save(order).ship(); //@a08
+  }
+
+  void a09(List<Long> ids) { //@A09
+    repo.findAllById(ids).get(0).ship(); //@a09
+  }
+
+  void a10() { //@A10
+    repo.findByName("x").orElseThrow().ship(); //@a10
+  }
+
+  void a11(Pageable p) { //@A11
+    repo.findAll(p).getContent().get(0).ship(); //@a11
+  }
+
+  void a12() { //@A12
+    ResponseEntity<Order> r = client.get(); //@a12.get
+    r.getBody().ship(); //@a12
+  }
+
+  void a13() { //@A13
+    ResponseEntity.ok(order).getBody().ship(); //@a13
+  }
+
+  void a15(String k) { //@A15
+    m.computeIfAbsent(k, x -> new Order()).ship(); //@a15
+  }
+
+  void a16(String k) { //@A16
+    m.getOrDefault(k, other).ship(); //@a16
+  }
+
+  void a18() { //@A18
+    orders.stream().map(Order::getLine).toList().get(0).qty(); //@a18
+  }
+
+  void a19() { //@A19
+    orders.stream().collect(Collectors.toList()).get(0).ship(); //@a19
+  }
+
+  void a24() { //@A24
+    Optional.ofNullable(order).map(Order::getLine).orElse(null).qty(); //@a24
+  }
+
+  void a25() { //@A25
+    Optional.of(order).orElseGet(() -> other).ship(); //@a25
+  }
+
+  void a26() { //@A26
+    f.join().ship(); //@a26
+  }
+
+  void a27() { //@A27
+    f.thenApply(o -> o.getName()); //@a27
+  }
+
+  void a28() { //@A28
+    List.of(order, other).get(0).ship(); //@a28
+  }
+
+  void a29() { //@A29
+    Arrays.asList(order, other).get(0).ship(); //@a29
+  }
+
+  void a30() { //@A30
+    Collections.unmodifiableList(orders).get(0).ship(); //@a30
+  }
+
+  void a31() { //@A31
+    new ArrayList<>(orders).get(0).ship(); //@a31
+  }
+
+  void a32() { //@A32
+    ctx.getBean(OrderService.class).place(); //@a32
+  }
+
+  void a33() { //@A33
+    Objects.requireNonNull(order).ship(); //@a33
+  }
+
+  void a34(Object src) { //@A34
+    mapper.map(src, Order.class).ship(); //@a34
+  }
+
+  void a38() { //@A38
+    var list = repo.findAll();
+    list.get(0).ship(); //@a38
+  }
+
+  void a39() { //@A39
+    for (var e : m.entrySet()) {
+      e.getValue().ship(); //@a39
+    }
+  }
+
+  void a41() { //@A41
+    orders.stream().map(o -> o.getLine()).forEach(l -> l.qty()); //@a41
+  }
+
+  void a42() { //@A42
+    client.get().getBody().ship(); //@a42
+  }
+
+  void a43() { //@A43
+    nested.get("x").get(0).ship(); //@a43
+  }
+
+  void a44() { //@A44
+    var opt = Optional.of(order);
+    opt.get().ship(); //@a44
+  }
+
+  void a45() { //@A45
+    Stream.of(order, other).findFirst().get().ship(); //@a45
+  }
+}
+
+// B: typing forms.
+enum Status {
+  ACTIVE, DONE;
+
+  String label() { return name(); } //@Status.label
+}
+
+record Money(Order o) {
+  Money { //@B23
+    o.ship(); //@b23
+  }
+}
+
+class FormCases {
+  OrderService service;
+  Supplier<Order> supplier;
+  Function<String, Order> function;
+  BiFunction<String, Integer, Order> bi;
+  Order order;
+
+  void b10() { //@B10
+    service.shape().area(); //@b10
+  }
+
+  void b14(String s) { //@B14
+    Status.valueOf(s).label(); //@b14
+  }
+
+  void b15() { //@B15
+    Status.values()[0].label(); //@b15
+  }
+
+  void b26() { //@B26
+    supplier.get().ship(); //@b26
+  }
+
+  void b27(String k) { //@B27
+    function.apply(k).ship(); //@b27
+  }
+
+  void b28() { //@B28
+    bi.apply("x", 1).ship(); //@b28
+  }
+
+  void b29() { //@B29
+    Predicate<Order> p = o -> o.ok(); //@b29
+    p.test(order);
+  }
+
+  void b30() { //@B30
+    Consumer<Order> c = o -> o.ship(); //@b30
+    c.accept(order);
+  }
+
+  void b39() { //@B39
+    Shape s = service.shape(); //@b39.shape
+    s.area(); //@b39
+  }
+
+  void b44() { //@B44
+    Order[] arr = service.all(); //@b44.all
+    for (var o : arr) {
+      o.ship(); //@b44
+    }
+  }
+
+  void b46() { //@B46
+    Function<Order, Line> g = Order::getLine; //@b46
+    g.apply(order).qty(); //@b46.apply
+  }
+}
+
+// C: generic JDK types written in the sources.
+class Catalog {
+  List<Order> list() { return null; } //@Catalog.list
+  Optional<Order> maybe() { return null; } //@Catalog.maybe
+  Map<String, Order> index() { return null; } //@Catalog.index
+  static List<Order> all() { return null; } //@Catalog.all
+  void each(Consumer<Order> c) {} //@Catalog.each
+  <R> R apply(Function<Order, R> f) { return null; } //@Catalog.apply
+}
+
+class SourceGenericCases {
+  Catalog catalog;
+  List<Order> orders;
+  Order order;
+  boolean flag;
+
+  void c01() { //@C01
+    catalog.list().get(0).ship(); //@c01
+  }
+
+  void c02() { //@C02
+    catalog.maybe().get().ship(); //@c02
+  }
+
+  void c03() { //@C03
+    catalog.index().get("x").ship(); //@c03
+  }
+
+  void c04() { //@C04
+    Catalog.all().get(0).ship(); //@c04
+  }
+
+  void c05() { //@C05
+    catalog.list().forEach(o -> o.ship()); //@c05
+  }
+
+  void c06() { //@C06
+    for (var o : catalog.list()) { //@c06.list
+      o.ship(); //@c06
+    }
+  }
+
+  void c07() { //@C07
+    var list = orders;
+    list.get(0).ship(); //@c07
+  }
+
+  void c08() { //@C08
+    var s = orders.stream();
+    s.findFirst().get().ship(); //@c08
+  }
+
+  void c09() { //@C09
+    catalog.each(o -> o.ship()); //@c09
+  }
+
+  void c10() { //@C10
+    catalog.apply(o -> o.getLine()).qty(); //@c10
+  }
+
+  void c11() { //@C11
+    (flag ? order : null).ship(); //@c11
+  }
+
+  void c12() { //@C12
+    catalog.list().stream().filter(o -> o.ok()).findFirst().get().ship(); //@c12
+  }
+
+  void c14() { //@C14
+    var l = catalog.list(); //@c14.list
+    l.get(0).ship(); //@c14
+  }
+}
+
+// D: overloads and cascades.
+class Taker {
+  void take(Order o) {} //@Taker.takeOrder
+  void take(Line l) {} //@Taker.takeLine
+}
+
+class CascadeCases {
+  Catalog catalog;
+  Taker taker;
+  List<Order> orders;
+
+  void d01() { //@D01
+    taker.take(catalog.list().get(0)); //@d01
+  }
+
+  void d04() { //@D04
+    new ArrayList<Order>(orders).get(0).ship(); //@d04
+  }
+
+  void d05() { //@D05
+    catalog.list().forEach(taker::take); //@d05
+  }
+
+  void d06() { //@D06
+    orders.forEach(taker::take); //@d06
+  }
+}
+
+// E02: a generic return declared on an interface and on an abstract class.
+interface Wrapper<T> {
+  Box<T> wrap(); //@Wrapper.wrap
+}
+
+abstract class BaseWrapper<T> implements Wrapper<T> {
+  public abstract Box<T> wrap(); //@BaseWrapper.wrap
+}
+
+abstract class OrderWrapper extends BaseWrapper<Order> {}
+
+class OrderBoxes extends OrderWrapper {
+  public Box<Order> wrap() { return null; } //@OrderBoxes.wrap
+}
+
+class WrapperCases {
+  OrderWrapper wrapper;
+
+  void e02() { //@E02
+    wrapper.wrap().get().ship(); //@e02
+  }
+}
+"""
+
+_SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE}
+
 Row = tuple[str, str, str]
 
 
@@ -396,10 +812,19 @@ class Case:
     # The rows the ``source`` engine gives instead, when a decision record
     # keeps the difference; ``None`` when the engines agree.
     deviation: frozenset[Row] | None = None
+    # The backlog item that owns a gap of the join both engines share, such
+    # as a caller missing from the method inventory: the CodeQL test then
+    # fails too, as a strict expected failure naming it.
+    codeql_item: str | None = None
 
 
-def _case(id: str, caller: str, item: str | None, *rows: Row, deviation: Iterable[Row] | None = None) -> Case:
-    return Case(id, caller, frozenset(rows), item, None if deviation is None else frozenset(deviation))
+def _case(
+    id: str, caller: str, item: str | None, *rows: Row, deviation: Iterable[Row] | None = None,
+    codeql_item: str | None = None,
+) -> Case:
+    return Case(
+        id, caller, frozenset(rows), item, None if deviation is None else frozenset(deviation), codeql_item,
+    )
 
 
 CASES: list[Case] = [
@@ -471,6 +896,136 @@ CASES: list[Case] = [
           ("b6.override", "Person.getName", "possible")),
     _case("B6-complete", "Implementors.complete", None,
           ("b6.complete", "SoloImpl.only", "exact"), ("b6.complete", "Solo.only", "possible")),
+    # The 2026-11-08 review (BACKLOG.md, Appendix A.1): CodeQL's measured
+    # rows; ``item`` names every owner of the gap, in the order of the table.
+    _case("A01", "A01", "BL-43",
+          ("a01", "Order.getName", "exact")),
+    _case("A02", "A02", "BL-43",
+          ("a02", "Order.getName", "exact")),
+    _case("A04", "A04", "BL-43, BL-37",
+          ("a04", "Order.ship", "exact")),
+    _case("A05", "A05", "BL-43",
+          ("a05", "Order.ship", "exact")),
+    _case("A06", "A06", "BL-43, BL-37",
+          ("a06", "Order.ship", "exact")),
+    _case("A07", "A07", "BL-43, BL-37",
+          ("a07", "Order.getName", "exact")),
+    _case("A08", "A08", "BL-43",
+          ("a08", "Order.ship", "exact")),
+    _case("A09", "A09", "BL-43",
+          ("a09", "Order.ship", "exact")),
+    _case("A10", "A10", "BL-35",
+          ("a10", "OrderRepo.findByName", "possible"), ("a10", "Order.ship", "exact")),
+    _case("A11", "A11", "BL-43",
+          ("a11", "OrderRepo.findAllPage", "possible"), ("a11", "Order.ship", "exact")),
+    _case("A12", "A12", "BL-43",
+          ("a12.get", "OrderClient.get", "exact"), ("a12", "Order.ship", "exact")),
+    _case("A13", "A13", "BL-43",
+          ("a13", "Order.ship", "exact")),
+    _case("A15", "A15", "BL-36",
+          ("a15", "Order.ship", "exact")),
+    _case("A16", "A16", "BL-36",
+          ("a16", "Order.ship", "exact")),
+    _case("A18", "A18", "BL-40",
+          ("a18", "Order.getLine", "exact"), ("a18", "Line.qty", "exact")),
+    _case("A19", "A19", "BL-36",
+          ("a19", "Order.ship", "exact")),
+    _case("A24", "A24", "BL-40",
+          ("a24", "Order.getLine", "exact"), ("a24", "Line.qty", "exact")),
+    _case("A25", "A25", "BL-36",
+          ("a25", "Order.ship", "exact")),
+    _case("A26", "A26", "BL-36",
+          ("a26", "Order.ship", "exact")),
+    _case("A27", "A27", "BL-37, BL-40",
+          ("a27", "Order.getName", "exact")),
+    _case("A28", "A28", "BL-36",
+          ("a28", "Order.ship", "exact")),
+    _case("A29", "A29", "BL-36",
+          ("a29", "Order.ship", "exact")),
+    _case("A30", "A30", "BL-36",
+          ("a30", "Order.ship", "exact")),
+    _case("A31", "A31", "BL-36",
+          ("a31", "Order.ship", "exact")),
+    _case("A32", "A32", "BL-44",
+          ("a32", "OrderService.place", "exact")),
+    _case("A33", "A33", "BL-36",
+          ("a33", "Order.ship", "exact")),
+    _case("A34", "A34", "BL-44",
+          ("a34", "Order.ship", "exact")),
+    _case("A38", "A38", "BL-35, BL-43",
+          ("a38", "Order.ship", "exact")),
+    _case("A39", "A39", "BL-41",
+          ("a39", "Order.ship", "exact")),
+    _case("A41", "A41", "BL-40",
+          ("a41", "Order.getLine", "exact"), ("a41", "Line.qty", "exact")),
+    _case("A42", "A42", "BL-35, BL-43",
+          ("a42", "OrderClient.get", "exact"), ("a42", "Order.ship", "exact")),
+    _case("A43", "A43", "BL-41",
+          ("a43", "Order.ship", "exact")),
+    _case("A44", "A44", "BL-35",
+          ("a44", "Order.ship", "exact")),
+    _case("A45", "A45", "BL-36",
+          ("a45", "Order.ship", "exact")),
+    _case("B10", "B10", "BL-46",
+          ("b10", "OrderService.shape", "exact"), ("b10", "Circle.area", "exact"), ("b10", "Shape.area", "possible")),
+    _case("B14", "B14", "BL-42",
+          ("b14", "Status.label", "exact")),
+    _case("B15", "B15", "BL-42",
+          ("b15", "Status.label", "exact")),
+    _case("B23", "B23", "BL-39",
+          ("b23", "Order.ship", "exact"), codeql_item="BL-39"),
+    _case("B26", "B26", "BL-36",
+          ("b26", "Order.ship", "exact")),
+    _case("B27", "B27", "BL-36",
+          ("b27", "Order.ship", "exact")),
+    _case("B28", "B28", "BL-36",
+          ("b28", "Order.ship", "exact")),
+    _case("B29", "B29", "BL-37",
+          ("b29", "Order.ok", "exact")),
+    _case("B30", "B30", "BL-37",
+          ("b30", "Order.ship", "exact")),
+    _case("B39", "B39", "BL-46",
+          ("b39.shape", "OrderService.shape", "exact"), ("b39", "Circle.area", "exact"), ("b39", "Shape.area", "possible")),
+    _case("B44", "B44", "BL-42",
+          ("b44.all", "OrderService.all", "exact"), ("b44", "Order.ship", "exact")),
+    _case("B46", "B46", "BL-36",
+          ("b46", "Order.getLine", "exact"), ("b46.apply", "Line.qty", "exact")),
+    _case("C01", "C01", "BL-35",
+          ("c01", "Catalog.list", "exact"), ("c01", "Order.ship", "exact")),
+    _case("C02", "C02", "BL-35",
+          ("c02", "Catalog.maybe", "exact"), ("c02", "Order.ship", "exact")),
+    _case("C03", "C03", "BL-35",
+          ("c03", "Catalog.index", "exact"), ("c03", "Order.ship", "exact")),
+    _case("C04", "C04", "BL-35",
+          ("c04", "Catalog.all", "exact"), ("c04", "Order.ship", "exact")),
+    _case("C05", "C05", "BL-35, BL-37",
+          ("c05", "Catalog.list", "exact"), ("c05", "Order.ship", "exact")),
+    _case("C06", "C06", "BL-35",
+          ("c06.list", "Catalog.list", "exact"), ("c06", "Order.ship", "exact")),
+    _case("C07", "C07", "BL-35",
+          ("c07", "Order.ship", "exact")),
+    _case("C08", "C08", "BL-35",
+          ("c08", "Order.ship", "exact")),
+    _case("C09", "C09", "BL-37",
+          ("c09", "Catalog.each", "exact"), ("c09", "Order.ship", "exact")),
+    _case("C10", "C10", "BL-37",
+          ("c10", "Catalog.apply", "exact"), ("c10", "Order.getLine", "exact"), ("c10", "Line.qty", "exact")),
+    _case("C11", "C11", "BL-42",
+          ("c11", "Order.ship", "exact")),
+    _case("C12", "C12", "BL-35",
+          ("c12", "Catalog.list", "exact"), ("c12", "Order.ok", "exact"), ("c12", "Order.ship", "exact")),
+    _case("C14", "C14", "BL-35",
+          ("c14.list", "Catalog.list", "exact"), ("c14", "Order.ship", "exact")),
+    _case("D01", "D01", "BL-35, BL-38",
+          ("d01", "Catalog.list", "exact"), ("d01", "Taker.takeOrder", "exact")),
+    _case("D04", "D04", "BL-36",
+          ("d04", "Order.ship", "exact")),
+    _case("D05", "D05", "BL-35, BL-37",
+          ("d05", "Catalog.list", "exact"), ("d05", "Taker.takeOrder", "exact")),
+    _case("D06", "D06", "BL-37",
+          ("d06", "Taker.takeOrder", "exact")),
+    _case("E02", "E02", "BL-35",
+          ("e02", "OrderBoxes.wrap", "exact"), ("e02", "Box.get", "exact"), ("e02", "Order.ship", "exact")),
 ]
 
 
@@ -484,21 +1039,22 @@ class _Project:
 
 
 def _project(root: Path) -> _Project:
-    (root / _PATH).parent.mkdir(parents=True, exist_ok=True)
-    (root / _PATH).write_text(FIXTURE, encoding="utf-8")
     tags: dict[tuple[str, int], str] = {}
     lines: dict[str, int] = {}
-    for number, line in enumerate(FIXTURE.splitlines(), start=1):
-        match = _TAG.search(line)
-        if match:
-            assert match.group(1) not in lines, f"duplicate tag {match.group(1)}"
-            tags[(_PATH, number)] = match.group(1)
-            lines[match.group(1)] = number
+    for path, text in _SOURCES.items():
+        (root / path).parent.mkdir(parents=True, exist_ok=True)
+        (root / path).write_text(text, encoding="utf-8")
+        for number, line in enumerate(text.splitlines(), start=1):
+            match = _TAG.search(line)
+            if match:
+                assert match.group(1) not in lines, f"duplicate tag {match.group(1)}"
+                tags[(path, number)] = match.group(1)
+                lines[match.group(1)] = number
     module = DiscoveredModule(
         name="app", path=root / "app", build_system="maven", version=None,
         kind="application", starts_application=True, configuration_example="",
     )
-    methods = materialize_integration_methods(root, [], [_PATH], [module])
+    methods = materialize_integration_methods(root, [], list(_SOURCES), [module])
     return _Project(root, methods, tags, lines)
 
 
@@ -547,7 +1103,7 @@ def _check(project: _Project, rows: dict[str, set[Row]], case: Case, expected: f
 @pytest.fixture(scope="module")
 def symbol_rows(tmp_path_factory: pytest.TempPathFactory) -> tuple[_Project, dict[str, set[Row]]]:
     project = _project(tmp_path_factory.mktemp("parity-source"))
-    symbols = JavaSymbols(project.root, project.methods, [_PATH])
+    symbols = JavaSymbols(project.root, project.methods, list(_SOURCES))
     return project, _rows(project, symbols.fallback_calls(set(), closed_world=True))
 
 
@@ -568,14 +1124,19 @@ def codeql_rows(tmp_path_factory: pytest.TempPathFactory) -> Iterator[tuple[_Pro
     if codeql_executable() is None:
         pytest.skip("Local CodeQL is required")
     project = _project(tmp_path_factory.mktemp("parity-codeql"))
-    request = EngineRequest(repo_root=project.root, allowed_paths=[_PATH], timeout_seconds=600)
+    request = EngineRequest(repo_root=project.root, allowed_paths=list(_SOURCES), timeout_seconds=600)
     with CodeQLEngine(threads=2).open(request) as session:
         calls = session.calls()
     yield project, _rows(project, calls)
 
 
+def _codeql_param(case: Case) -> object:
+    marks = [pytest.mark.xfail(strict=True, reason=case.codeql_item)] if case.codeql_item else []
+    return pytest.param(case, id=case.id, marks=marks)
+
+
 @pytest.mark.slow
-@pytest.mark.parametrize("case", [pytest.param(case, id=case.id) for case in CASES])
+@pytest.mark.parametrize("case", [_codeql_param(case) for case in CASES])
 def test_codeql_gives_the_parity_rows(
     codeql_rows: tuple[_Project, dict[str, set[Row]]], case: Case,
 ) -> None:
@@ -586,14 +1147,15 @@ def test_every_parity_row_is_documented() -> None:
     spec = Path(__file__).resolve().parents[1] / "docs/spec-tech/indexing.md"
     text = spec.read_text(encoding="utf-8")
     section = text[text.index("### Engine parity"):text.index("## Build layout")]
-    documented = dict(re.findall(r"^\| ([AB]\d+) \|.*?\|.*?\| (.*?) \|$", section, re.MULTILINE))
+    documented = dict(re.findall(r"^\| ([A-E]\d+) \|.*?\|.*?\| (.*?) \|$", section, re.MULTILINE))
     rows = {case.id.split("-", 1)[0] for case in CASES}
     assert set(documented) == rows, f"undocumented: {sorted(rows - set(documented))}"
     for case in CASES:
-        if case.item:
-            assert case.item in documented[case.id.split("-", 1)[0]], (
-                f"{case.id}: {case.item} missing from the parity table"
-            )
+        for item in (case.item, case.codeql_item):
+            if item:
+                assert item in documented[case.id.split("-", 1)[0]], (
+                    f"{case.id}: {item} missing from the parity table"
+                )
         if case.deviation is not None:
             assert case.id in documented[case.id.split("-", 1)[0]], (
                 f"{case.id}: its deviation is missing from the parity table"

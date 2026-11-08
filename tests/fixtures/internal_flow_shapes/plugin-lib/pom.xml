@@ -1,0 +1,9 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <parent><groupId>example</groupId><artifactId>shapes-parent</artifactId><version>1.0.0</version></parent>
+  <artifactId>plugin-lib</artifactId>
+  <dependencies>
+    <dependency><groupId>example</groupId><artifactId>shared-lib</artifactId><version>1.0.0</version></dependency>
+    <dependency><groupId>org.springframework.kafka</groupId><artifactId>spring-kafka</artifactId><version>3.1.0</version></dependency>
+  </dependencies>
+</project>
