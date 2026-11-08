@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v29-inherited-methods-rabbit-jms"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v30-redacted-url-secrets"
 
 
 def current_endpoint_inventory_signature() -> str:

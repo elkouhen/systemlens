@@ -2,6 +2,8 @@ import hashlib
 from dataclasses import dataclass, replace
 from typing import Literal, TypeAlias
 
+from systemlens.domain.redaction import redact_url_secrets
+
 
 IntegrationSystem: TypeAlias = Literal["kafka", "rest"]
 KafkaRole: TypeAlias = Literal["produce", "consume"]
@@ -113,6 +115,13 @@ class MessageEndpoint:
     # Libellé source conservé pour l'affichage lorsque `topic` est normalisé
     # par une convention d'indexation, notamment Strategy1.
     topic_display: str | None = None
+
+    def __post_init__(self) -> None:
+        # Invariant 5: evidence never keeps a URL credential, whichever
+        # scanner, loader or adapter builds the endpoint.
+        redacted = redact_url_secrets(self.snippet)
+        if redacted != self.snippet:
+            object.__setattr__(self, "snippet", redacted)
 
     @property
     def kafka_topic(self) -> str | None:

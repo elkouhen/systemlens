@@ -173,7 +173,11 @@ def _segment_matches(call_segment: str, serve_segment: str) -> bool:
     return call_segment == serve_segment
 
 
-_URL_HOST_RE = re.compile(r"https?://([^/\s:?#\"'`]+)", re.IGNORECASE)
+# An optional ``userinfo@`` precedes the host: ``https://admin@inventory``
+# designates ``inventory``, not ``admin``.
+_URL_HOST_RE = re.compile(
+    r"https?://(?:[^/\s@?#\"'`]*@)?([^/\s:?#\"'`@]+)", re.IGNORECASE
+)
 _DNS_LABEL_RE = re.compile(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", re.IGNORECASE)
 _IPV4_HOST_RE = re.compile(r"\d{1,3}(?:\.\d{1,3}){3}")
 _CLUSTER_LOCAL_SUFFIXES = (".svc", ".svc.cluster.local")

@@ -198,6 +198,7 @@ they are not cross-module entry points.
 | Kubernetes runtime discovery | `discovery/kubernetes.py` |
 | Shared module inventory types | `domain/module_inventory.py` |
 | Kafka payload type informativeness and comparison | `domain/message_types.py` |
+| Credential redaction of endpoint evidence | `domain/redaction.py` |
 | Same-method potential flow materialization | `indexing/code_flows.py` |
 | Call-graph engine contract or selection | `callgraph/engine.py`, `callgraph/registry.py` |
 | A new call-graph engine | `engines/<name>/` with `declaration.py`, plus one entry in `callgraph/registry.py` |

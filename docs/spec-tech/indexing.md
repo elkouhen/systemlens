@@ -1518,7 +1518,9 @@ moved the endpoint inventory to
 `endpoint-inventory-v29-inherited-methods-rabbit-jms`, so the next
 `index` re-extracts every file. BL-45 and BL-46 moved the code-flow
 signature to `code-flow-v57-dispatch-precision`, and BL-43 and BL-44 to
-`code-flow-v58-spring-signatures`.
+`code-flow-v58-spring-signatures`. BC-02 moved the endpoint inventory to
+`endpoint-inventory-v30-redacted-url-secrets`, so an index that persisted
+a URL credential re-extracts every file and drops it.
 
 ### Internal-flow shapes
 

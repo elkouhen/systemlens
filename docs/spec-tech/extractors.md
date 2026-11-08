@@ -151,6 +151,18 @@ A failure, a non-literal DSL argument or an unreadable filter makes the
 call `<dynamic>`. Java DSL filter calls are ordered by the position of
 their names. YAML `uri` lines come from `yaml.compose_all` node marks.
 
+An endpoint snippet never keeps a URL credential (AGENTS.md invariant 5).
+`MessageEndpoint` passes every snippet through
+`domain/redaction.redact_url_secrets`, whichever scanner builds it. The
+helper strips `user:password@` userinfo after any `scheme://`. It masks
+as `<redacted>` the value of a query or matrix parameter whose name holds
+`token`, `key`, `secret`, `password`, `passwd`, `pwd`, `credential`,
+`signature`, `sig` or `auth`. A `${...}` placeholder or `{...}` template
+value is kept, since it names a property, not a secret.
+
+The REST service hint skips userinfo:
+`https://admin:pw@inventory/` designates `inventory`, not `admin`.
+
 REST graph matching indexes served routes by resolved target service before
 checking route compatibility. If `C` is the number of calls and `S` the number
 of served routes, matching costs `O(C + S + M)`, where `M` is the number of

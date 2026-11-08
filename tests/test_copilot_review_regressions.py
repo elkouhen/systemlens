@@ -4,8 +4,15 @@ Each test reproduces an item of ``backlog-copilot.md`` on a minimal fixture
 and names the rule it protects.
 """
 
+import sqlite3
 from pathlib import Path
 
+import pytest
+from typer.testing import CliRunner
+
+from systemlens.delivery.cli import app
+from systemlens.domain.graph import url_service_hint
+from systemlens.domain.redaction import redact_url_secrets
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
 from systemlens.scanner import clear_analysis_caches
@@ -62,3 +69,102 @@ def test_an_impossible_yaml_date_does_not_abort_the_index(tmp_path: Path) -> Non
         )
 
         assert _index(repo) == ["GET /ping"], name
+
+
+# Obviously fake values: the test asserts that they never persist.
+FAKE_USERINFO = "user:not-a-secret"
+FAKE_TOKEN = "fake-token-value"
+FAKE_KEY = "fake-key-value"
+APPLICATION = """package demo;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+@SpringBootApplication
+public class App { public static void main(String[] args) {} }
+"""
+
+
+def test_a_gateway_uri_credential_is_redacted_everywhere(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """BC-02: a gateway ``uri`` kept its userinfo and token (invariant 5).
+
+    The YAML and Java DSL snippets lose the userinfo and the secret query
+    values, and the userinfo no longer becomes the service hint: the
+    gateway still calls ``inventory``.
+    """
+    repo = tmp_path / "repo"
+    _write(repo / "pom.xml", POM.format(
+        name="root",
+        deps="<packaging>pom</packaging><modules><module>gw</module>"
+        "<module>inventory</module></modules>",
+    ))
+    _write(repo / "gw/pom.xml", POM.format(name="gw", deps=""))
+    _write(repo / "inventory/pom.xml", POM.format(name="inventory", deps=""))
+    for module in ("gw", "inventory"):
+        _write(repo / module / "src/main/java/demo/App.java", APPLICATION)
+        _write(
+            repo / module / "src/main/resources/application.yml",
+            f"spring:\n  application:\n    name: {module}\n",
+        )
+    with (repo / "gw/src/main/resources/application.yml").open("a") as handle:
+        handle.write(
+            "  cloud:\n    gateway:\n      routes:\n        - id: inv\n"
+            f"          uri: https://{FAKE_USERINFO}@inventory/?token={FAKE_TOKEN}\n"
+            "          predicates:\n            - Path=/items/**\n"
+        )
+    _write(repo / "gw/src/main/java/demo/Routes.java", f"""package demo;
+import org.springframework.cloud.gateway.route.RouteLocator;
+import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
+class Routes {{
+  RouteLocator routes(RouteLocatorBuilder b) {{
+    return b.routes().route("java", r -> r.path("/stock/**")
+        .uri("http://{FAKE_USERINFO}@inventory?api_key={FAKE_KEY}")).build();
+  }}
+}}
+""")
+    _write(repo / "inventory/src/main/java/demo/Items.java", """package demo;
+import org.springframework.web.bind.annotation.*;
+@RestController
+class Items {
+  @GetMapping("/items/{id}") String item(@PathVariable String id) { return id; }
+  @GetMapping("/stock/{id}") String stock(@PathVariable String id) { return id; }
+}
+""")
+
+    _index(repo)
+    with Store(repo) as store:
+        gateway = [
+            endpoint for endpoint in store.all_endpoints()
+            if endpoint.framework == "spring-cloud-gateway"
+        ]
+        services = {
+            (relation.source_name, relation.target_name)
+            for relation in store.all_architecture_relations()
+            if relation.relation == "calls_service"
+        }
+    monkeypatch.chdir(repo)
+    html = repo / "architecture.html"
+    exported = CliRunner().invoke(app, ["export", "microservices", "--html", str(html)])
+
+    assert len(gateway) == 4
+    assert all("<redacted>" in endpoint.snippet for endpoint in gateway)
+    assert services == {("gw", "inventory")}
+    assert exported.exit_code == 0
+    with sqlite3.connect(repo / ".systemlens/findings.db") as connection:
+        dump = "\n".join(connection.iterdump())
+    for secret in ("not-a-secret", FAKE_TOKEN, FAKE_KEY):
+        assert secret not in dump
+        assert secret not in html.read_text(encoding="utf-8")
+
+
+def test_url_redaction_keeps_placeholders_and_hints_skip_userinfo() -> None:
+    """BC-02: the shared helper and the host hint, shape by shape."""
+    assert url_service_hint("https://admin:pw@inventory/x") == "inventory"
+    assert redact_url_secrets("lb://u:p@orders/a?password=x&page=2") == (
+        "lb://orders/a?password=<redacted>&page=2"
+    )
+    assert redact_url_secrets("http://h/a?token=${app.token}&key={key}") == (
+        "http://h/a?token=${app.token}&key={key}"
+    )
+    assert redact_url_secrets('"http://" + user + "@" + host') == (
+        '"http://" + user + "@" + host'
+    )
