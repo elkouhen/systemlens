@@ -313,7 +313,9 @@ compatible implementation, candidates from other modules remain possible.
 The static base type remains a possible target when a subtype override is also
 visible. An inherited template call is restricted to the concrete entry subtype
 when that subtype is known; an entry declared by the base class itself keeps
-every override. `super.method()` resolves to the direct parent
+every override. The restriction holds only while the route calls methods on
+`this`: once it calls another object, such as `secondStep.execute()`, every
+override stays possible (ADR-43). `super.method()` resolves to the direct parent
 declaration. These rules prevent sibling implementations from entering one
 source flow while preserving uncertainty for a base-typed field.
 

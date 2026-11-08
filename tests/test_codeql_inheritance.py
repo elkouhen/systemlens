@@ -1259,6 +1259,91 @@ def test_entry_dispatch_allowed(caller, callees, callee, allowed):
     assert entry_dispatch_allowed("app.A.entry", caller, callee, callees) is allowed
 
 
+@pytest.mark.parametrize(("caller", "callees", "callee"), [
+    ("core.Base.process", ["app.A.send", "app.B.send"], "app.B.send"),
+])
+def test_entry_dispatch_allowed_once_the_route_leaves_this(caller, callees, callee):
+    # ADR-43 amendment (BL-47): the receiver is another object, any override.
+    from systemlens.domain.code_flows import entry_dispatch_allowed
+
+    assert entry_dispatch_allowed("app.A.entry", caller, callee, callees, on_this=False)
+
+
+SIBLING_TEMPLATE = {
+    "core/Base.java": """package core; public abstract class Base {
+  public void process() { send(); }
+  public abstract void send();
+}""",
+    "app/First.java": """package app; import core.Base; public class First extends Base {
+  private final Second second = new Second();
+  public void entry() { second.process(); }
+  public void send() { output(); }
+  void output() {}
+}""",
+    "app/Second.java": """package app; import core.Base; public class Second extends Base {
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+}
+
+
+def test_inherited_dispatch_is_unrestricted_after_a_call_on_another_object(tmp_path: Path):
+    """S24 (BL-47): ``second.process()`` runs the template on a Second."""
+    methods, endpoints = _project(tmp_path, SIBLING_TEMPLATE)
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(SIBLING_TEMPLATE),
+    )
+    assert {(flow.method, flow.steps[-1].path) for flow in flows} == {
+        ("app.First.entry", "app/First.java"),
+        ("app.First.entry", "app/Second.java"),
+    }
+
+
+def test_call_graph_records_the_calls_on_another_object(tmp_path: Path):
+    methods, endpoints = _project(tmp_path, SIBLING_TEMPLATE)
+    edges: list[CallGraphEdge] = []
+    materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(SIBLING_TEMPLATE),
+        call_graph_sink=lambda graph: edges.extend(graph.edges()),
+    )
+    by_id = {method.id: method.qualified_method for method in methods}
+    flagged = {
+        (by_id[edge.caller_id], by_id[edge.callee_id])
+        for edge in edges if edge.other_receiver
+    }
+    # ``second.process()`` leaves ``this``; ``send()`` and ``output()`` do not.
+    assert flagged == {("app.First.entry", "core.Base.process")}
+
+
+def test_persisted_rebuild_reads_the_receiver_flag(tmp_path: Path):
+    """Without source symbols, the persisted flag lifts the restriction."""
+    methods, endpoints = _project(tmp_path, SIBLING_TEMPLATE)
+    by_name = {method.qualified_method: method for method in methods}
+    process = by_name["core.Base.process"]
+
+    def edges(other_receiver: bool) -> list[CallGraphEdge]:
+        return [
+            CallGraphEdge(by_name["app.First.entry"].id, process.id, "app/First.java", 3, "exact",
+                          other_receiver=other_receiver),
+        ] + [
+            CallGraphEdge(process.id, by_name[f"app.{owner}.send"].id, "core/Base.java", 2, "possible")
+            for owner in ("First", "Second")
+        ] + [
+            CallGraphEdge(by_name["app.First.send"].id, by_name["app.First.output"].id,
+                          "app/First.java", 4, "exact"),
+            CallGraphEdge(by_name["app.Second.send"].id, by_name["app.Second.otherOutput"].id,
+                          "app/Second.java", 2, "exact"),
+        ]
+
+    def outputs(other_receiver: bool) -> set[str]:
+        flows = materialize_call_graph_flows(methods, endpoints, [], persisted_edges=edges(other_receiver))
+        return {flow.steps[-1].path for flow in flows if flow.method == "app.First.entry"}
+
+    # An unknown receiver (an index written before the flag) keeps ADR-43.
+    assert outputs(False) == {"app/First.java"}
+    assert outputs(True) == {"app/First.java", "app/Second.java"}
+
+
 def test_placeholder_methods_carry_the_discovered_module_identity(tmp_path: Path):
     """An engine method without an indexed row still respects app boundaries."""
     sources = {

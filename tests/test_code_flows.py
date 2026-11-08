@@ -1942,6 +1942,31 @@ def test_store_additively_migrates_previous_schema_for_code_flows(
         assert store.get_meta("schema_version") == SCHEMA_VERSION
 
 
+def test_store_adds_the_receiver_flag_to_existing_call_edges(tmp_path: Path) -> None:
+    # Schema 40 (BL-47): an index written before the flag migrates additively
+    # with an unknown receiver, and a new edge keeps its flag.
+    with Store(tmp_path) as store:
+        store.conn.execute("DROP TABLE codeql_call_edges")
+        store.conn.execute(
+            """CREATE TABLE codeql_call_edges (
+                caller_id TEXT NOT NULL, callee_id TEXT NOT NULL, path TEXT NOT NULL,
+                line INTEGER NOT NULL, dispatch_confidence TEXT NOT NULL,
+                inferred INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (caller_id, callee_id, path, line, dispatch_confidence, inferred))"""
+        )
+        store.conn.execute(
+            "INSERT INTO codeql_call_edges VALUES ('a', 'b', 'A.java', 3, 'exact', 0)"
+        )
+        store.set_meta("schema_version", "39")
+
+    with Store(tmp_path) as store:
+        assert store.all_call_edges() == [CallGraphEdge("a", "b", "A.java", 3, "exact")]
+        with store.transaction():
+            store.replace_call_edges([CallGraphEdge("a", "b", "A.java", 3, "exact", other_receiver=True)])
+        assert store.all_call_edges()[0].other_receiver is True
+        assert store.get_meta("schema_version") == SCHEMA_VERSION
+
+
 def test_codeql_calls_join_ast_entry_and_output_methods(tmp_path: Path) -> None:
     source = "orders/src/main/java/com/example/OrderController.java"
     target = "orders/src/main/java/com/example/OrderPublisher.java"

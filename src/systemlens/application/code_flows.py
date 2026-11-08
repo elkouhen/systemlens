@@ -497,6 +497,7 @@ def _call_graph_flow_attempts(
                 )
                 if _call_graph_edge_allowed(
                     edge, methods_by_id, input_method.qualified_method, adjacency,
+                    not any(hop.other_receiver for hop in (*edge_path, edge)),
                 )
             ]
             if not outgoing:
@@ -628,27 +629,31 @@ def _shortest_method_path(
     methods: dict[str, IntegrationMethod],
     entry_method: str,
 ) -> tuple[list[str], list[CallGraphEdge]] | None:
-    queue: deque[tuple[str, list[str], list[CallGraphEdge]]] = deque([
-        (start, [start], [])
+    # A state carries whether every hop so far runs on ``this``: the
+    # entry-subtype restriction holds only then (BL-47).
+    queue: deque[tuple[str, list[str], list[CallGraphEdge], bool]] = deque([
+        (start, [start], [], True)
     ])
-    visited = {start}
+    visited = {(start, True)}
     while queue:
-        current, method_path, edge_path = queue.popleft()
+        current, method_path, edge_path, on_this = queue.popleft()
         if current == target:
             return method_path, edge_path
         for edge in sorted(
             adjacency.get(current, []),
             key=lambda item: (item.path, item.line, item.callee_id),
         ):
-            if not _call_graph_edge_allowed(edge, methods, entry_method, adjacency):
+            next_on_this = on_this and not edge.other_receiver
+            if not _call_graph_edge_allowed(edge, methods, entry_method, adjacency, next_on_this):
                 continue
-            if edge.callee_id in visited:
+            if (edge.callee_id, next_on_this) in visited:
                 continue
-            visited.add(edge.callee_id)
+            visited.add((edge.callee_id, next_on_this))
             queue.append((
                 edge.callee_id,
                 [*method_path, edge.callee_id],
                 [*edge_path, edge],
+                next_on_this,
             ))
     return None
 
@@ -658,6 +663,7 @@ def _call_graph_edge_allowed(
     methods: dict[str, IntegrationMethod],
     entry_method: str,
     adjacency: dict[str, list[CallGraphEdge]],
+    on_this: bool = True,
 ) -> bool:
     return entry_dispatch_allowed(
         entry_method,
@@ -669,6 +675,7 @@ def _call_graph_edge_allowed(
             if sibling.path == edge.path and sibling.line == edge.line
             and sibling.callee_id in methods
         ),
+        on_this=on_this,
     )
 
 

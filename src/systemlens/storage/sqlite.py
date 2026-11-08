@@ -54,7 +54,7 @@ from systemlens.storage.serialization import (
     row_to_finding as _row_to_finding,
 )
 
-SCHEMA_VERSION = "39"
+SCHEMA_VERSION = "40"
 SEVERITY_ORDER = ["INFO", "WARNING", "ERROR"]
 # Collections kept per runtime source so two windows can be compared.
 RUNTIME_HISTORY_DEPTH = 3
@@ -481,6 +481,7 @@ class Store:
                 line INTEGER NOT NULL,
                 dispatch_confidence TEXT NOT NULL,
                 inferred INTEGER NOT NULL DEFAULT 0,
+                other_receiver INTEGER NOT NULL DEFAULT 0,
                 PRIMARY KEY (caller_id, callee_id, path, line, dispatch_confidence, inferred),
                 FOREIGN KEY (caller_id) REFERENCES integration_methods(id),
                 FOREIGN KEY (callee_id) REFERENCES integration_methods(id)
@@ -589,6 +590,7 @@ class Store:
         self._migrate_graph_fact_columns()
         self._migrate_code_flow_columns()
         self._migrate_integration_method_columns()
+        self._migrate_call_edge_columns()
         self._migrate_runtime_columns()
         if self.get_meta("schema_version") != SCHEMA_VERSION:
             self.set_meta("schema_version", SCHEMA_VERSION)
@@ -708,6 +710,19 @@ class Store:
         cols = {row["name"] for row in self.conn.execute("PRAGMA table_info(integration_methods)")}
         if "parameter_types" not in cols:
             self.conn.execute("ALTER TABLE integration_methods ADD COLUMN parameter_types TEXT")
+
+    def _migrate_call_edge_columns(self) -> None:
+        """Add the receiver flag of ADR-43's amendment (BL-47) additively.
+
+        An index written before it keeps ``0``: the receiver is unknown and
+        the entry-subtype restriction stays on.
+        """
+        table = persisted_names.CALL_EDGES_TABLE
+        cols = {row["name"] for row in self.conn.execute(f"PRAGMA table_info({table})")}
+        if "other_receiver" not in cols:
+            self.conn.execute(
+                f"ALTER TABLE {table} ADD COLUMN other_receiver INTEGER NOT NULL DEFAULT 0"
+            )
 
     def _migrate_runtime_columns(self) -> None:
         """Add latency percentiles and collection history additively.
@@ -1063,6 +1078,7 @@ class Store:
                     edge.line,
                     edge.dispatch_confidence,
                     int(edge.inferred),
+                    int(edge.other_receiver),
                 )
                 for edge in edges
             ],
@@ -1072,8 +1088,8 @@ class Store:
         self.conn.execute(f"DELETE FROM {persisted_names.CALL_EDGES_TABLE}")
         self.conn.executemany(
             f"""INSERT INTO {persisted_names.CALL_EDGES_TABLE}
-            (caller_id, callee_id, path, line, dispatch_confidence, inferred)
-            VALUES (?, ?, ?, ?, ?, ?)""",
+            (caller_id, callee_id, path, line, dispatch_confidence, inferred, other_receiver)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
             rows,
         )
 
@@ -1157,7 +1173,7 @@ class Store:
     def all_call_edges(self) -> list[CallGraphEdge]:
         rows = self.conn.execute(
             f"""SELECT caller_id, callee_id, path, line,
-                      dispatch_confidence, inferred
+                      dispatch_confidence, inferred, other_receiver
                FROM {persisted_names.CALL_EDGES_TABLE}
                ORDER BY caller_id, callee_id, path, line,
                         dispatch_confidence, inferred"""
@@ -1170,6 +1186,7 @@ class Store:
                 line=row["line"],
                 dispatch_confidence=row["dispatch_confidence"],
                 inferred=bool(row["inferred"]),
+                other_receiver=bool(row["other_receiver"]),
             )
             for row in rows
         ]

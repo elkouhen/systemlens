@@ -141,6 +141,9 @@ class CallGraphEdge:
     line: int
     dispatch_confidence: str
     inferred: bool = False
+    # The call runs on an object other than the caller's ``this`` (ADR-43
+    # amendment, BL-47). ``False`` also stands for an unknown receiver.
+    other_receiver: bool = False
 
 
 @dataclass(frozen=True)
@@ -160,6 +163,8 @@ def entry_dispatch_allowed(
     caller_method: str,
     callee_method: str,
     call_site_callees: Iterable[str],
+    *,
+    on_this: bool = True,
 ) -> bool:
     """Keep an inherited call site's dispatch on the entry's own override.
 
@@ -170,7 +175,13 @@ def entry_dispatch_allowed(
     the runtime receiver is that class, so sibling overrides are excluded.
     Without such a fan-out, or without an override on the entry's class,
     every edge stays allowed.
+
+    ``on_this`` says whether every hop since the entry, this call included,
+    runs on ``this``. Once the route leaves it, the receiver is another
+    object and every edge stays allowed (ADR-43 amendment, BL-47).
     """
+    if not on_this:
+        return True
     entry_owner = entry_method.rpartition(".")[0]
     if caller_method.rpartition(".")[0] == entry_owner:
         return True

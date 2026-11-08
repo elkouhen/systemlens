@@ -823,6 +823,11 @@ base64. The browser loads them once, on the first contract inspection, using
 `DecompressionStream`. This reduces file size and defers viewer execution, but
 does not bound graph memory usage. The persisted graph JSON remains unchanged.
 
+Schema version 40 adds `other_receiver` to `codeql_call_edges`: `1` when the
+call runs on an object other than the caller's `this` (ADR-43 amendment,
+BL-47). An existing index migrates with `0`, an unknown receiver that keeps
+the entry-subtype restriction until the next index.
+
 Schema version 38 adds nullable declared parameter types to `integration_methods`.
 Existing indexes migrate with unknown signatures, while a fresh index records the
 types from Java declarations.

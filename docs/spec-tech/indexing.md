@@ -899,11 +899,26 @@ cannot cross into the flow. Owners are compared by qualified name, so the rule
 also holds when the inherited body is declared in a helper module. When the
 entry method is declared by the inherited body's own class, the runtime
 receiver is unknown and every override stays possible.
+
+The restriction holds only while every hop since the entry runs on `this`
+(ADR-43 amendment, BL-47). The traversal state carries that bit beside the
+method and the `possible` label, so one method can be explored twice. A
+call leaves `this` when its receiver is another expression, or when it
+has no receiver and its target is outside the caller's class hierarchy,
+such as an outer-class method or a static import.
+
+`other_receiver_sites` in `code_flows.py` reads the receivers through
+`JavaSymbols.receiver_sites` once per caller. Each persisted edge records
+the result as `other_receiver`; a site the symbols do not know, such as a
+placeholder caller or an engine line no source call starts on, keeps an
+unknown receiver and the restriction. A rebuild reads the flag and does
+not recompute it; an expansion of a persisted abstract edge keeps it.
+
 A rebuild from persisted edges has no source symbols. It approximates the rule
 per call site: when a site outside the entry's class fans out to several
 overrides of one method name and one is declared by the entry's class, only
-that override is followed. The `analyze` call-chain diagnostics apply the same
-rule. No application class name is special-cased. Explicit `super` calls target direct parent bodies.
+that override is followed, while the route stays on `this`. The `analyze`
+call-chain diagnostics apply the same rule. No application class name is special-cased. Explicit `super` calls target direct parent bodies.
 Each indexing pass sizes the parsed-tree cache to its Java inventory, bounded
 by 20,000 files, so extractors, the method inventory, the symbol pass and flow
 materialization share one parse per file. Retained memory therefore grows with
@@ -1354,7 +1369,8 @@ stage and rebuilds its edges and flows without `--full`.
 
 BL-35, BL-39 and BL-42 moved it to `code-flow-v52-receiver-typing` for the same
 reason, BL-36 and BL-37 to `code-flow-v53-jdk-signatures`, and BL-38,
-BL-40 and BL-41 to `code-flow-v54-overloads-and-transforms`.
+BL-40 and BL-41 to `code-flow-v54-overloads-and-transforms`, and BL-47
+to `code-flow-v55-entry-rule-on-this`.
 
 ### Internal-flow shapes
 
@@ -1365,15 +1381,16 @@ engine, then `flows calculate` on the persisted index, and checks the
 flows of each entry in both results.
 
 A shape whose gap an open item owns is a strict expected failure naming
-it: the sibling template method (BL-47), the route inherited from a base
+it: the route inherited from a base
 controller (BL-48), the Rabbit, JMS, `@EventListener` and
 `CommandLineRunner` entries (BL-49), the route that reaches no
 integration point (BL-50), the dispatch a generic type argument decides
 (BL-45), and the ternary and call-context dispatch (BL-46).
 
 Controls pass today: a controller-service-client chain, a job calling its
-own inherited template method, and a `@Scheduled(fixedDelay = ...)`
-entry. The rebuild reproduces the indexed flows with `source`. A `slow`
+own inherited template method, a template method called on a sibling
+subtype (BL-47), and a `@Scheduled(fixedDelay = ...)` entry. A `slow`
+test checks both template shapes with CodeQL. The rebuild reproduces the indexed flows with `source`. A `slow`
 test runs the same check with CodeQL; it is a strict expected failure
 until BL-51 applies the ADR-71 module check to the rebuild.
 

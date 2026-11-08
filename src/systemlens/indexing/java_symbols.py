@@ -4067,6 +4067,49 @@ class JavaSymbols:
             if node.type in _CALL_SITES | _CONSTRUCTOR_SITES and _call_context(node) == context
         ]
 
+    def receiver_sites(self, method_id: str) -> dict[tuple[int, str], bool]:
+        """Whether each ``(line, name)`` call site of a method may run on ``this``.
+
+        A call without receiver, on ``this``, ``super`` or ``Outer.this``,
+        and ``this(...)`` or ``super(...)``, may run on the caller's own
+        instance; a call on any other expression, and ``new T(...)``, does
+        not. A line holding both kinds counts as on ``this``. Whether a
+        call without receiver reaches an outer class or a static import is
+        left to the caller, which knows the target (ADR-43, BL-47). An
+        unknown method gives no site.
+        """
+        info = self.methods.get(method_id)
+        if info is None:
+            return {}
+        source = self.units[info.method.path].source
+        sites: dict[tuple[int, str], bool] = {}
+        for invocation, _context in self._call_sites(info):
+            line = invocation.start_point.row + 1
+            receiver: Node | None
+            if invocation.type == "object_creation_expression":
+                name, on_this = CONSTRUCTOR, False
+            elif invocation.type == "explicit_constructor_invocation":
+                name = CONSTRUCTOR
+                on_this = invocation.child_by_field_name("object") is None
+            else:
+                if invocation.type == "method_reference":
+                    parts = invocation.named_children
+                    if len(parts) < 2 or parts[-1].type != "identifier":
+                        continue
+                    receiver, name = parts[0], parser.node_text(source, parts[-1])
+                else:
+                    name_node = invocation.child_by_field_name("name")
+                    if name_node is None:
+                        continue
+                    receiver, name = invocation.child_by_field_name("object"), parser.node_text(source, name_node)
+                on_this = receiver is None or receiver.type in {"this", "super"} or (
+                    receiver.type == "field_access"
+                    and (field := receiver.child_by_field_name("field")) is not None
+                    and field.type == "this"
+                )
+            sites[(line, name)] = sites.get((line, name), False) or on_this
+        return sites
+
     def _constructor_targets(
         self, info: _Method, invocation: Node,
     ) -> tuple[list[IntegrationMethod], str]:

@@ -41,7 +41,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v54-overloads-and-transforms"
+CODE_FLOW_SIGNATURE = "code-flow-v55-entry-rule-on-this"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 
@@ -73,6 +73,13 @@ class CallGraph:
     locate: Callable[[str, str, int], tuple[IntegrationMethod, bool] | None]
     methods: tuple[PersistedCallGraphMethod, ...] = ()
     symbols: JavaSymbols | None = None
+    # ``(caller ID, call line, callee ID)`` of the edges whose call runs on
+    # an object other than the caller's ``this`` (ADR-43 amendment, BL-47).
+    other_receiver_sites: frozenset[tuple[str, int, str]] = frozenset()
+
+    def on_this(self, caller_id: str, call: MethodCall, callee_id: str) -> bool:
+        """Whether a call may run on the caller's own instance."""
+        return (caller_id, call.call_line, callee_id) not in self.other_receiver_sites
 
     @property
     def joined_calls(self) -> int:
@@ -89,6 +96,7 @@ class CallGraph:
                     line=call.call_line,
                     dispatch_confidence=call.dispatch_confidence,
                     inferred=inferred,
+                    other_receiver=not self.on_this(caller_id, call, callee.id),
                 )
                 for caller_id, targets in self.adjacency.items()
                 for callee, call, inferred in targets
@@ -925,11 +933,14 @@ def _build_call_graph(
         for edge in persisted_edges:
             if edge.dispatch_confidence == "exact" and not edge.inferred:
                 persisted_exact[(edge.caller_id, edge.line)].add(edge.callee_id)
+        persisted_other_receiver: set[tuple[str, int, str]] = set()
         for edge in persisted_edges:
             caller = methods_by_id.get(edge.caller_id)
             callee = methods_by_id.get(edge.callee_id)
             if caller is None or callee is None:
                 continue
+            if edge.other_receiver:
+                persisted_other_receiver.add((caller.id, edge.line, callee.id))
             add_edge(
                 caller,
                 callee,
@@ -973,6 +984,9 @@ def _build_call_graph(
                         )
                         synthetic_calls.add(synthetic)
                         add_edge(caller, candidate, synthetic, True)
+                        if edge.other_receiver:
+                            # The expansion keeps the site's receiver.
+                            persisted_other_receiver.add((caller.id, edge.line, candidate.id))
         return CallGraph(
             adjacency=adjacency,
             synthetic_calls=synthetic_calls,
@@ -980,6 +994,7 @@ def _build_call_graph(
             locate=lambda name, path, line: locate(name, path, line),
             methods=tuple(persisted_methods),
             symbols=symbols,
+            other_receiver_sites=frozenset(persisted_other_receiver),
         )
 
     dependencies_by_module: dict[str, set[str]] = defaultdict(set)
@@ -1184,7 +1199,56 @@ def _build_call_graph(
         locate=lambda name, path, line: locate(name, path, line),
         methods=method_facts(graph_methods_by_id),
         symbols=symbols,
+        other_receiver_sites=(
+            other_receiver_sites(symbols, adjacency) if symbols is not None else frozenset()
+        ),
     )
+
+
+def other_receiver_sites(
+    symbols: JavaSymbols, adjacency: dict[str, list[CallEdgeEntry]],
+) -> frozenset[tuple[str, int, str]]:
+    """The edges whose call runs on an object other than the caller's ``this``.
+
+    A call site without receiver, or on ``this`` or ``super``, stays on
+    ``this`` when its target belongs to the caller's class hierarchy; a
+    call without receiver to an outer class or a static import does not.
+    An edge whose caller or call site the source symbols do not know keeps
+    an unknown receiver, which is not recorded: the entry-subtype
+    restriction stays on for it (ADR-43 amendment, BL-47).
+    """
+    def owners(owner: str, module: str) -> set[str]:
+        return {name for name, _module in symbols.ancestors(owner, module)}
+
+    sites_by_caller: dict[str, dict[tuple[int, str], bool]] = {}
+    other: set[tuple[str, int, str]] = set()
+    for caller_id, entries in adjacency.items():
+        caller_info = symbols.methods.get(caller_id)
+        if caller_info is None:
+            continue
+        sites = sites_by_caller.get(caller_id)
+        if sites is None:
+            sites = sites_by_caller[caller_id] = symbols.receiver_sites(caller_id)
+        for callee, call, _inferred in entries:
+            name = callee.qualified_method.rsplit(".", 1)[-1]
+            on_this = sites.get((call.call_line, name))
+            if on_this is None:
+                continue
+            if on_this:
+                callee_info = symbols.methods.get(callee.id)
+                callee_owner = (
+                    callee_info.owner if callee_info is not None
+                    else callee.qualified_method.rsplit(".", 1)[0]
+                )
+                related = (
+                    callee_owner in owners(caller_info.owner, caller_info.module)
+                    or callee_info is not None
+                    and caller_info.owner in owners(callee_info.owner, callee_info.module)
+                )
+                if related:
+                    continue
+            other.add((caller_id, call.call_line, callee.id))
+    return frozenset(other)
 
 
 def materialize_call_graph_flows(
@@ -1603,6 +1667,7 @@ def materialize_call_graph_flows(
         current: IntegrationMethod,
         target: IntegrationMethod,
         call: MethodCall,
+        on_this: bool = True,
     ) -> bool:
         """Keep dispatch from an inherited body on the entry's own subtype.
 
@@ -1610,7 +1675,13 @@ def materialize_call_graph_flows(
         abstract call. The runtime receiver is the subtype that owns the
         indexed entry method; crossing to a sibling override creates
         impossible flows and false cycles.
+
+        That receiver is known only while every hop since the entry, this
+        call included, runs on ``this`` (``on_this``). Once the route calls
+        another object, dispatch is unrestricted (ADR-43 amendment, BL-47).
         """
+        if not on_this:
+            return True
         if dispatch_symbols is not None:
             current_owner = current.qualified_method.rsplit(".", 1)[0]
             target_owner = target.qualified_method.rsplit(".", 1)[0]
@@ -1644,6 +1715,7 @@ def materialize_call_graph_flows(
                 for callee, sibling, _inferred in adjacency.get(current.id, [])
                 if sibling.call_line == call.call_line and sibling.caller_path == call.caller_path
             ),
+            on_this=on_this,
         )
 
     for entry in input_methods[resume_from_entry:]:
@@ -1652,8 +1724,12 @@ def materialize_call_graph_flows(
             trigger = endpoint_by_id.get(trigger_id)
             if trigger is None:
                 continue
-            queue = deque[tuple[IntegrationMethod, list[tuple[IntegrationMethod, MethodCall, bool]]]]([(entry, [])])
-            visited: set[tuple[str, bool]] = {(entry.id, False)}
+            # A state carries whether every hop so far runs on ``this``: the
+            # entry-subtype restriction holds only then (BL-47).
+            search = deque[tuple[
+                IntegrationMethod, list[tuple[IntegrationMethod, MethodCall, bool]], bool,
+            ]]([(entry, [], True)])
+            visited: set[tuple[str, bool, bool]] = {(entry.id, False, True)}
             terminal_routes: dict[
                 tuple[tuple[str, ...], str],
                 list[tuple[IntegrationMethod, MethodCall, bool]],
@@ -1666,8 +1742,8 @@ def materialize_call_graph_flows(
                 key = (tuple(hop.qualified_method for hop, _call, _inferred in route), reason)
                 terminal_routes.setdefault(key, route)
 
-            while queue:
-                current, route = queue.popleft()
+            while search:
+                current, route, route_on_this = search.popleft()
                 for operation in operations_by_method.get(current.id, ()):
                     operation_path = operation.path
                     steps = [_endpoint_step(trigger, 1)]
@@ -1721,7 +1797,10 @@ def materialize_call_graph_flows(
                     for target, call, signature_join in adjacency.get(current.id, [])
                     if target.id in component
                     and within_application_boundary(entry.module, target.module)
-                    and dispatch_matches_entry(entry, current, target, call)
+                    and dispatch_matches_entry(
+                        entry, current, target, call,
+                        route_on_this and call_graph.on_this(current.id, call, target.id),
+                    )
                 ), key=lambda item: (
                     item[1].caller_path, item[1].call_line, item[0].id,
                     item[1].dispatch_confidence, item[2],
@@ -1825,10 +1904,11 @@ def materialize_call_graph_flows(
                             report_live_chain(entry, trigger, next_route, output=output)
                     possible = any(edge.dispatch_confidence == "possible" or inferred
                                    for _method, edge, inferred in next_route)
-                    state = (target.id, possible)
+                    next_on_this = route_on_this and call_graph.on_this(current.id, call, target.id)
+                    state = (target.id, possible, next_on_this)
                     if state not in visited:
                         visited.add(state)
-                        queue.append((target, next_route))
+                        search.append((target, next_route, next_on_this))
             for (_route_names, reason), route in sorted(terminal_routes.items())[:50]:
                 report_live_chain(entry, trigger, route, stop_reason=reason)
         explored_entries += 1
@@ -1883,23 +1963,30 @@ def materialize_call_graph_flows(
                 predecessors: dict[str, tuple[str, IntegrationMethod, MethodCall, bool]] = {}
                 queue = deque([(source, 0)])
                 visited = {source.id}
+                # The route a tree keeps to each method decides whether the
+                # next hop still runs on ``this`` (BL-47).
+                tree_on_this = {source.id: True}
                 while queue:
                     current, depth = queue.popleft()
                     if depth >= max_hops:
                         continue
                     for candidate, call, inferred in adjacency.get(current.id, []):
+                        hop_on_this = tree_on_this[current.id] and call_graph.on_this(
+                            current.id, call, candidate.id,
+                        )
                         # A direct engine witness must not contain synthetic
                         # AST edges or a weaker dispatch than the proven pair.
                         if (
                             inferred
                             or not within_application_boundary(source.module, candidate.module)
                             or (confidence == "medium" and call.dispatch_confidence != "exact")
-                            or not dispatch_matches_entry(source, current, candidate, call)
+                            or not dispatch_matches_entry(source, current, candidate, call, hop_on_this)
                         ):
                             continue
                         if candidate.id in visited:
                             continue
                         visited.add(candidate.id)
+                        tree_on_this[candidate.id] = hop_on_this
                         predecessors[candidate.id] = (current.id, candidate, call, inferred)
                         queue.append((candidate, depth + 1))
                 tree_cache[key] = predecessors

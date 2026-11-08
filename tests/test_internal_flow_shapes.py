@@ -70,8 +70,10 @@ CASES = [
     # The flow exists although extraction-rules.md excluded the trigger (BL-34).
     _case("scheduled-fixed-delay", f"{_ORDERS}MessagingEntries.tick", None,
           _flow("medium", *_TO_PUBLISHER)),
-    # S24: FirstStep calls the template method on another object, a SecondStep.
-    _case("S24-sibling-template", f"{_ORDERS}FirstStep.entry", "BL-47",
+    # S24: FirstStep calls the template method on another object, a
+    # SecondStep: the route leaves ``this``, so the entry-subtype rule no
+    # longer holds and SecondStep's override is reached (ADR-43, BL-47).
+    _case("S24-sibling-template", f"{_ORDERS}FirstStep.entry", None,
           _flow("low", "BaseStep.execute", "SecondStep.doStep", *_TO_PUBLISHER)),
     _case("inherited-crud-route", "POST /products/crud", "BL-48",
           _flow("medium", "PaymentClient.charge", "POST /payments")),
@@ -173,3 +175,19 @@ def test_codeql_rebuild_reproduces_the_indexed_flows(
     # cannot see; the rebuild expands the declared Notifier row without the
     # check and adds a POST /notices flow to plugin-notices.
     assert sorted(codeql_flows["flows calculate"]) == sorted(codeql_flows["index"])
+
+
+_TEMPLATE_CASES = [case for case in CASES if case.id in {"S24-sibling-template", "S25-own-template"}]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("case", "command"),
+    [_param(case, command) for case in _TEMPLATE_CASES for command in COMMANDS],
+)
+def test_codeql_engine_applies_the_entry_rule_only_on_this(
+    codeql_flows: dict[str, list[tuple[str, str, str, tuple[str, ...]]]], case: FlowCase, command: str,
+) -> None:
+    # ADR-43 amendment (BL-47): S24 leaves ``this`` and reaches the sibling
+    # override; S25 stays on ``this`` and keeps its own.
+    test_source_engine_persists_the_shape_flows(codeql_flows, case, command)
