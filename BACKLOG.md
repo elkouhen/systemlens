@@ -2,9 +2,9 @@
 
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
-owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33 to BL-42 and BL-45 to BL-53; each Delivery line names its commit
-and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
+owner, who asked for it to be implemented. Fully processed on
+2026-11-08: BL-33 to BL-53 are all `delivered` and none is blocked;
+each Delivery line names its commit and tests. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
 product owner's mandate, to be confirmed by them. Owner: SystemLens
@@ -94,8 +94,8 @@ defect in the join is visible in a test). A target is never invented
 | [BL-40](#bl-40) | Follow element-type transforms through `map` and `flatMap` | P2 | `delivered` |
 | [BL-41](#bl-41) | Resolve nested type arguments | P2 | `delivered` |
 | [BL-42](#bl-42) | Type enum `valueOf`/`values`, array `var` loops and `null` ternaries | P2 | `delivered` |
-| [BL-43](#bl-43) | Add a documented Spring signature table | P2 | `open` |
-| [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `open` |
+| [BL-43](#bl-43) | Add a documented Spring signature table | P2 | `delivered` |
+| [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `delivered` |
 | [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `delivered` |
 | [BL-46](#bl-46) | Narrow a receiver by the creations a method returns or a ternary holds | P3 | `delivered` |
 | [BL-47](#bl-47) | Apply the ADR-43 entry rule only while the route stays on `this` | P1 | `delivered` |
@@ -520,7 +520,22 @@ decision the owner has not taken.
 - **Depends on:** BL-33, BL-35; a new ADR settling that the engine may
   hold a hand-kept table of external signatures, its version policy and
   the `<S extends T> S save(S)` rule.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-90, accepted on 2026-11-08 under the mandate, to be
+  confirmed (commit `e354e79`). `_REPOSITORY_RETURNS` types `findById`,
+  `findAll()`, `findAllById` and `save` of `CrudRepository`,
+  `ListCrudRepository` and `JpaRepository` through the source `extends`
+  clauses; `Page`/`Slice`, `HttpEntity`/`ResponseEntity` and
+  `ResponseEntity.ok` join the container views. A source declaration
+  wins, the most specific `findAll` wins, a conflict or a raw repository
+  gives nothing. Parity cases A01, A02, A04 to A09, A11 to A13, A38 and
+  A42 pass; call shapes W9 add the negatives (member absent from the
+  table, raw `JpaRepository`, `findAll` conflict, untyped `save`
+  argument). Train-ticket: 447/447 flow pairs, 1712/1712 edges, zero
+  differences, unchanged. Lab: the CodeQL-only edge
+  `ProductPersistenceAdapter.save → ProductEntity.toDomain` is now found
+  by `source` (`exact`), so edges are 105/105 with zero differences; 25
+  flows and their confidences unchanged. Commit `151651b`.
 - **Why P2:** the owner's project is Spring; but the gain depends on the
   callee being an indexed method, which Lombok entities are not.
 
@@ -536,7 +551,15 @@ decision the owner has not taken.
   (Class<T>)` returns `T`; ModelMapper and similar stay out unless the
   ADR lists them. The cases pass.
 - **Depends on:** BL-43's ADR, extended with the `Class<T>` rule.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-90 holds the `Class<T>` rule. `X.class` and a
+  written `Class<X>` are a `Class<X>` view; `getBean(Class<T>)` and
+  `getBean(String, Class<T>)` on `BeanFactory` or `ApplicationContext`
+  return `T`. A32 passes; A34 (ModelMapper) is a kept deviation of
+  ADR-90, not an open gap. Call shapes W10 add the negatives
+  (`getBean(String)`, `Class<?>`, untyped name, ModelMapper). The same
+  commit moves `CODE_FLOW_SIGNATURE` to `code-flow-v58-spring-signatures`.
+  Reference projects unchanged beyond BL-43. Commit `699c935`.
 - **Why P3:** rare and framework-specific.
 
 ## Lot 3: dispatch precision, behind a decision record
