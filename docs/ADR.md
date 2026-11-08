@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class); proposed: [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class), [ADR-87](#adr-87-keep-every-overload-of-a-call-the-arguments-cannot-separate); proposed: [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -2336,3 +2336,48 @@ persisted edges therefore dispatches a witness only to the exact target
 of its site, as the fresh join does, so it opens no route there either.
 Measured on 2026-11-07, train-ticket has no such variable and keeps 406
 flows and 1712 edges between indexed methods.
+
+## ADR-87: Keep every overload of a call the arguments cannot separate
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+implement the internal-flow backlog; to be confirmed by the product
+owner. Backlog item BL-38. Folds in Appendix B.6 of that backlog.
+
+**Context:** The source pass picks one overload of a call by its argument
+types (JLS 15.12.2). When the arity matches several overloads and an
+argument is untyped, the pass returns no target at all. The call
+`taker.take(x)` with `take(Order)` and `take(Line)` then loses its edge
+and every edge under it: one typing gap costs a whole call site.
+
+Under ADR-3 and invariant 4 the pass must not pick one overload. Dropping
+the call, though, hides a caller-callee relation the sources prove. A
+broken accessor chain is a related blind spot: `x.get(0)` on a receiver
+the pass cannot view as a JDK container leaves no trace of where the
+typing stopped.
+
+**Decision:**
+1. In the closed world of the `source` engine, when the arity matches
+   several overloads of one receiver type and the argument types cannot
+   separate them, the call reaches every overload no known argument
+   provably excludes. Each target is a `possible` edge.
+2. A flow through such an edge follows the `possible` rules: it stays
+   `low`, and `engine_edge_confidence: exact` drops it.
+3. A typed argument that selects one overload keeps today's behaviour:
+   one target, `exact` when the dispatch rules allow it.
+4. A varargs candidate and a call on an external receiver keep today's
+   rules: no target is added.
+5. `analyze call-edge` re-runs the source pass on the caller and lists
+   its typing notes: each call left with the reason `overload
+   unresolved`, and each JDK accessor call (`get`, `orElse`,
+   `getValue`...) whose receiver has no container view and no source
+   type, as `accessor chain broken`.
+
+**Consequences:** A call site that disappeared now gives several
+`possible` edges, and flows may appear through them with `low`
+confidence. A typed engine resolves the overload itself, so CodeQL may
+give one `exact` row where the source engine gives every overload
+`possible`; the engine-parity fixture records that difference as a
+deviation of ADR-87. The reason is not persisted: the call-edge
+diagnostic recomputes it from the sources, as it already does for
+interface implementations. The CodeQL gap filler, an open-world pass,
+is unchanged.
