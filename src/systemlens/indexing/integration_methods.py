@@ -211,26 +211,31 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
     return found
 
 
-def _openapi_operation_id(repo_root: Path, endpoint: MessageEndpoint) -> str | None:
-    """Return the exact OpenAPI operation ID carried by a contract endpoint.
+def _openapi_operation_ids(contract_path: Path) -> dict[tuple[str, str], str]:
+    """``(METHOD, route) -> operationId`` of one OpenAPI contract.
 
     Generated controller interfaces commonly put the route declaration in the
     contract and leave their checked-in implementation with only ``@Override``.
-    The contract remains the endpoint evidence; this helper supplies the
-    explicit operation identifier required to associate it with that method.
+    The contract remains the endpoint evidence; its explicit operation
+    identifiers associate it with that method. An unreadable contract has none.
     """
-    if endpoint.framework != "openapi" or endpoint.system != "rest":
-        return None
     try:
-        method, route = endpoint.topic.split(" ", 1)
-        contract_path = repo_root / endpoint.path
         text = contract_path.read_text(encoding="utf-8", errors="replace")
         document = json.loads(text) if contract_path.suffix == ".json" else yaml.safe_load(text)
-        operation = document.get("paths", {}).get(route, {}).get(method.lower(), {})
+        paths = document.get("paths", {})
     except (OSError, ValueError, RecursionError, yaml.YAMLError, AttributeError):
-        return None
-    operation_id = operation.get("operationId") if isinstance(operation, dict) else None
-    return operation_id if isinstance(operation_id, str) and operation_id else None
+        return {}
+    operation_ids: dict[tuple[str, str], str] = {}
+    if not isinstance(paths, dict):
+        return operation_ids
+    for route, item in paths.items():
+        if not isinstance(item, dict):
+            continue
+        for method, operation in item.items():
+            operation_id = operation.get("operationId") if isinstance(operation, dict) else None
+            if isinstance(operation_id, str) and operation_id:
+                operation_ids[(str(method).upper(), str(route))] = operation_id
+    return operation_ids
 
 
 def _declared_on_rest_controller(declaration, source: bytes) -> bool:
@@ -781,31 +786,37 @@ def materialize_integration_methods(
             input_endpoint_ids=tuple(sorted((*inherited.input_endpoint_ids, endpoint.id))),
         )
         endpoint_ids_with_method.add(endpoint.id)
+    # BC-37: each contract is parsed once, and overriding controller methods
+    # are indexed by (module, name) instead of scanned per endpoint.
+    contracts: dict[str, dict[tuple[str, str], str]] = {}
+    overriding: dict[tuple[str | None, str], list[int]] = {}
+    for index, method in enumerate(methods):
+        if method.id in overridden_rest_controller_method_ids:
+            overriding.setdefault(
+                (method.module, method.qualified_method.rsplit(".", 1)[-1]), [],
+            ).append(index)
     for endpoint in endpoints:
         if (
             endpoint.id in endpoint_ids_with_method
             or (endpoint.system, endpoint.role) != ("rest", "serve")
             or endpoint.framework != "openapi"
+            or " " not in endpoint.topic
         ):
             continue
-        operation_id = _openapi_operation_id(repo_root, endpoint)
+        if endpoint.path not in contracts:
+            contracts[endpoint.path] = _openapi_operation_ids(repo_root / endpoint.path)
+        http_method, route = endpoint.topic.split(" ", 1)
+        operation_id = contracts[endpoint.path].get((http_method.upper(), route))
         if operation_id is None:
             continue
-        method_candidates = [
-            method for method in methods
-            if (
-                method.id in overridden_rest_controller_method_ids
-                and method.module == endpoint.module
-                and method.qualified_method.rsplit(".", 1)[-1] == operation_id
-            )
-        ]
         # An operation ID is a contract-level name. Attribute it only when it
         # has exactly one local Java implementation; overloads and helpers
         # remain unresolved rather than being guessed.
-        if len(method_candidates) != 1:
+        candidates = overriding.get((endpoint.module, operation_id), [])
+        if len(candidates) != 1:
             continue
-        candidate = method_candidates[0]
-        methods[methods.index(candidate)] = IntegrationMethod(
+        candidate = methods[candidates[0]]
+        methods[candidates[0]] = IntegrationMethod(
             **{
                 **candidate.__dict__,
                 "input_endpoint_ids": tuple(sorted((*candidate.input_endpoint_ids, endpoint.id))),

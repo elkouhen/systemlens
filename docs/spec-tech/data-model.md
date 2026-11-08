@@ -877,7 +877,9 @@ the input to exactly one method in the same module when the contract's exact
 `@Override` on a class carrying `@RestController`. The endpoint keeps its
 OpenAPI file and operation line as source evidence. Zero or multiple candidates
 remain unmatched; this projection never selects a method merely from an HTTP
-route or a class name.
+route or a class name. Each contract is parsed once per projection into its
+`(method, route) -> operationId` table, and the candidate methods are
+indexed by module and name, so the cost is linear in endpoints (BC-37).
 
 The source-evidence contract requires paths relative to the indexed project
 root. For root-relative evidence, HTML export receives a local `--root-path`

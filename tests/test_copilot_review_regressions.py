@@ -6,6 +6,7 @@ and names the rule it protects.
 
 import os
 import sqlite3
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,9 @@ from typer.testing import CliRunner
 
 from systemlens.delivery.cli import app
 from systemlens.domain.graph import url_service_hint
+from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.module_inventory import DiscoveredModule
+from systemlens.indexing import integration_methods
 from systemlens.domain.redaction import redact_url_secrets
 from systemlens.indexing.file_inventory import list_repo_files
 from systemlens.indexing.service import index_repo
@@ -681,3 +685,65 @@ def test_a_schedules_container_starts_a_flow_per_schedule(tmp_path: Path) -> Non
         ("twice", "@Scheduled(cron=0 * * * * *)"),
         ("twice", "@Scheduled(fixedRate=5000)"),
     ]
+
+
+def test_an_openapi_contract_is_parsed_once_for_all_its_operations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """BC-37: each OpenAPI endpoint re-parsed its contract.
+
+    Three operations of one contract now read it once, and each still
+    reaches its unique overriding controller method by ``operationId``.
+    """
+    java_path = "orders/src/main/java/com/example/OrderController.java"
+    contract_path = "orders/src/main/resources/static/openapi.yaml"
+    _write(tmp_path / java_path, (
+        "package com.example;\n"
+        "@RestController\n"
+        "class OrderController {\n"
+        "  @Override String placeOrder(Object r) { return null; }\n"
+        "  @Override String getOrder(String id) { return null; }\n"
+        "  @Override String listOrders() { return null; }\n"
+        "}\n"
+    ))
+    _write(tmp_path / contract_path, (
+        "openapi: 3.0.3\npaths:\n  /orders:\n"
+        "    post: {operationId: placeOrder}\n    get: {operationId: listOrders}\n"
+        "  /orders/{id}:\n    parameters: []\n    get: {operationId: getOrder}\n"
+    ))
+    module = DiscoveredModule(
+        name="orders", path=tmp_path / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    endpoint = MessageEndpoint(
+        id="", role="serve", system="rest", topic="", topic_dynamic=False, source="code",
+        framework="openapi", path=contract_path, start_line=1, end_line=1, snippet="",
+        module="orders",
+    )
+    endpoints = [
+        replace(endpoint, id=topic, topic=topic)
+        for topic in ("POST /orders", "GET /orders", "GET /orders/{id}")
+    ]
+    reads: list[str] = []
+    read = integration_methods._openapi_operation_ids
+
+    def counted(path: Path) -> dict[tuple[str, str], str]:
+        reads.append(str(path))
+        return read(path)
+
+    monkeypatch.setattr(integration_methods, "_openapi_operation_ids", counted)
+
+    methods = integration_methods.materialize_integration_methods(
+        tmp_path, endpoints, [java_path], [module],
+    )
+
+    inputs = {
+        method.qualified_method.rsplit(".", 1)[-1]: method.input_endpoint_ids
+        for method in methods
+    }
+    assert inputs == {
+        "placeOrder": ("POST /orders",),
+        "listOrders": ("GET /orders",),
+        "getOrder": ("GET /orders/{id}",),
+    }
+    assert len(reads) == 1
