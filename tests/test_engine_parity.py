@@ -865,6 +865,8 @@ package p;
 
 import java.util.*;
 
+import static p.Util20.assist20;
+
 // E06: the implicit supertypes of an enum and a record (BC-06).
 enum Tint { RED }
 
@@ -1189,6 +1191,18 @@ class Locals19 {
     new Helper19().h(); //@e19.b
   }
 }
+
+// E20: a static import called from anonymous class bodies (BC-21).
+class Util20 {
+  static void assist20() {} //@Util20.assist20
+}
+
+class Anonymous20 {
+  void e20() { //@E20
+    new Runnable() { public void run() { assist20(); } }; //@e20.runnable
+    new Thread() { public void run() { assist20(); } }; //@e20.thread
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1482,6 +1496,8 @@ CASES: list[Case] = [
           ("e19.b", "Helper19b.h", "exact")),
     _case("E19-helper", "E19.helper", None,
           ("E19.helper", "Go19.go", "exact")),
+    _case("E20", "E20", None,
+          ("e20.runnable", "Util20.assist20", "exact"), ("e20.thread", "Util20.assist20", "exact")),
 ]
 
 

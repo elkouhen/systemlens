@@ -269,6 +269,35 @@ SHAPES: list[Shape] = [
             """,
     }, "Known.run", {"Util.foo": "exact"},
         note="BC-13: Runnable's members are known and do not include foo"),
+    Shape("S2-import-anonymous", {
+        f"{_APP}l/Util.java": """
+            package p.l;
+            public class Util {
+              public static void foo() {} //@Util.foo
+              public static void bar() {} //@Util.bar
+              public static void baz() {} //@Util.baz
+            }
+            """,
+        f"{_APP}a/Use.java": """
+            package p.a;
+            import static p.l.Util.foo;
+            import static p.l.Util.bar;
+            import static p.l.Util.baz;
+            abstract class Base {
+              abstract void bar(); //@Base.bar
+            }
+            class Use {
+              void run() { //@Use.run
+                new Runnable() { public void run() { foo(); } };
+                new Thread() { public void run() { foo(); } };
+                new Base() { void bar() {} void go() { bar(); } };
+                new org.acme.Task() { public void run() { baz(); } };
+              }
+            }
+            """,
+    }, "Use.run", {"Util.foo": "exact"}, absent=("Util.bar", "Util.baz", "Base.bar"),
+        note="BC-21: no enclosing type may declare foo, so the import binds it; an anonymous body "
+             "declaring bar, or an external supertype of unknown members, keeps the call unresolved"),
     Shape("S3", """
         class Outer {
           void helper() {} //@Outer.helper

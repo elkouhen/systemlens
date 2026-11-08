@@ -801,6 +801,9 @@ through the one static wildcard import whose source type declares that name
 and arity. Several candidates stay unresolved. An enclosing type with an
 external supertype whose members the pass does not know may inherit the
 name, so the import does not apply and the call stays unresolved (BC-13).
+The same holds from an anonymous class body: the import applies once the
+search has passed every enclosing type, anonymous ones included, without
+meeting the name or a supertype that may declare it (BC-21).
 Literals, `new`, casts, and typed variables give argument types. Inside
 an anonymous class body, `this` is that instance, typed by the supertype it
 creates (BC-10); in a lambda it stays the enclosing class. A numeric
@@ -1377,7 +1380,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | # | Shape | Status | Plan |
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors; dotted and nested generic type names; a field chain from `this` | `covered` (BC-07, BC-16, BC-17) | |
-| S2 | Static call and static import; an import an external supertype may shadow stays unresolved | `covered` (BC-13) | |
+| S2 | Static call and static import, also from an anonymous class body; an import an external supertype may shadow stays unresolved | `covered` (BC-13, BC-21) | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
@@ -1591,6 +1594,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E17 | Enum constants `A(Seed17.helper())`, `B(new Part17())`, `C(..) { .. }` with a body and `D` without arguments | `covered` | BC-18 |
 | E18 | `map(Foo18::new)`, `Supplier<Foo18> make = Foo18::new` and `Foo18::<String>id` | `covered` | BC-19 |
 | E19 | A local `class Helper19` declaring `h()` in each of two methods, each calling its own | `covered` | BC-20 |
+| E20 | A statically imported `assist20()` called in an anonymous `Runnable` and an anonymous `Thread` | `covered` | BC-21 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

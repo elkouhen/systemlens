@@ -4798,16 +4798,23 @@ class JavaSymbols:
         return False
 
     def _lexical_owner(self, info: _Method, name: str, invocation: Node) -> str | None:
-        """The type an unqualified call ``name(...)`` binds to, if provable.
+        """The type an unqualified call ``name(...)`` binds to, if provable."""
+        return self._lexical_lookup(info, name, invocation)[0]
+
+    def _lexical_lookup(self, info: _Method, name: str, invocation: Node) -> tuple[str | None, bool]:
+        """The type an unqualified call ``name(...)`` binds to, if provable,
+        and whether the search was blocked.
 
         Java searches the innermost enclosing type, anonymous classes
         included, whose members (declared or inherited) carry the name, and
         only then the outer types. A scope that inherits from an external
         supertype with unknown members stops the search: that supertype may
-        declare the name.
+        declare the name, so the search is blocked. An unblocked search
+        without owner proves that no enclosing type declares the name: only
+        a static import can then (BC-21).
         """
         if name in _OBJECT_METHODS:
-            return None
+            return None, True
         path = info.method.path
         source = self.units[path].source
         node = invocation.parent
@@ -4817,38 +4824,40 @@ class JavaSymbols:
                     member.type == "method_declaration" and parser.declaration_name(member, source) == name
                     for member in node.named_children
                 ):
-                    return None
+                    return None, True
                 type_node = node.parent.child_by_field_name("type")
                 supertype = self.resolve(
                     path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
                     at=type_node,
                 ) if type_node is not None else None
                 if supertype is None:
-                    return None
+                    return None, True
                 if supertype in self.types:
                     module = self._receiver_module(supertype, info)
                     if (
                         self._declared_arities(supertype, name, path, info.module)
                         or self._may_inherit_unknown(supertype, module, name)
                     ):
-                        return None
+                        return None, True
                 else:
                     known = _KNOWN_EXTERNAL_MEMBERS.get(supertype)
                     if known is None or name in known:
-                        return None
+                        return None, True
             node = node.parent
         scope = info.owner
         package = self.units[path].package
-        while scope and scope != package and scope in self.types:
+        while scope and scope != package:
+            if scope not in self.types:
+                return None, True
             if self._declared_arities(scope, name, path, info.module):
-                return scope
+                return scope, False
             if self._may_inherit_unknown(scope, self._receiver_module(scope, info), name) or (
                 name in _ENUM_METHODS
                 and any(node.type == "enum_declaration" for _path, node in self._type_candidates(scope, path))
             ):
-                return None
+                return None, True
             scope = scope.rpartition(".")[0]
-        return None
+        return None, False
 
     def visible_modules(self, module: str) -> frozenset[str]:
         """``module`` and its transitive build dependencies (ADR-71).
@@ -5379,15 +5388,17 @@ class JavaSymbols:
                     receiver, name, arguments = parser.invocation_parts(invocation, source)
                     # An unqualified call binds to the innermost enclosing
                     # type that has the name, possibly an outer type.
-                    lexical_owner = (
-                        self._lexical_owner(info, name, invocation) if receiver is None else None
+                    lexical_owner, lexical_blocked = (
+                        self._lexical_lookup(info, name, invocation) if receiver is None else (None, True)
                     )
                     if (
-                        in_anonymous_body and lexical_owner is None
+                        in_anonymous_body and lexical_owner is None and lexical_blocked
                         and _refers_to_anonymous_instance(source, receiver)
                     ):
                         # ``this`` is the anonymous instance, whose members
-                        # come from an often external supertype.
+                        # come from an often external supertype. When no
+                        # enclosing type may declare the name, a static
+                        # import can still (BC-21).
                         continue
                     receiver_type = lexical_owner or self._dispatch_receiver_type(
                         info, receiver, invocation, (name, len(arguments)) in _OBJECT_DISPATCH,
