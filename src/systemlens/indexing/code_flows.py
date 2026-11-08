@@ -41,7 +41,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v51-call-graph-alignment"
+CODE_FLOW_SIGNATURE = "code-flow-v52-receiver-typing"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
 _EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
 

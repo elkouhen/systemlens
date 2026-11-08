@@ -1693,12 +1693,16 @@ class JavaSymbols:
         if node.type == "parenthesized_expression" and node.named_children:
             return self.expression_type(info, node.named_children[0], invocation, depth + 1)
         if node.type == "ternary_expression":
-            # Typed only when both branches have the same type.
-            branches = {
-                self.expression_type(info, node.child_by_field_name(branch), invocation, depth + 1)
-                for branch in ("consequence", "alternative")
-            }
-            return branches.pop() if len(branches) == 1 else None
+            # Typed only when both branches have the same type. A ``null``
+            # branch takes the other branch's type, boxed when primitive
+            # (JLS 15.25, BL-42).
+            nodes = [node.child_by_field_name(branch) for branch in ("consequence", "alternative")]
+            typed = [branch for branch in nodes if branch is None or branch.type != "null_literal"]
+            branches = {self.expression_type(info, branch, invocation, depth + 1) for branch in typed}
+            if len(branches) != 1:
+                return None
+            found = branches.pop()
+            return _BOXED.get(found, found) if found is not None and len(typed) < len(nodes) else found
         if node.type in {"identifier", "this", "method_invocation", "field_access", "array_access"}:
             return self.receiver_type(info, node, invocation, depth + 1)
         return None
@@ -2086,7 +2090,11 @@ class JavaSymbols:
             # ``for (var c : circles)``: the element type the iterable's
             # written type argument gives, read in the loop header.
             view = self._generic_view(info, declarator.element_of, declarator.element_of)
-            return view[1][0] if view is not None and view[0] == "iterable" else None
+            if view is not None:
+                return view[1][0] if view[0] == "iterable" else None
+            # ``for (var o : orders)`` over an array: its element type (BL-42).
+            array = self.expression_type(info, declarator.element_of, declarator.element_of)
+            return array[:-2] if array is not None and array.endswith("[]") else None
         type_node = declarator.type_node
         if type_node is None:
             return None
@@ -2679,6 +2687,11 @@ class JavaSymbols:
         if not declarations:
             declarations = [candidate for base, base_module in self.ancestors(owner, module)
                             for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        if not declarations and locations[0][1].type == "enum_declaration" and (
+            (name, len(arguments)) in {("valueOf", 1), ("values", 0)}
+        ):
+            # The implicit static methods of an enum (JLS 8.9.3, BL-42).
+            return owner if name == "valueOf" else owner + "[]"
         if not declarations and not arguments:
             # A record component or a Lombok getter is an implicit accessor;
             # a declared accessor of the same name was found above and wins.

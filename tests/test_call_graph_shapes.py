@@ -1723,6 +1723,33 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {},
         note="BL-23: no written type argument, no type; the loop variable still shadows the field"),
+    Shape("T9-array", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Circle[] circles;
+          Circle[] all() { return circles; } //@Use.all
+          void run(Square[][] grid) { //@Use.run
+            for (var c : circles) {
+              c.area();
+            }
+            for (var c : all()) {
+              c.area();
+            }
+            for (var row : grid) {
+              row[0].area();
+            }
+          }
+        }
+        """, "Use.run", {"Use.all": "exact", "Circle.area": "exact", "Square.area": "exact"},
+        note="BL-42: a var loop over an array takes its element type"),
     Shape("T10", """
         abstract class Shape {
           abstract double area(); //@Shape.area
@@ -1762,6 +1789,48 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {},
         note="BL-23: branches of different types leave the ternary untyped"),
+    Shape("T10-null", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Circle a;
+          Square b;
+          void run(boolean flag) { //@Use.run
+            (flag ? a : null).area();
+            (flag ? null : a).area();
+            var c = flag ? null : a;
+            c.area();
+          }
+        }
+        """, "Use.run", {"Circle.area": "exact"},
+        note="BL-42: a null branch takes the other branch's type"),
+    Shape("T10-null-unproven", """
+        abstract class Shape {
+          abstract double area(); //@Shape.area
+        }
+        class Circle extends Shape {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square extends Shape {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Circle a;
+          Square b;
+          void none(boolean flag) { //@Use.none
+            (flag ? null : null).area();
+            (flag ? b : (flag ? a : null)).area();
+          }
+        }
+        """, "Use.none", {},
+        note="BL-42: a null branch never reconciles two different types"),
     Shape("T11", """
         class Service {
           void go() {} //@Service.go
@@ -1969,6 +2038,40 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"LeafImpl.items": "exact", "Store.raw": "exact", "Store.any": "exact"},
         note="BL-35: disagreeing declarations, unseparated overloads, a raw or wildcard return give nothing"),
+    Shape("T15", """
+        enum Status {
+          ACTIVE, DONE;
+          String label() { return name(); } //@Status.label
+          static Status first() { return values()[0]; } //@Status.first
+        }
+        class Use {
+          void run(String s) { //@Use.run
+            Status.valueOf(s).label();
+            Status.values()[0].label();
+            for (var each : Status.values()) {
+              each.label();
+            }
+          }
+        }
+        """, "Use.run", {"Status.label": "exact"},
+        note="BL-42: an enum's implicit valueOf(String) and values()"),
+    Shape("T15-unproven", """
+        enum Status {
+          ACTIVE, DONE;
+          String label() { return name(); } //@Status.label
+        }
+        class Plain {
+          String label() { return ""; } //@Plain.label
+        }
+        class Use {
+          void run(String s) { //@Use.run
+            Status.valueOf(Status.class, s).label();
+            Plain.valueOf(s).label();
+            Plain.values()[0].label();
+          }
+        }
+        """, "Use.run", {},
+        note="BL-42: Enum.valueOf(Class, String) and a class that is no enum stay untyped"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area

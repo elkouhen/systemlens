@@ -411,7 +411,9 @@ type it encloses, or a capitalized type name for a static call.
 the target functional interface picks one (BL-24); see the lambda
 paragraphs below.
 A ternary takes the type its two branches share; branches of different
-types leave it untyped (BL-23). A zero-argument `getX()` (`isX()` for a
+types leave it untyped (BL-23). A `null` branch takes the other branch's
+type, boxed when primitive (JLS 15.25, BL-42). A source enum's implicit
+`valueOf(String)` returns the enum and `values()` an array of it (BL-42). A zero-argument `getX()` (`isX()` for a
 `boolean`) that no source type declares takes the field type when Lombok
 `@Data`, `@Value` or `@Getter` generates it. `toString()`, `hashCode()`
 and `equals(x)` return `String`, `int` and `boolean` on any receiver.
@@ -419,7 +421,8 @@ Variables declared by an enclosing statement also type receivers: an enhanced
 `for` variable, a single-type `catch` parameter, a try-with-resources
 resource, and an explicitly typed lambda parameter. A `var` loop variable
 takes the element type the iterable's written type argument gives through
-the container view below, and nothing otherwise (BL-23). A multi-catch
+the container view below (BL-23), or the element type of an array
+(BL-42), and nothing otherwise. A multi-catch
 parameter has no type, but still shadows a field of the same name.
 
 A pattern variable takes its written type where JLS 6.3.1 proves it in
@@ -1038,12 +1041,13 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
 | T7 | A local class is visible only to the end of its block | `covered` | |
 | T8 | A type parameter hides a source type of the same simple name | `covered` | |
-| T9 | `var` loop variable typed by the iterable's written type argument | `covered` (BL-23) | |
-| T10 | Ternary receiver whose branches share a type | `covered` (BL-23) | |
+| T9 | `var` loop variable typed by the iterable's written type argument or an array's element | `covered` (BL-23, BL-42) | |
+| T10 | Ternary receiver whose branches share a type, or with one `null` branch | `covered` (BL-23, BL-42) | |
 | T11 | `Outer.this` from an inner class | `covered` (BL-23) | |
 | T12 | Element of a JDK container accessor chain | `covered` (BL-27) | |
 | T13 | Local or `final` field created once as a named class; reassigned and inherited values keep the declared type | `covered` (BL-29) | |
 | T14 | Element of a JDK container a source method returns or a `var` holds; agreeing inherited declarations | `covered` (BL-35) | |
+| T15 | Implicit enum methods `valueOf(String)` and `values()` | `covered` (BL-42) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1152,8 +1156,8 @@ shapes from the jars it fetches while it builds its database.
 | A44 | `var opt = Optional.of(order); opt.get().ship()` | `missing` | BL-36 (`Optional.of`); BL-35 typed the `var` |
 | A45 | `Stream.of(a, b).findFirst().get().ship()` | `missing` | BL-36 |
 | B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
-| B14 | `Status.valueOf(s).label()` | `missing` | BL-42 |
-| B15 | `Status.values()[0].label()` | `missing` | BL-42 |
+| B14 | `Status.valueOf(s).label()` | `covered` | BL-42 |
+| B15 | `Status.values()[0].label()` | `covered` | BL-42 |
 | B23 | Call in a record compact constructor, indexed as the canonical constructor | `covered` | BL-39 |
 | B26 | `Supplier<Order> s; s.get().ship()` | `missing` | BL-36 |
 | B27 | `Function<String, Order> f; f.apply(k).ship()` | `missing` | BL-36 |
@@ -1161,7 +1165,7 @@ shapes from the jars it fetches while it builds its database.
 | B29 | `Predicate<Order> p = o -> o.ok()` | `missing` | BL-37 |
 | B30 | `Consumer<Order> c = o -> o.ship()` | `missing` | BL-37 |
 | B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
-| B44 | `for (var o : array)` over `Order[]` | `missing` | BL-42 |
+| B44 | `for (var o : array)` over `Order[]` | `covered` | BL-42 |
 | B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `missing` | BL-36 |
 | C01 | Source `List<Order> list()`, then `.get(0).ship()` | `covered` | BL-35 |
 | C02 | Source `Optional<Order> maybe()`, then `.get().ship()` | `covered` | BL-35 |
@@ -1173,7 +1177,7 @@ shapes from the jars it fetches while it builds its database.
 | C08 | `var s = orders.stream(); s.findFirst().get().ship()` | `covered` | BL-35 |
 | C09 | Lambda passed to a source `each(Consumer<Order>)` | `missing` | BL-37 |
 | C10 | Lambda passed to a source `<R> R apply(Function<Order, R>)` | `missing` | BL-37 |
-| C11 | `(flag ? order : null).ship()` | `missing` | BL-42 |
+| C11 | `(flag ? order : null).ship()` | `covered` | BL-42 |
 | C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `covered` | BL-35 |
 | C14 | `var l = catalog.list(); l.get(0).ship()` | `covered` | BL-35 |
 | D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `covered` | BL-35 |
@@ -1185,7 +1189,9 @@ shapes from the jars it fetches while it builds its database.
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
 them, so the next `index` of an existing index re-runs the call-graph
-stage and rebuilds its edges and flows without `--full`.
+stage and rebuilds its edges and flows without `--full`. BL-35, BL-39
+and BL-42 moved it to `code-flow-v52-receiver-typing` for the same
+reason.
 
 ### Internal-flow shapes
 
