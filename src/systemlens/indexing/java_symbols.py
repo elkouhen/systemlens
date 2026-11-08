@@ -180,6 +180,20 @@ _JDK_FUNCTIONAL_ARITIES: dict[str, int] = {
     "java.util.function.BiFunction": 2, "java.util.function.BiPredicate": 2,
     "java.util.function.BinaryOperator": 2, "java.util.Comparator": 2,
 }
+# The single abstract method of a JDK functional type (BL-37): the number
+# of type arguments, then the type argument each parameter takes, and the
+# one the result takes (``None`` for ``void`` or ``boolean``).
+_JDK_FUNCTIONAL_SIGNATURES: dict[str, tuple[int, tuple[int, ...], int | None]] = {
+    "java.util.function.Function": (2, (0,), 1),
+    "java.util.function.BiFunction": (3, (0, 1), 2),
+    "java.util.function.Predicate": (1, (0,), None),
+    "java.util.function.BiPredicate": (2, (0, 1), None),
+    "java.util.function.Consumer": (1, (0,), None),
+    "java.util.function.BiConsumer": (2, (0, 1), None),
+    "java.util.function.Supplier": (1, (), 0),
+    "java.util.function.UnaryOperator": (1, (0,), 0),
+    "java.util.function.BinaryOperator": (1, (0, 0), 0),
+}
 # Receivers of a method reference that are expressions, never a type name.
 _EXPRESSION_RECEIVERS = {
     "this", "super", "method_invocation", "object_creation_expression", "parenthesized_expression",
@@ -244,6 +258,10 @@ _LAMBDA_PARAMETERS: dict[tuple[str, str, int, int, int], tuple[int, ...]] = {
     ("map", "computeIfPresent", 2, 1, 2): (0, 1),
     ("map", "compute", 2, 1, 2): (0, 1),
     ("map", "merge", 3, 2, 2): (1, 1),
+    # BL-37: the value of a future, through ``Function``, ``Consumer``.
+    **{("future", name, count, 0, 1): (0,) for name in (
+        "thenApply", "thenAccept", "thenCompose", "thenApplyAsync", "thenAcceptAsync", "thenComposeAsync",
+    ) for count in (1, 2) if count == 1 or name.endswith("Async")},
 }
 # Calls that keep a container's type arguments under another kind:
 # (receiver kind, method name, argument count) -> (result kind, arguments).
@@ -2181,17 +2199,57 @@ class JavaSymbols:
         """
         site = self._argument_site(info, lambda_node)
         if site is None:
-            return None
+            # ``Predicate<Order> p = o -> ..`` (BL-37).
+            parameters = self._assigned_signature(info, lambda_node)
+            return parameters[position] if parameters is not None and len(parameters) == count else None
         call, receiver, name, call_arguments, index = site
         view = self._generic_view(info, receiver, call) if receiver is not None else None
         if view is not None:
             kind, type_arguments = view
             slots = _LAMBDA_PARAMETERS.get((kind, name, len(call_arguments), index, count))
             return type_arguments[slots[position]] if slots is not None else None
-        # A source method whose parameter is a source functional interface
-        # (BL-24): the parameter types of its single abstract method.
+        # A source method whose parameter is a source (BL-24) or JDK (BL-37)
+        # functional interface: the parameter types of its abstract method.
         parameters = self._functional_parameters(info, call, receiver, name, call_arguments, index)
         return parameters[position] if parameters is not None and len(parameters) == count else None
+
+    def _assigned_signature(self, info: _Method, node: Node) -> tuple[str | None, ...] | None:
+        """The parameter types of the functional interface a lambda or a
+        method reference implements when it initializes, or is assigned to,
+        a variable whose type is written (BL-37)."""
+        parent = node.parent
+        path = info.method.path
+        source = self.units[path].source
+        if parent is None:
+            return None
+        if parent.type == "variable_declarator" and parent.child_by_field_name("value") == node:
+            declaration = parent.parent
+            type_node = declaration.child_by_field_name("type") if declaration is not None else None
+            if type_node is None or declaration is None or declaration.type not in {
+                "local_variable_declaration", "field_declaration",
+            }:
+                return None
+            return self._functional_signature(path, type_node, info.owner, None)
+        if parent.type == "assignment_expression" and parent.child_by_field_name("right") == node and (
+            parser.node_text(source, parent).split("=", 1)[0].strip()[-1:] not in set("+-*/%&|^<>")
+        ):
+            target = parent.child_by_field_name("left")
+            field_only = target is not None and target.type == "field_access" and (
+                (this := target.child_by_field_name("object")) is not None and this.type == "this"
+            )
+            if target is not None and field_only:
+                field = target.child_by_field_name("field")
+                name = parser.node_text(source, field) if field is not None else ""
+            elif target is not None and target.type == "identifier":
+                name = parser.node_text(source, target)
+            else:
+                return None
+            written = self._written_variable(info, name, parent, field_only=field_only)
+            if written is None:
+                return None
+            location, type_node, owner, env = written
+            return self._functional_signature(location, type_node, owner, env)
+        return None
 
     def _argument_site(
         self, info: _Method, node: Node,
@@ -2209,25 +2267,28 @@ class JavaSymbols:
         ), None)
         return (call, receiver, name, call_arguments, index) if index is not None else None
 
-    def _reference_arity(self, info: _Method, reference: Node) -> int | None:
-        """The parameter count of the functional interface a method
-        reference implements, when it is a direct argument whose target the
-        sources prove: a JDK callback of a written container, or a source
+    def _reference_parameters(self, info: _Method, reference: Node) -> tuple[str | None, ...] | None:
+        """The parameter types of the functional interface a method
+        reference implements, when the sources prove its target: a direct
+        argument of a JDK callback of a written container, or of a source
         method parameter typed by a source or JDK functional interface
-        (BL-24). ``None`` for any other target."""
+        (BL-24), or a variable whose type is written (BL-37). Their count is
+        the arity the reference binds; an unknown type is ``None``.
+        ``None`` for any other target."""
         site = self._argument_site(info, reference)
         if site is None:
-            return None
+            return self._assigned_signature(info, reference)
         call, receiver, name, call_arguments, index = site
         view = self._generic_view(info, receiver, call) if receiver is not None else None
         if view is not None:
-            counts = {
-                key[4] for key in _LAMBDA_PARAMETERS
+            slots = {
+                slot for key, slot in _LAMBDA_PARAMETERS.items()
                 if key[:4] == (view[0], name, len(call_arguments), index)
             }
-            return next(iter(counts)) if len(counts) == 1 else None
-        parameters = self._functional_parameters(info, call, receiver, name, call_arguments, index)
-        return len(parameters) if parameters is not None else None
+            if len(slots) != 1:
+                return None
+            return tuple(view[1][slot] for slot in next(iter(slots)))
+        return self._functional_parameters(info, call, receiver, name, call_arguments, index)
 
     def _functional_parameters(
         self, info: _Method, call: Node, receiver: Node | None, name: str, arguments: list[Node], index: int,
@@ -2278,7 +2339,7 @@ class JavaSymbols:
         return next(iter(found)) if len(found) == 1 else None
 
     def _functional_signature(
-        self, path: str, type_node: Node, owner: str, env: _Env,
+        self, path: str, type_node: Node, owner: str, env: _Env | None,
     ) -> tuple[str | None, ...] | None:
         """The parameter types of the single abstract method of a written
         functional interface type.
@@ -2287,11 +2348,19 @@ class JavaSymbols:
         interfaces with no external supertype and declare one abstract
         method name and arity, ``Object`` methods aside. Its parameter types
         take the written type arguments, through ``extends`` clauses. A JDK
-        functional interface gives its arity only, untyped.
+        functional type of ``_JDK_FUNCTIONAL_SIGNATURES`` takes them at its
+        fixed positions (BL-37); a raw one, and any other JDK functional
+        interface, gives its arity only, untyped.
         """
         source = self.units[path].source
         name_node = type_node.named_children[0] if type_node.type == "generic_type" else type_node
         written = self.resolve(path, parser.node_text(source, name_node), owner, allow_ambiguous=True, at=name_node)
+        if written in _JDK_FUNCTIONAL_SIGNATURES:
+            count, positions, _result = _JDK_FUNCTIONAL_SIGNATURES[written]
+            arguments = self._functional_arguments(path, type_node, owner, env, count)
+            if arguments is None:
+                return (None,) * len(positions)
+            return tuple(arguments[position] for position in positions)
         if written in _JDK_FUNCTIONAL_ARITIES:
             return (None,) * _JDK_FUNCTIONAL_ARITIES[written]
         parameterized = self._parameterized(path, type_node, owner, env)
@@ -2339,6 +2408,69 @@ class JavaSymbols:
                     types.append(self._declared_type(location, formal_type, ancestor, ancestor_env))
             signatures.add(tuple(types))
         return next(iter(signatures)) if len(signatures) == 1 else None
+
+    def _functional_arguments(
+        self, path: str, type_node: Node, owner: str, env: _Env | None, count: int,
+    ) -> tuple[str | None, ...] | None:
+        """The written type arguments of a JDK functional type, as its
+        single abstract method sees them (JLS 9.9): ``? extends X`` and
+        ``? super X`` give ``X``, ``?`` and a nested type nothing. ``None``
+        for a raw type or a count mismatch."""
+        written = parser.child_by_type(type_node, "type_arguments") if type_node.type == "generic_type" else None
+        arguments = written.named_children if written is not None else []
+        if len(arguments) != count:
+            return None
+        source = self.units[path].source
+        found: list[str | None] = []
+        for argument in arguments:
+            if argument.type == "wildcard":
+                bound = argument.named_children[-1] if argument.named_children else None
+                if bound is None or not re.match(r"\?\s*(extends|super)\b", parser.node_text(source, argument)):
+                    found.append(None)
+                    continue
+                argument = bound
+            found.append(self._type_argument_value(path, argument, owner, env))
+        return tuple(found)
+
+    def _lambda_result(self, info: _Method, lambda_node: Node, depth: int) -> str | None:
+        """The type of the value a lambda returns: its body expression, or
+        the one type every ``return`` of its block gives (BL-37).
+
+        Typed under the typing guard, since the body's names may be lambda
+        parameters whose type depends on the call being inferred.
+        """
+        body = lambda_node.child_by_field_name("body")
+        key = (info.method.path, lambda_node.start_byte)
+        if body is None or key in self._typing:
+            return None
+        if body.type == "block":
+            returns = [
+                node for node in parser.walk(body)
+                if node.type == "return_statement" and self._enclosing_body(node, body)
+            ]
+            if not returns or any(not node.named_children for node in returns):
+                return None
+            values = [node.named_children[0] for node in returns]
+        else:
+            values = [body]
+        self._typing.add(key)
+        try:
+            types = {self.expression_type(info, value, value, depth + 1) for value in values}
+        finally:
+            self._typing.discard(key)
+        found = types.pop() if len(types) == 1 else None
+        return _BOXED.get(found, found) if found is not None and found != "void" else None
+
+    @staticmethod
+    def _enclosing_body(node: Node, body: Node) -> bool:
+        """Whether ``body`` is the nearest lambda or method body around
+        ``node``: a ``return`` of a nested lambda or class is not its own."""
+        current = node.parent
+        while current is not None and current != body:
+            if current.type in {"lambda_expression", "class_body", "method_declaration"}:
+                return False
+            current = current.parent
+        return current == body
 
     def _generic_view(
         self, info: _Method, node: Node | None, invocation: Node, depth: int = 0,
@@ -3158,6 +3290,35 @@ class JavaSymbols:
             path, parser.node_text(source, name_node), declaration.owner, allow_ambiguous=True, at=name_node,
         )
         count = len(written.named_children) if written is not None else 0
+        lambda_node = argument
+        while lambda_node.type == "parenthesized_expression" and lambda_node.named_children:
+            lambda_node = lambda_node.named_children[0]
+        if container in _JDK_FUNCTIONAL_SIGNATURES and lambda_node.type == "lambda_expression" and (
+            count == _JDK_FUNCTIONAL_SIGNATURES[container][0]
+        ):
+            # An implicitly typed lambda is not pertinent to the type
+            # variables of its parameters (JLS 15.12.2.2): it constrains
+            # only the result, by its body's type (BL-37).
+            result = _JDK_FUNCTIONAL_SIGNATURES[container][2]
+            parameters = lambda_node.child_by_field_name("parameters")
+            implicit = parameters is None or parameters.type == "identifier" or all(
+                parameter.type == "identifier" for parameter in parameters.named_children
+            )
+            arguments = written.named_children if written is not None else []
+            at_result = (
+                set(self._mentioned(path, arguments[result], names)) if result is not None else set()
+            )
+            found = [
+                (name, self._lambda_result(info, lambda_node, depth + 1) if index == result else None)
+                for index, name in slots.items() if index == result or not implicit
+            ]
+            given = {name for name, _value in found}
+            # A variable written elsewhere in the result, or anywhere in an
+            # explicitly typed lambda's parameters, stays unproven.
+            found.extend(
+                (name, None) for name in mentioned if name not in given and (name in at_result or not implicit)
+            )
+            return found
         if container in _GENERIC_CONTAINERS:
             view = self._generic_view(info, argument, invocation)
             if view is not None and view[0] == _GENERIC_CONTAINERS[container][0] and len(view[1]) == count:
@@ -3739,12 +3900,13 @@ class JavaSymbols:
                     if receiver_type is None:
                         continue
                     arities = self._declared_arities(receiver_type, name, info.method.path, info.module)
+                    parameters = self._reference_parameters(info, invocation)
                     if len(arities) > 1:
                         # Overloads: the target functional interface's
                         # parameter count picks one arity (BL-24). A type
                         # name may also name an unbound instance method,
                         # which takes the first parameter as receiver.
-                        target = self._reference_arity(info, invocation)
+                        target = len(parameters) if parameters is not None else None
                         expression = receiver.type in _EXPRESSION_RECEIVERS or (
                             receiver.type == "identifier" and self.variable_type(
                                 info, parser.node_text(source, receiver), invocation,
@@ -3756,7 +3918,16 @@ class JavaSymbols:
                         arities &= accepted
                     if len(arities) != 1:
                         continue
-                    arity, argument_types = next(iter(arities)), None
+                    arity = next(iter(arities))
+                    # The proven parameter types pick one overload of that
+                    # arity; an unbound reference passes all but the first
+                    # (BL-37).
+                    argument_types = (
+                        None if parameters is None
+                        else parameters if arity == len(parameters)
+                        else parameters[1:] if arity == len(parameters) - 1
+                        else None
+                    )
                 else:
                     receiver, name, arguments = parser.invocation_parts(invocation, source)
                     # An unqualified call binds to the innermost enclosing

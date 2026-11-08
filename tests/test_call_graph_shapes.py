@@ -2645,6 +2645,104 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {}, partial=True, absent=("Sink.handle", "Sink.handleTwo"),
         note="BL-24: an unknown target, or a type name that fits two arities, stays unresolved"),
+    Shape("F6", """
+        import java.util.List;
+        import java.util.concurrent.CompletableFuture;
+        import java.util.function.BiConsumer;
+        import java.util.function.BiFunction;
+        import java.util.function.BinaryOperator;
+        import java.util.function.Consumer;
+        import java.util.function.Function;
+        import java.util.function.Predicate;
+        import java.util.function.UnaryOperator;
+        class Circle {
+          boolean m01() { return true; } //@Circle.m01
+          void m02() {} //@Circle.m02
+          boolean m03() { return true; } //@Circle.m03
+          Circle m04() { return this; } //@Circle.m04
+          Circle m05() { return this; } //@Circle.m05
+          Circle m06() { return this; } //@Circle.m06
+          void m07() {} //@Circle.m07
+          void m08() {} //@Circle.m08
+          void m09() {} //@Circle.m09
+          int m10() { return 1; } //@Circle.m10
+          Circle self() { return this; } //@Circle.self
+        }
+        class Square {}
+        class Taker {
+          void take(Circle c) {} //@Taker.takeCircle
+          void take(Square s) {} //@Taker.takeSquare
+        }
+        class Store {
+          void each(Consumer<Circle> c) {} //@Store.each
+          void both(BiConsumer<String, ? super Circle> c) {} //@Store.both
+          <R> R apply(Function<Circle, R> f) { return null; } //@Store.apply
+        }
+        class Use {
+          Store store;
+          Taker taker;
+          List<Circle> circles;
+          CompletableFuture<Circle> future;
+          Predicate<Circle> keep;
+          void run() { //@Use.run
+            Predicate<Circle> p = c -> c.m01();
+            Consumer<Circle> k = c -> c.m02();
+            keep = c -> c.m03();
+            BiFunction<String, Circle, Circle> bf = (s, c) -> c.m04();
+            UnaryOperator<Circle> u = c -> c.m05();
+            BinaryOperator<Circle> b = (x, y) -> y.m06();
+            store.each(c -> c.m07());
+            store.both((s, c) -> c.m08());
+            store.apply(c -> { return c.self(); }).m09();
+            future.thenApply(c -> c.m10());
+            circles.forEach(taker::take);
+            Consumer<Square> squares = taker::take;
+          }
+        }
+        """, "Use.run", {
+            **{f"Circle.m{index:02d}": "exact" for index in range(1, 11)},
+            "Circle.self": "exact", "Store.each": "exact", "Store.both": "exact", "Store.apply": "exact",
+            "Taker.takeCircle": "exact", "Taker.takeSquare": "exact",
+        },
+        note="BL-37: JDK functional types type a lambda from a written variable, a source parameter "
+             "or a future, the result a generic method infers, and an overloaded method reference"),
+    Shape("F6-unproven", """
+        import java.util.List;
+        import java.util.function.Consumer;
+        import java.util.function.Function;
+        interface Round {}
+        interface Flat {}
+        class Circle implements Round, Flat {
+          void area() {} //@Circle.area
+        }
+        class Square {
+          void area() {} //@Square.area
+        }
+        class Taker {
+          void take(Round r) {} //@Taker.takeRound
+          void take(Flat f) {} //@Taker.takeFlat
+        }
+        class Store {
+          <T> void open(Consumer<T> c) {} //@Store.open
+          void any(Consumer<?> c) {} //@Store.any
+          <R> R pick(Function<Circle, R> f) { return null; } //@Store.pick
+        }
+        class Use {
+          List<Circle> circles;
+          Taker taker;
+          Store store;
+          void run() { //@Use.run
+            circles.forEach(taker::take);
+            Consumer raw = c -> c.area();
+            Consumer<?> wildcard = c -> c.area();
+            store.open(c -> c.area());
+            store.any(c -> c.area());
+            store.pick(c -> { if (c == null) { return c; } return new Square(); }).area();
+          }
+        }
+        """, "Use.run", {"Store.open": "exact", "Store.any": "exact", "Store.pick": "exact"},
+        note="BL-37: two matching overloads, a raw or wildcard target, an unproven type variable "
+             "and lambda returns of different types stay unresolved"),
     # 2.6 Module boundaries
     Shape("M1", {
         "lib/src/main/java/l/Local.java": """

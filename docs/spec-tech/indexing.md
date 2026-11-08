@@ -434,15 +434,19 @@ included. Record pattern components count; a `var` component has no type.
 Elsewhere the name keeps its outer meaning. The Kafka payload pass shares
 these rules through `discovery/java/patterns.py`.
 
-An untyped lambda parameter is typed only when the lambda is a direct
+An untyped lambda parameter is typed when the lambda is a direct
 argument of a JDK callback whose parameter the receiver's written type
-arguments fix (BL-14). The receiver is a variable, a field or `this.field`
-written as a `java.util` collection, `Stream`, `Optional` or `Map`, or a
-chain that keeps its arguments: `stream()`, `filter`, `sorted`,
-`findFirst`, `keySet()`, `values()`. The callbacks are `forEach`,
-`filter`, `map`, `anyMatch` and their kin, comparators of `sorted`, `min`
-and `max`, and `Map.forEach`, `compute*` and `merge`, which give the key
-or the value. `? extends X` gives `X`.
+arguments fix (BL-14).
+
+The receiver is a variable, a field or `this.field` written as a
+`java.util` collection, `Stream`, `Optional` or `Map`, or a chain that
+keeps its arguments: `stream()`, `filter`, `sorted`, `findFirst`,
+`keySet()`, `values()`. A future's `thenApply`, `thenAccept`,
+`thenCompose` and their `Async` forms give its value (BL-37).
+
+The callbacks are `forEach`, `filter`, `map`, `anyMatch` and their kin,
+comparators of `sorted`, `min` and `max`, and `Map.forEach`, `compute*`
+and `merge`, which give the key or the value. `? extends X` gives `X`.
 
 A lambda passed directly to a source method takes the parameter types of
 the single abstract method of the source functional interface declared at
@@ -456,20 +460,67 @@ supertype and one abstract method name and arity, `Object` methods,
 `default`, `static` and `private` methods aside. Every declaration of the
 called name and arity must give the same types. Disagreeing overloads, a
 varargs overload, a receiver whose external supertype may declare the
-name, an unproven type argument, or any other target (an assignment, a
-JDK functional interface, a raw or wildcard container, a type changed by
-`map`) leave the parameter untyped, but it still shadows a field.
+name, an unproven type argument, or any other target (a raw or wildcard
+functional type, a raw or wildcard container, a type changed by `map`)
+leave the parameter untyped, but it still shadows a field.
+
+A parameter declared with a JDK functional type types the lambda as well
+(BL-37): `each(Consumer<Order> c)` makes `each(o -> o.ship())` an
+`Order` lambda.
+
+The table below fixes, for each type, the type argument each parameter
+of its abstract method takes and the one its result takes. `? extends X`
+and `? super X` give `X` (JLS 9.9); `?`, a nested type argument and a
+raw type give nothing.
+
+| Type | Abstract method | Parameters | Result |
+|---|---|---|---|
+| `Function<T, R>` | `R apply(T t)` | `T` | `R` |
+| `BiFunction<T, U, R>` | `R apply(T t, U u)` | `T`, `U` | `R` |
+| `Predicate<T>` | `boolean test(T t)` | `T` | none |
+| `BiPredicate<T, U>` | `boolean test(T t, U u)` | `T`, `U` | none |
+| `Consumer<T>` | `void accept(T t)` | `T` | none |
+| `BiConsumer<T, U>` | `void accept(T t, U u)` | `T`, `U` | none |
+| `Supplier<T>` | `T get()` | none | `T` |
+| `UnaryOperator<T>` | `T apply(T t)` | `T` | `T` |
+| `BinaryOperator<T>` | `T apply(T t, T u)` | `T`, `T` | `T` |
+
+A lambda that initializes or is assigned to a variable whose type is
+written takes the parameter types of that type, JDK or source:
+`Predicate<Order> p = o -> o.ok()` types `o`. A compound assignment
+and a `var` give nothing.
+
+The result position lets a generic method infer its type variable from
+a lambda. With `<R> R apply(Function<Order, R> f)`, `apply(o ->
+o.getLine())` is a `Line`: the body expression, or the one type every
+`return` of a block body gives, binds `R`. Returns of different types
+give nothing.
+
+An implicitly typed lambda constrains no type variable of its
+parameters (JLS 15.12.2.2): such a variable takes the type the other
+arguments prove, or its bound, as Java infers it.
 
 A method reference whose name has several declared arities binds to the
-one its target functional interface fixes (BL-24). The target is a direct
-argument position: a JDK callback above, such as `forEach` taking one
-parameter, a source functional interface as for a lambda, or a JDK one
+one its target functional interface fixes (BL-24). The target is a
+direct argument position or a variable whose type is written (BL-37).
+At an argument position, it is a JDK callback above, such as `forEach`
+taking one parameter, or a functional interface a source method declares.
+
+That interface is a source one, as for a lambda, or a JDK one
 (`Runnable`, `Callable`, `Supplier`, `Consumer`, `Function`, `Predicate`,
 `UnaryOperator`, `BiConsumer`, `BiFunction`, `BiPredicate`,
-`BinaryOperator`, `Comparator`) declared by a source method. A type name
-as receiver may name an unbound instance method, so it accepts the
-target's count or one less; when both arities exist, the reference stays
-unresolved. So does an overloaded reference whose target is unknown.
+`BinaryOperator`, `Comparator`).
+
+A type name as receiver may name an unbound instance method, so it
+accepts the target's count or one less; when both arities exist, the
+reference stays unresolved. So does an overloaded reference whose
+target is unknown.
+
+Overloads of the bound arity are told apart by the target's parameter
+types (BL-37): `orders.forEach(taker::take)` binds `take(Order)`, not
+`take(Line)`. An unbound reference passes all but the first type.
+Overloads are chosen as for a call; two that match equally leave the
+reference unresolved.
 
 The same view types a call chained on a JDK container accessor (BL-27).
 The accessor returns the type argument it names: `get(int)`, `getFirst()`
@@ -1116,6 +1167,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
 | F5 | Lambda parameter typed by a source functional interface; method reference overload picked by its target | `covered` (BL-24) | |
+| F6 | Lambda typed by a JDK functional type: written variable, source parameter, future callback, inferred result; method reference overload picked by its target's parameter types | `covered` (BL-37) | |
 | M1 | External-interface dispatch limited to visible modules | `covered` (ADR-71) | |
 | M2 | Source-type dispatch from a library into a module that depends on it | `defect` | not planned |
 | M3 | Same qualified type in two modules, one visible | `defect` | not planned |
@@ -1186,10 +1238,10 @@ shapes from the jars it fetches while it builds its database.
 | B6 | Implementor without a written body: record accessor, Lombok member, body inherited from an external class or `Object`; one complete implementor set stays `exact` (ADR-81 rule 1) | `covered` | BL-32 |
 | A01 | `repo.findById(id).orElseThrow().getName()` through `extends JpaRepository<Order, Long>` | `missing` | BL-43 |
 | A02 | `repo.findById(id).get().getName()` | `missing` | BL-43 |
-| A04 | `repo.findById(id).ifPresent(o -> o.ship())` | `missing` | BL-43, BL-37 |
+| A04 | `repo.findById(id).ifPresent(o -> o.ship())` | `missing` | BL-43 |
 | A05 | `repo.findAll().get(0).ship()` | `missing` | BL-43 |
-| A06 | `repo.findAll().forEach(o -> o.ship())` | `missing` | BL-43, BL-37 |
-| A07 | `repo.findAll().stream().map(o -> o.getName())` | `missing` | BL-43, BL-37 |
+| A06 | `repo.findAll().forEach(o -> o.ship())` | `missing` | BL-43 |
+| A07 | `repo.findAll().stream().map(o -> o.getName())` | `missing` | BL-43 |
 | A08 | `repo.save(order).ship()` | `missing` | BL-43 |
 | A09 | `repo.findAllById(ids).get(0).ship()` | `missing` | BL-43 |
 | A10 | Source `Optional<Order> findByName(..)`, then `.orElseThrow().ship()` | `covered` | BL-35 |
@@ -1203,7 +1255,7 @@ shapes from the jars it fetches while it builds its database.
 | A24 | `Optional.ofNullable(o).map(Order::getLine).orElse(null).qty()` | `missing` | BL-40 |
 | A25 | `Optional.of(order).orElseGet(() -> other).ship()` | `covered` | BL-36 |
 | A26 | `CompletableFuture<Order> f; f.join().ship()` | `covered` | BL-36 |
-| A27 | `f.thenApply(o -> o.getName())` | `missing` | BL-37, BL-40 |
+| A27 | `f.thenApply(o -> o.getName())` | `covered` | BL-37 (the future's value types `o`; no transform is needed) |
 | A28 | `List.of(a, b).get(0).ship()` | `covered` | BL-36 |
 | A29 | `Arrays.asList(a, b).get(0).ship()` | `covered` | BL-36 |
 | A30 | `Collections.unmodifiableList(orders).get(0).ship()` | `covered` | BL-36 |
@@ -1225,8 +1277,8 @@ shapes from the jars it fetches while it builds its database.
 | B26 | `Supplier<Order> s; s.get().ship()` | `covered` | BL-36 |
 | B27 | `Function<String, Order> f; f.apply(k).ship()` | `covered` | BL-36 |
 | B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `covered` | BL-36 |
-| B29 | `Predicate<Order> p = o -> o.ok()` | `missing` | BL-37 |
-| B30 | `Consumer<Order> c = o -> o.ship()` | `missing` | BL-37 |
+| B29 | `Predicate<Order> p = o -> o.ok()` | `covered` | BL-37 |
+| B30 | `Consumer<Order> c = o -> o.ship()` | `covered` | BL-37 |
 | B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B44 | `for (var o : array)` over `Order[]` | `covered` | BL-42 |
 | B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `covered` | BL-36 |
@@ -1238,23 +1290,24 @@ shapes from the jars it fetches while it builds its database.
 | C06 | `for (var o : catalog.list())` | `covered` | BL-35 |
 | C07 | `var list = orders; list.get(0).ship()` | `covered` | BL-35 |
 | C08 | `var s = orders.stream(); s.findFirst().get().ship()` | `covered` | BL-35 |
-| C09 | Lambda passed to a source `each(Consumer<Order>)` | `missing` | BL-37 |
-| C10 | Lambda passed to a source `<R> R apply(Function<Order, R>)` | `missing` | BL-37 |
+| C09 | Lambda passed to a source `each(Consumer<Order>)` | `covered` | BL-37 |
+| C10 | Lambda passed to a source `<R> R apply(Function<Order, R>)` | `covered` | BL-37 |
 | C11 | `(flag ? order : null).ship()` | `covered` | BL-42 |
 | C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `covered` | BL-35 |
 | C14 | `var l = catalog.list(); l.get(0).ship()` | `covered` | BL-35 |
 | D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `covered` | BL-35 |
 | D04 | `new ArrayList<Order>(orders).get(0).ship()` | `covered` | BL-36 |
-| D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `missing` | BL-37; BL-35 typed `list()` |
-| D06 | `orders.forEach(taker::take)`, overloaded `take` | `missing` | BL-37 |
+| D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `covered` | BL-37; BL-35 typed `list()` |
+| D06 | `orders.forEach(taker::take)`, overloaded `take` | `covered` | BL-37 |
 | E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
 them, so the next `index` of an existing index re-runs the call-graph
-stage and rebuilds its edges and flows without `--full`. BL-35, BL-39
-and BL-42 moved it to `code-flow-v52-receiver-typing` for the same
-reason.
+stage and rebuilds its edges and flows without `--full`.
+
+BL-35, BL-39 and BL-42 moved it to `code-flow-v52-receiver-typing` for the same
+reason, and BL-36 and BL-37 to `code-flow-v53-jdk-signatures`.
 
 ### Internal-flow shapes
 

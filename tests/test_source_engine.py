@@ -93,8 +93,8 @@ def test_source_engine_keeps_doubt_where_syntax_cannot_decide(tmp_path: Path) ->
     assert sorted(calls["send"]) == [(_line("class Adapter"), "possible"), (_line("class Other"), "possible")]
     # A method reference to a name declared with two arities binds to the
     # one its target fixes (BL-24): forEach takes a one-parameter Consumer.
-    # Its target unread, the assignment to a Runnable stays unresolved.
-    assert calls["multi"] == [(_line("void multi(String s)"), "exact")]
+    # The assignment to a Runnable binds the zero-parameter one (BL-37).
+    assert sorted(calls["multi"]) == [(_line("void multi()"), "exact"), (_line("void multi(String s)"), "exact")]
 
 
 def test_an_override_typed_through_an_external_wildcard_import_is_dispatched(tmp_path: Path) -> None:
@@ -260,7 +260,7 @@ class Svc {
     for (Order o : orders) { o.process(); }
     try (Resource r = open()) { r.use(); } catch (Failure e) { e.report(); }
     orders.forEach((Order x) -> x.fail());
-    java.util.function.Consumer<Order> sink = order -> order.fail();
+    java.util.function.Consumer<?> sink = order -> order.fail();
   }
 }
 """
@@ -294,7 +294,7 @@ def test_variables_declared_by_enclosing_statements_type_their_receivers(tmp_pat
         ("p.Svc.open", line("try (Resource"), "exact"),
     ]
     # The untyped lambda parameter ``order`` shadows the field of the same
-    # name, and an assignment target types no lambda parameter: only the
+    # name, and a wildcard target types no lambda parameter: only the
     # typed lambda ``x`` yields ``fail``.
     assert sum(callee == "p.Order.fail" for callee, _line, _dispatch in calls) == 1
 
@@ -805,7 +805,7 @@ class Repo {
     byId.computeIfAbsent(1L, key -> key.getId());
     apply(x -> x.getId());
   }
-  void apply(java.util.function.Function<Department, Long> f) {}
+  void apply(java.util.function.Function<?, Long> f) {}
 }
 """
 
