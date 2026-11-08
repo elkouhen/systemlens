@@ -287,6 +287,19 @@ _GENERIC_CALLS: dict[tuple[str, str, int], tuple[str, tuple[int, ...]]] = {
     ("stream", "toList", 0): ("iterable", (0,)),
     ("stream", "reduce", 1): ("optional", (0,)),
 }
+# Calls whose function argument gives the container's new element (BL-40):
+# (receiver kind, method name) -> whether the function returns the element
+# itself (``map``) or a container of the same kind holding it (``flatMap``).
+_ELEMENT_TRANSFORMS: dict[tuple[str, str], bool] = {
+    ("stream", "map"): False,
+    ("stream", "flatMap"): True,
+    ("optional", "map"): False,
+    ("optional", "flatMap"): True,
+    ("future", "thenApply"): False,
+    ("future", "thenApplyAsync"): False,
+    ("future", "thenCompose"): True,
+    ("future", "thenComposeAsync"): True,
+}
 # ``Collectors`` methods that make ``stream.collect(..)`` a collection of
 # the stream's element (BL-36).
 _COLLECTION_COLLECTORS = {"toList", "toSet", "toUnmodifiableList", "toUnmodifiableSet"}
@@ -2647,6 +2660,13 @@ class JavaSymbols:
             ):
                 # ``stream.collect(Collectors.toList())`` (BL-36).
                 return "iterable", inner[1]
+            flattens = _ELEMENT_TRANSFORMS.get((inner[0], name))
+            if flattens is not None and arguments and (
+                len(arguments) == 1 or name.endswith("Async") and len(arguments) == 2
+            ):
+                # ``stream().map(Order::getLine)`` (BL-40).
+                element = self._transformed(info, arguments[0], inner[0], flattens, depth + 1)
+                return (inner[0], (element,)) if element is not None else None
             index = _ELEMENT_ACCESSORS.get((inner[0], name, len(arguments)))
             if index is not None:
                 # ``nested.get(k)`` on ``Map<String, List<Order>>`` (BL-41).
@@ -2713,6 +2733,104 @@ class JavaSymbols:
         return kind, tuple(
             self._view_argument(path, argument, owner, env) for argument in written_arguments
         )
+
+    def _transformed(
+        self, info: _Method, function: Node, kind: str, flattens: bool, depth: int,
+    ) -> _Arg | None:
+        """The element a ``map``-like call gives its result (BL-40).
+
+        The function is a method reference whose name has a single declared
+        arity on its receiver type, read from its declared return type, or
+        a lambda the pass types (``_lambda_result``). For ``flatMap`` and
+        ``thenCompose`` the result must be a container of ``kind``, and its
+        element is the new one: a lambda whose body is one expression, or a
+        reference whose declared return type is written. Anything else
+        leaves the chain untyped.
+        """
+        while function.type == "parenthesized_expression" and function.named_children:
+            function = function.named_children[0]
+        if function.type == "method_reference":
+            returns = self._reference_returns(info, function)
+            if returns is None:
+                return None
+            if not flattens:
+                types = {
+                    self.resolve(declaration.method.path, parser.node_text(
+                        self.units[declaration.method.path].source, type_node,
+                    ), declaration.owner, at=type_node)
+                    for declaration, type_node in returns
+                }
+                found = types.pop() if len(types) == 1 else None
+                return _BOXED.get(found, found) if found not in {None, "void"} else None
+            elements: set[_Arg | None] = set()
+            for declaration, type_node in returns:
+                path = declaration.method.path
+                if type_node.type != "generic_type":
+                    return None
+                name_node = type_node.named_children[0]
+                container = self.resolve(
+                    path, parser.node_text(self.units[path].source, name_node), declaration.owner,
+                    allow_ambiguous=True, at=name_node,
+                )
+                written = parser.child_by_type(type_node, "type_arguments")
+                values = written.named_children if written is not None else []
+                if container not in _GENERIC_CONTAINERS or _GENERIC_CONTAINERS[container] != (kind, 1) or (
+                    len(values) != 1
+                ):
+                    return None
+                elements.add(self._view_argument(path, values[0], declaration.owner, None))
+            return elements.pop() if len(elements) == 1 else None
+        if function.type != "lambda_expression":
+            return None
+        if not flattens:
+            return self._lambda_result(info, function, depth)
+        body = function.child_by_field_name("body")
+        key = (info.method.path, function.start_byte)
+        if body is None or body.type == "block" or key in self._typing:
+            return None
+        self._typing.add(key)
+        try:
+            view = self._generic_view(info, body, body, depth + 1)
+        finally:
+            self._typing.discard(key)
+        return view[1][0] if view is not None and view[0] == kind and len(view[1]) == 1 else None
+
+    def _reference_returns(self, info: _Method, reference: Node) -> list[tuple[_Method, Node]] | None:
+        """The declarations a method reference names and their written
+        return types, when its name has a single declared arity on the
+        receiver's source type and every declaration writes a return type."""
+        parts = reference.named_children
+        if len(parts) < 2 or parts[-1].type != "identifier":
+            return None
+        source = self.units[info.method.path].source
+        receiver, name = parts[0], parser.node_text(source, parts[-1])
+        owner = self.receiver_type(info, receiver, reference)
+        if owner is None or owner not in self.types:
+            return None
+        arities = self._declared_arities(owner, name, info.method.path, info.module)
+        if len(arities) != 1 or not arities <= {0, 1}:
+            # A ``Function`` binds one parameter: an unbound reference takes
+            # it as the receiver, any other as the argument.
+            return None
+        arity = next(iter(arities))
+        locations = self._type_candidates(owner, info.method.path)
+        if len(locations) != 1:
+            return None
+        module = self.path_modules.get(locations[0][0], info.module)
+        declarations = self.by_owner.get((owner, name, arity, module), []) or [
+            candidate for base, base_module in self.ancestors(owner, module)
+            for candidate in self.by_owner.get((base, name, arity, base_module), [])
+        ]
+        found: list[tuple[_Method, Node]] = []
+        for declaration in declarations:
+            type_node = declaration.node.child_by_field_name("type")
+            if type_node is None or type_node.type == "type_identifier" and self._type_variable(
+                parser.node_text(self.units[declaration.method.path].source, type_node).strip(), type_node,
+            ) is not None:
+                # A type variable's argument is not read here.
+                return None
+            found.append((declaration, type_node))
+        return found or None
 
     def _jdk_static_owner(self, info: _Method, receiver: Node | None, invocation: Node) -> str | None:
         """The external type a static call names: ``List`` in ``List.of(..)``

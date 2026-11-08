@@ -1791,9 +1791,6 @@ SHAPES: list[Shape] = [
             for (var c : any) {
               c.area();
             }
-            for (var c : circles.stream().map(x -> x).toList()) {
-              c.area();
-            }
           }
         }
         """, "Use.run", {},
@@ -1973,12 +1970,11 @@ SHAPES: list[Shape] = [
           void run() { //@Use.run
             raw.get(0).area();
             any.get(0).area();
-            circles.stream().map(c -> c).findFirst().get().area();
             byName.keySet().iterator().next().area();
           }
         }
         """, "Use.run", {},
-        note="BL-27: a raw or wildcard container, or a type-changing chain, gives nothing"),
+        note="BL-27: a raw or wildcard container gives nothing; BL-40 types map"),
     Shape("T14", """
         import java.util.List;
         import java.util.Map;
@@ -2341,6 +2337,58 @@ SHAPES: list[Shape] = [
         """, "Use.run", {"Box.get": "exact"}, absent=("Circle.area",),
         note="BL-41: two levels of nesting, a source generic's type variable bound to a container, "
              "and a lower-bounded wildcard stay untyped"),
+    Shape("T18", """
+        import java.util.List;
+        import java.util.Optional;
+        import java.util.concurrent.CompletableFuture;
+        import java.util.stream.Stream;
+        class Line {
+          int qty() { return 1; } //@Line.qty
+        }
+        class Order {
+          Line getLine() { return null; } //@Order.getLine
+          List<Line> lines() { return null; } //@Order.lines
+          Optional<Line> firstLine() { return null; } //@Order.firstLine
+        }
+        class Use {
+          List<Order> orders;
+          Optional<Order> maybe;
+          CompletableFuture<Order> future;
+          void run() { //@Use.run
+            orders.stream().map(Order::getLine).findFirst().get().qty();
+            orders.stream().flatMap(o -> o.lines().stream()).findFirst().get().qty();
+            maybe.flatMap(Order::firstLine).get().qty();
+            future.thenApply(o -> { return o.getLine(); }).join().qty();
+          }
+        }
+        """, "Use.run", {
+            "Order.getLine": "exact", "Order.lines": "exact", "Order.firstLine": "exact", "Line.qty": "exact",
+        },
+        note="BL-40: a method reference's return type, a lambda's result, the element of a flatMap result"),
+    Shape("T18-unproven", """
+        import java.util.List;
+        import java.util.stream.Stream;
+        class Line {
+          int qty() { return 1; } //@Line.qty
+        }
+        class Order {
+          Line pick() { return null; } //@Order.pick.0
+          Line pick(int i) { return null; } //@Order.pick.1
+          <T> T as() { return null; } //@Order.as
+          Stream<Line> lines() { return null; } //@Order.lines
+        }
+        class Use {
+          List<Order> orders;
+          void run(Object other) { //@Use.run
+            orders.stream().map(Order::pick).findFirst().get().qty();
+            orders.stream().map(o -> other).findFirst().get().qty();
+            orders.stream().flatMap(o -> { return o.lines(); }).findFirst().get().qty();
+            orders.stream().flatMap(o -> o.lines().toList()).findFirst().get().qty();
+          }
+        }
+        """, "Use.run", {"Order.lines": "exact"}, partial=True, absent=("Line.qty",),
+        note="BL-40: two declared arities, an untyped result, a block body or another kind "
+             "for flatMap stay untyped"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area

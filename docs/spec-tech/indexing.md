@@ -528,7 +528,17 @@ and `getLast()` of a collection, `next()` of an `Iterator` (also reached
 through `iterator()`), `get()`, `orElse`, `orElseGet` and `orElseThrow`
 of an `Optional`, so `stream().findFirst().get()` too, `get(key)` of a
 `Map`, and `getKey()` and `getValue()` of a written `Map.Entry<K, V>`.
-A raw or wildcard container, or a chain through `map`, gives no type.
+A raw or wildcard container gives no type.
+
+A transform changes the element (BL-40): `map` of a stream or an
+`Optional` and a future's `thenApply` take the function's result, and
+`flatMap` and `thenCompose` the element of the container of the same
+kind it returns. A method reference gives its declared return type when
+its name has one declared arity, 0 or 1, on a source receiver type, and
+the return type is no type variable. A lambda gives the type of its body
+or of its agreeing `return`s (`_lambda_result`, BL-37); for `flatMap`
+and `thenCompose` its body must be one expression with a container view.
+Anything else leaves the chain untyped.
 
 BL-36 completes the view with the JDK signatures below. Each row quotes
 the Java SE declaration the pass reads, and the result it gives.
@@ -1196,6 +1206,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T15 | Implicit enum methods `valueOf(String)` and `values()` | `covered` (BL-42) | |
 | T16 | Element from the BL-36 JDK signatures: `Map` accessors, stream results, static factories, creations, futures, functional results; a shadowed static import | `covered` (BL-36) | |
 | T17 | Element of a JDK container nested as a type argument, one level deep: written, returned with its type variable substituted, `entrySet()` and `var` loops | `covered` (BL-41) | |
+| T18 | Element changed by `map`, `flatMap`, `thenApply` or `thenCompose`: a single-arity method reference's return type, a typed lambda result | `covered` (BL-40) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1284,9 +1295,9 @@ shapes from the jars it fetches while it builds its database.
 | A13 | `ResponseEntity.ok(order).getBody().ship()` | `missing` | BL-43 |
 | A15 | `m.computeIfAbsent(k, x -> new Order()).ship()` | `covered` | BL-36 |
 | A16 | `m.getOrDefault(k, other).ship()` | `covered` | BL-36 |
-| A18 | `stream().map(Order::getLine).toList().get(0).qty()` | `missing` | BL-40 |
+| A18 | `stream().map(Order::getLine).toList().get(0).qty()` | `covered` | BL-40 |
 | A19 | `stream().collect(Collectors.toList()).get(0).ship()` | `covered` | BL-36 |
-| A24 | `Optional.ofNullable(o).map(Order::getLine).orElse(null).qty()` | `missing` | BL-40 |
+| A24 | `Optional.ofNullable(o).map(Order::getLine).orElse(null).qty()` | `covered` | BL-40 |
 | A25 | `Optional.of(order).orElseGet(() -> other).ship()` | `covered` | BL-36 |
 | A26 | `CompletableFuture<Order> f; f.join().ship()` | `covered` | BL-36 |
 | A27 | `f.thenApply(o -> o.getName())` | `covered` | BL-37 (the future's value types `o`; no transform is needed) |
@@ -1299,7 +1310,7 @@ shapes from the jars it fetches while it builds its database.
 | A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
 | A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `covered` | BL-41 |
-| A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `missing` | BL-40 |
+| A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `covered` | BL-40 |
 | A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `covered` | BL-41 |
 | A44 | `var opt = Optional.of(order); opt.get().ship()` | `covered` | BL-36 (`Optional.of`); BL-35 typed the `var` |
@@ -1342,7 +1353,8 @@ them, so the next `index` of an existing index re-runs the call-graph
 stage and rebuilds its edges and flows without `--full`.
 
 BL-35, BL-39 and BL-42 moved it to `code-flow-v52-receiver-typing` for the same
-reason, and BL-36 and BL-37 to `code-flow-v53-jdk-signatures`.
+reason, BL-36 and BL-37 to `code-flow-v53-jdk-signatures`, and BL-38,
+BL-40 and BL-41 to `code-flow-v54-overloads-and-transforms`.
 
 ### Internal-flow shapes
 
