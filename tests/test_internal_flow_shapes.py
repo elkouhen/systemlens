@@ -193,3 +193,20 @@ def test_codeql_engine_applies_the_entry_rule_only_on_this(
     # ADR-43 amendment (BL-47): S24 leaves ``this`` and reaches the sibling
     # override; S25 stays on ``this`` and keeps its own.
     test_source_engine_persists_the_shape_flows(codeql_flows, case, command)
+
+
+def test_index_log_reports_the_entries_stopped_at_the_hop_limit(tmp_path: Path) -> None:
+    # BL-52: the index log names the setting and counts truncated entries.
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    for max_hops, truncated in ((12, False), (1, True)):
+        progress: list[str] = []
+        with Store(repo) as store:
+            index_repo(
+                repo, Config(call_graph_engine="source", engine_max_hops=max_hops), store,
+                full=True, progress=progress.append,
+            )
+        lines = [line for line in progress if f"à la limite engine_max_hops={max_hops}" in line]
+        assert len(lines) == 1, progress
+        count = int(lines[0].split(" : ", 1)[1].split(" ", 1)[0])
+        assert (count > 0) is truncated

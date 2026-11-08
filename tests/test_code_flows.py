@@ -2578,7 +2578,29 @@ def test_codeql_flow_materialization_bounds_exploration(tmp_path: Path) -> None:
     )
 
     assert len(flows) == 1
-    assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1}
+    assert stats == {"calls": 1, "joined_calls": 1, "explored_paths": 1, "hop_limited_entries": 0}
+
+    # BL-52: a route stopped at the hop limit with calls left is counted.
+    stats = {}
+    flows = materialize_call_graph_flows(
+        methods,
+        endpoints,
+        [MethodCall("com.example.OrderController.receive", source, 1,
+                    "com.example.OrderController.receive", source, 1, 1)],
+        stats=stats, max_hops=1,
+    )
+    assert stats["hop_limited_entries"] == 0  # a cycle is no truncation
+    stats = {}
+    materialize_call_graph_flows(
+        methods,
+        endpoints,
+        [MethodCall("com.example.OrderController.receive", source, 1,
+                    "com.example.OrderPublisher.send", target, 1, 1),
+         MethodCall("com.example.OrderPublisher.send", target, 1,
+                    "com.example.OrderController.receive", source, 1, 1)],
+        stats=stats, max_hops=1,
+    )
+    assert stats["hop_limited_entries"] == 1
 
 
 def test_mongo_operations_get_independent_source_backed_paths(tmp_path: Path) -> None:

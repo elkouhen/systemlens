@@ -315,6 +315,10 @@ otherwise `index_repo` builds the configured one. `engine_timeout_seconds`
 reaches the engine as `EngineRequest.timeout_seconds` and its deadline;
 `engine_max_hops` and `engine_edge_confidence` bound the join and enter the
 code-flow signature, with the engine's `input_fingerprint()`.
+The join counts, in `stats["hop_limited_entries"]`, the entry methods with
+a route stopped at `engine_max_hops` while its last method still has
+calls; the index log prints that count with the setting (BL-52). A join
+resumed from a checkpoint counts only the entries of the current run.
 
 Persisted names written before ADR-85 keep their spelling: the
 `codeql_call_edges` and `codeql_methods` tables, the `codeql_*` meta keys,

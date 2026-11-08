@@ -1664,6 +1664,8 @@ def materialize_call_graph_flows(
                 report_live_chain(entry, trigger, [], explored=True)
                 report_live_chain(entry, trigger, [], output=output)
     explored = 0
+    # Entries whose traversal stopped at ``max_hops`` on some route (BL-52).
+    hop_limited_entries: set[str] = set()
 
     def dispatch_matches_entry(
         entry: IntegrationMethod,
@@ -1794,6 +1796,9 @@ def materialize_call_graph_flows(
                     ))
                 if len(route) >= max_hops:
                     remember_terminal(route, "limite de profondeur")
+                    if adjacency.get(current.id):
+                        # The route has calls left to follow.
+                        hop_limited_entries.add(entry.id)
                     continue
                 eligible_targets = sorted((
                     (target, call, signature_join)
@@ -1936,6 +1941,7 @@ def materialize_call_graph_flows(
         stats.update({
             "calls": call_count, "joined_calls": sum(len(targets) for targets in adjacency.values()),
             "explored_paths": explored,
+            "hop_limited_entries": len(hop_limited_entries),
         })
     if reachability:
         # One predecessor tree per source/confidence, not a BFS per pair.

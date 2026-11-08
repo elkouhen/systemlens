@@ -816,6 +816,13 @@ def run_call_graph_stage(
             f"{call_graph_stats['explored_paths']} transition(s), "
             f"{len(call_graph_flows)} flux interprocédural(aux).",
         )
+        # A route stopped at the hop limit loses the flows beyond it (BL-52).
+        _report_progress(
+            progress,
+            f"→ {engine_label} : {call_graph_stats.get('hop_limited_entries', 0)} "
+            f"méthode(s) d'entrée arrêtée(s) à la limite engine_max_hops="
+            f"{config.engine_max_hops}.",
+        )
     service_aliases = {
         module_identity(module): local_spring_application_names(module.path, None)
         for module in relation_modules

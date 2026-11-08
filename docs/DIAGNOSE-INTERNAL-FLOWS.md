@@ -42,13 +42,20 @@ the engine's label: `Source (tree-sitter)`, `CodeQL` or `Joern`.
 | `<engine> : préparation de l'analyse interprocédurale` | The selected engine builds the call graph. |
 | `<engine> indisponible ; moteur source (tree-sitter) utilisé` | The selected engine is not installed; the `source` engine builds the call graph instead. |
 | `<engine> : N appel(s), J jointure(s), T transition(s), F flux interprocédural(aux)` | Calls the engine returned (always 0 for `source`, whose edges come from the symbol pass), edges attached to indexed methods, transitions the traversal explored, and flows that cross method boundaries. Many calls with zero joins usually indicate a source-location or method-name resolution problem. |
+| `<engine> : N méthode(s) d'entrée arrêtée(s) à la limite engine_max_hops=H` | Entry methods with at least one route that stopped at `H` calls while calls remained to follow. Flows beyond the bound are missing for them; `0` rules depth truncation out. |
 | `jointure terminée · T transition(s), 0 reachability(s), F flux dédupliqué(s)` | The end of the traversal. The reachability count is always 0 during an index: ADR-84 removed the CodeQL reachability pass. |
 | `Indexation : N flux de code et M annotation(s) d'accès aux données collectée(s)` | Total persisted flows after the same-method and interprocedural passes. |
 
 Every engine builds its flows the same way: a breadth-first traversal of
 the joined call graph from each indexed entry, bounded by
-`engine_max_hops` calls. The index log does not report a traversal that
-stops at that bound. To see it, rebuild one module with
+`engine_max_hops` calls. The index log counts the entry methods whose
+traversal stopped at that bound with calls left to follow:
+
+```text
+→ source : 3 méthode(s) d'entrée arrêtée(s) à la limite engine_max_hops=12.
+```
+
+To see the routes it stops, rebuild one module with
 `systemlens index --module <module> --show-call-chains`. The command walks
 back from each output of the module to its callers and prints each route
 it stops, as `Chaîne arrêtée en direct`, with the reason in brackets:
