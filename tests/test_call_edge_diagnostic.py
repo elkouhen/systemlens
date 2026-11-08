@@ -479,3 +479,99 @@ def test_call_edge_reports_when_the_caller_is_outside_every_input_path(
         "caller_reachable_from_input": False,
         "callee_can_reach_output": True,
     }
+
+
+_TYPING_SOURCE = """\
+package orders;
+
+import com.lib.Source;
+
+class Order {
+  void ship() {}
+}
+
+class Line {}
+
+class Taker {
+  void take(Order o) {}
+  void take(Line l) {}
+}
+
+class Use {
+  Taker taker;
+  Source source;
+
+  void run() {
+    taker.take(source.fetch());
+    source.list().get(0).ship();
+  }
+
+  void typed(Order order) {
+    taker.take(order);
+  }
+}
+"""
+
+
+def _given_typing_project(root: Path) -> list[IntegrationMethod]:
+    from systemlens.domain.module_inventory import DiscoveredModule
+    from systemlens.indexing.integration_methods import materialize_integration_methods
+
+    path = "orders/src/main/java/orders/Use.java"
+    (root / path).parent.mkdir(parents=True)
+    (root / path).write_text(_TYPING_SOURCE, encoding="utf-8")
+    module = DiscoveredModule(
+        name="orders", path=root / "orders", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    return materialize_integration_methods(root, [], [path], [module])
+
+
+def test_call_edge_names_an_unresolved_overload_and_a_broken_accessor_chain(
+    tmp_path: Path,
+) -> None:
+    # Given an untyped argument to an overloaded call, persisted by the
+    # source engine as one possible edge per overload (ADR-87).
+    methods = _given_typing_project(tmp_path)
+    by_name = {method.qualified_method: method for method in methods if "take" not in method.qualified_method}
+    takes = sorted(
+        (method for method in methods if method.qualified_method == "orders.Taker.take"),
+        key=lambda method: method.start_line,
+    )
+    caller = by_name["orders.Use.run"]
+    edges = [
+        CallGraphEdge(caller.id, take.id, caller.path, 21, "possible", True) for take in takes
+    ]
+    _given_persisted_snapshot(tmp_path, methods, edges=edges)
+
+    # When the user diagnoses the call to the first overload.
+    exit_code, payload = _invoke_json(tmp_path, "Use.run", takes[0].id)
+
+    # Then the edge carries its reason, and both typing gaps are listed.
+    assert exit_code == 0
+    assert payload["edges"][0]["reason"] == "overload unresolved"
+    assert payload["typing_notes"] == [
+        {"line": 21, "reason": "overload unresolved", "name": "take",
+         "targets": ["orders.Taker.take:12", "orders.Taker.take:13"]},
+        {"line": 22, "reason": "accessor chain broken", "name": "get", "targets": []},
+    ]
+
+
+def test_call_edge_lists_no_typing_note_for_a_typed_overload(tmp_path: Path) -> None:
+    # Given a typed argument that selects one overload.
+    methods = _given_typing_project(tmp_path)
+    caller = next(method for method in methods if method.qualified_method == "orders.Use.typed")
+    take = min(
+        (method for method in methods if method.qualified_method == "orders.Taker.take"),
+        key=lambda method: method.start_line,
+    )
+    edge = CallGraphEdge(caller.id, take.id, caller.path, 26, "exact")
+    _given_persisted_snapshot(tmp_path, methods, edges=[edge])
+
+    # When the user diagnoses the call.
+    exit_code, payload = _invoke_json(tmp_path, "Use.typed", take.id)
+
+    # Then nothing is reported as untyped, and the edge has no reason.
+    assert exit_code == 0
+    assert payload["typing_notes"] == []
+    assert "reason" not in payload["edges"][0]

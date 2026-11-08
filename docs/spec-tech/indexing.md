@@ -691,7 +691,12 @@ they list, `String` and the boxes.
 A phase decides only when every argument and parameter type is known and
 no overload's applicability depends on an unknown hierarchy. Otherwise the
 pass drops only the overloads a known argument provably cannot reach.
-Unknown arguments never narrow. When no method of the call's arity
+Unknown arguments never narrow. If several overloads remain, the closed
+world of the `source` engine keeps the call: each overload's targets are
+`possible` edges, and the call-edge diagnostic names the line with the
+reason `overload unresolved` (ADR-87). A varargs candidate, a method
+reference and the open-world gap filler leave such a call without target.
+When no method of the call's arity
 exists, a varargs method whose fixed parameter count does not exceed it is
 the candidate, as in Java's third phase.
 When one module declares a type in `src/main` and in `src/test`,
@@ -726,8 +731,9 @@ when the declaration is concrete, or when its own dispatch reaches a body
 outside the targets, so a rebuild from persisted edges opens no route.
 A call with no source body reaches the one abstract declaration no source
 type implements, such as a Spring Data query method, as a `possible`
-target. The pass drops ambiguous overloads while retaining an ambiguous
-receiver type long enough to apply module-scoped interface dispatch.
+target. Outside ADR-87, the pass drops ambiguous overloads while
+retaining an ambiguous receiver type long enough to apply module-scoped
+interface dispatch.
 
 The join labels an edge `inferred` only when it is a candidate dispatch to a
 concrete body. A call to a declaration without a body, such as the Spring
@@ -1055,6 +1061,10 @@ it checks the persisted edge before applying the recorded confidence filter.
 When the callee is an interface method, the diagnostic also resolves its
 source-backed indexed implementations and accepts a persisted edge to one of
 those concrete targets as the requested dynamic-dispatch edge.
+For one caller, it re-runs `JavaSymbols.fallback_calls` in a closed world,
+limited to that caller, and reads `typing_notes`: the calls left to every
+overload (ADR-87) and the JDK accessor calls whose receiver had no container
+view. The edge reason is not persisted; this recomputation gives it.
 It then tests reachability from any indexed input method and to any indexed
 output method. Existing snapshots do not persist rejected raw CodeQL rows, so
 an absent edge remains classified across extraction and CodeQL-to-AST joining.
@@ -1126,6 +1136,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
 | S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer | `covered` (ADR-75, BL-39) | |
 | S9 | Varargs call with any arity from the fixed parameter count up | `covered` | |
+| S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
 | H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | |
 | H3 | Template method: `step()` or `this.step()` from the base class | `covered` | |
@@ -1299,6 +1310,7 @@ shapes from the jars it fetches while it builds its database.
 | D04 | `new ArrayList<Order>(orders).get(0).ship()` | `covered` | BL-36 |
 | D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `covered` | BL-37; BL-35 typed `list()` |
 | D06 | `orders.forEach(taker::take)`, overloaded `take` | `covered` | BL-37 |
+| D07 | `taker.take(Collections.max(orders, cmp))`: the pass does not type the argument | `covered` | BL-38; D07 keeps both overloads `possible` where CodeQL selects one (ADR-87) |
 | E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The

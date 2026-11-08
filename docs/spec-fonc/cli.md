@@ -89,7 +89,17 @@ this explains why the search stopped without hiding the attempted node.
 Use `systemlens analyze call-edge CALLER CALLEE [--module MODULE]` when one
 expected Java call is missing from a flow or graph view. The command reads the
 method inventory, persisted call graph, flow snapshot status, and configured
-edge confidence. It does not run the engine.
+edge confidence. It does not run the configured engine.
+
+For one resolved caller, it re-runs the source symbol pass on that caller
+and lists its typing notes in `typing_notes` (ADR-87). A note gives the call
+line, the method name and a reason: `overload unresolved` for a call whose
+untyped arguments leave several overloads, with each `possible` target, or
+`accessor chain broken` for a JDK accessor such as `get` or `orElse` whose
+receiver the pass cannot view as a container.
+
+A persisted edge at an `overload unresolved` line carries the same `reason`
+in its JSON. Text output prints each note as a `typage` line.
 
 For an interface selector, indexed source symbols can match a persisted edge
 whose target is a compatible concrete implementation. Text and JSON output

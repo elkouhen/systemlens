@@ -545,6 +545,11 @@ class JavaSymbols:
         # External interfaces and the source types that implement them directly.
         self.external_implementors: dict[str, set[tuple[str, str]]] = defaultdict(set)
         self.interface_witnesses: dict[MethodCall, MethodCall] = {}
+        # Typing notes for the call-edge diagnostic (ADR-87): calls whose
+        # overloads stayed unresolved, by caller method ID, and JDK accessor
+        # calls whose chain broke, by (path, start byte).
+        self.unresolved_overloads: dict[str, list[tuple[int, str, tuple[str, ...]]]] = defaultdict(list)
+        self.broken_accessors: dict[tuple[str, int], tuple[int, str]] = {}
         # ``var`` initializers being typed, to break reference cycles.
         self._typing: set[tuple[str, int]] = set()
         # Whether a type variable without an argument takes its bound; off
@@ -1647,9 +1652,13 @@ class JavaSymbols:
     def _candidate_targets(
         self, receiver_type: str, name: str, arity: int, module: str, path: str,
         argument_types: tuple[str | None, ...] | None = None,
+        signature: tuple[str | None, ...] | None = None,
     ) -> tuple[list[IntegrationMethod], bool, _Method | None]:
         """Return compatible targets, whether module preference pruned some,
         and the declaration the call statically binds to, if unique.
+
+        ``signature`` names the overload by its parameter types instead of
+        selecting it from ``argument_types`` (ADR-87).
 
         Preferring the caller's module is a heuristic, not a proof: a call
         whose candidates it pruned never becomes an exact dispatch.
@@ -1661,6 +1670,43 @@ class JavaSymbols:
             if len(receiver_locations) == 1 else module
         )
         receiver_bases = self.ancestors(receiver_type, receiver_module)
+        contracts = self._receiver_contracts(receiver_type, name, arity, receiver_locations, receiver_bases)
+        if signature is not None:
+            contracts = [candidate for candidate in contracts if candidate.parameters == signature]
+        else:
+            contracts = self._select_overload(contracts, argument_types)
+        if len({candidate.parameters for candidate in contracts}) != 1:
+            return [], False, None
+        return self._dispatch_targets(
+            receiver_type, receiver_is_interface, receiver_module, receiver_bases, contracts, module, path,
+        )
+
+    def typing_notes(self, method_id: str) -> list[dict[str, object]]:
+        """The typing notes of one caller after :meth:`fallback_calls`: its
+        calls left with unresolved overloads, and its JDK accessor calls
+        whose receiver has no container view (ADR-87), by line."""
+        info = self.methods.get(method_id)
+        if info is None:
+            return []
+        notes: dict[tuple[int, str, str], dict[str, object]] = {}
+        for line, name, targets in self.unresolved_overloads.get(method_id, []):
+            notes[(line, "overload unresolved", name)] = {
+                "line": line, "reason": "overload unresolved", "name": name, "targets": list(targets),
+            }
+        start, end = info.node.start_byte, info.node.end_byte
+        for (path, offset), (line, name) in self.broken_accessors.items():
+            if path == info.method.path and start <= offset < end:
+                notes[(line, "accessor chain broken", name)] = {
+                    "line": line, "reason": "accessor chain broken", "name": name, "targets": [],
+                }
+        return [notes[key] for key in sorted(notes)]
+
+    def _receiver_contracts(
+        self, receiver_type: str, name: str, arity: int, receiver_locations: list[tuple[str, Node]],
+        receiver_bases: set[tuple[str, str]],
+    ) -> list[_Method]:
+        """The declarations of ``name``/``arity`` a receiver type sees, its
+        own and its ancestors', or the varargs ones when none has the arity."""
         contracts = [candidate for owner in receiver_bases
                      for candidate in self.by_owner.get((owner[0], name, arity, owner[1]), [])]
         if len(receiver_locations) > 1:
@@ -1681,9 +1727,55 @@ class JavaSymbols:
                 for candidate in self.varargs_by_owner.get((owner, name, owner_module), [])
                 if len(candidate.parameters) - 1 <= arity
             ]
-        contracts = self._select_overload(contracts, argument_types)
-        if len({candidate.parameters for candidate in contracts}) != 1:
-            return [], False, None
+        return contracts
+
+    def _unresolved_overloads(
+        self, receiver_type: str, name: str, arity: int, module: str, path: str,
+        argument_types: tuple[str | None, ...],
+    ) -> list[IntegrationMethod]:
+        """The targets of every same-arity overload the arguments cannot
+        separate, when Java's selection stays open (ADR-87).
+
+        An overload that a known argument provably excludes is left out. A
+        varargs candidate keeps the call unresolved: its arity is not fixed.
+        """
+        locations = self._type_candidates(receiver_type, path)
+        receiver_module = self.path_modules.get(locations[0][0], module) if len(locations) == 1 else module
+        contracts = self._receiver_contracts(
+            receiver_type, name, arity, locations, self.ancestors(receiver_type, receiver_module),
+        )
+        if not contracts or any(
+            candidate.varargs or len(candidate.parameters) != arity for candidate in contracts
+        ):
+            return []
+        if len({candidate.parameters for candidate in self._select_overload(contracts, argument_types)}) < 2:
+            return []
+        signatures = sorted(
+            {
+                candidate.parameters for candidate in contracts
+                if not any(
+                    self._applicable(parameter, argument, boxing=True) is False
+                    for parameter, argument in zip(candidate.parameters, argument_types, strict=True)
+                )
+            },
+            key=lambda parameters: tuple(parameter or "" for parameter in parameters),
+        )
+        if len(signatures) < 2:
+            return []
+        targets: dict[str, IntegrationMethod] = {}
+        for signature in signatures:
+            found, _pruned, _declaration = self._candidate_targets(
+                receiver_type, name, arity, module, path, signature=signature,
+            )
+            targets.update((target.id, target) for target in found)
+        return list(targets.values())
+
+    def _dispatch_targets(
+        self, receiver_type: str, receiver_is_interface: bool, receiver_module: str,
+        receiver_bases: set[tuple[str, str]], contracts: list[_Method], module: str, path: str,
+    ) -> tuple[list[IntegrationMethod], bool, _Method | None]:
+        """The bodies one overload's declarations dispatch to from a
+        receiver type: see :meth:`_candidate_targets`."""
         declaration = self._most_specific(contracts)
         candidates = {candidate.method.id: candidate for contract in contracts
                       for candidate in self.implementations(contract)
@@ -3020,6 +3112,12 @@ class JavaSymbols:
             if view is not None and index is not None:
                 return view[1][index]
         owner = self.receiver_type(info, parent_receiver, receiver, depth + 1)
+        if (name, len(arguments)) in _ACCESSOR_CALLS and owner not in self.types:
+            # A JDK accessor whose receiver has no container view: the chain
+            # breaks here, which the call-edge diagnostic shows (ADR-87).
+            self.broken_accessors[(info.method.path, receiver.start_byte)] = (
+                receiver.start_point.row + 1, name,
+            )
         if owner is None:
             return None
         locations = self._type_candidates(owner, info.method.path)
@@ -3841,6 +3939,7 @@ class JavaSymbols:
     def fallback_calls(
         self, resolved_sites: set[tuple[str, int, str]], *, closed_world: bool = False,
         exact_sites: set[tuple[str, int, str]] | None = None,
+        callers: set[str] | None = None,
     ) -> list[MethodCall]:
         """Receiver-typed calls between indexed methods.
 
@@ -3857,13 +3956,17 @@ class JavaSymbols:
         resolved exactly. When one of an invocation's candidates is such a
         target, the invocation adds nothing: the engine already chose its
         implementation, and the fallback must not reopen the others.
+
+        ``callers`` limits the pass to those method IDs, as the call-edge
+        diagnostic does to read one caller's typing notes.
         """
         exact_sites = exact_sites or set()
         calls: list[MethodCall] = []
         # Witness call -> the exact call it accompanies at the same site.
         self.interface_witnesses = {}
+        self.unresolved_overloads = defaultdict(list)
         for info in self.methods.values():
-            if not info.concrete:
+            if not info.concrete or callers is not None and info.method.id not in callers:
                 continue
             source = self.units[info.method.path].source
             for invocation, context in self._call_sites(info):
@@ -3984,6 +4087,21 @@ class JavaSymbols:
                         )
                         if narrowed is not None:
                             dispatch_type, targets, pruned = narrowed
+                    if (
+                        not targets and closed_world and argument_types is not None
+                        and invocation.type != "method_reference" and receiver_type in self.types
+                    ):
+                        # Overloads the arguments cannot separate: every one
+                        # stays a possible target (ADR-87).
+                        targets = self._unresolved_overloads(
+                            receiver_type, name, arguments_count, info.module, info.method.path,
+                            argument_types,
+                        )
+                        if targets:
+                            pruned = True
+                            self.unresolved_overloads[info.method.id].append((
+                                line, name, tuple(sorted(f"{target.qualified_method}:{target.start_line}" for target in targets)),
+                            ))
                     if not targets and receiver is None:
                         static_owner = self._static_import_owner(info, name, arguments_count)
                         if static_owner is not None:

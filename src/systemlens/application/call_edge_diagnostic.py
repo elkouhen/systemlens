@@ -119,8 +119,21 @@ def _matching_methods(
     )
 
 
+def _source_symbols(inventory: ArchitectureInventory) -> list[JavaSymbols]:
+    """The Java symbol resolver over each existing source root."""
+    return [
+        JavaSymbols(
+            root,
+            inventory.integration_methods,
+            source_paths=[method.path for method in inventory.integration_methods],
+        )
+        for root in inventory.source_roots
+        if root.exists()
+    ]
+
+
 def _interface_implementation_ids(
-    inventory: ArchitectureInventory, callee: IntegrationMethod, *, module: str | None = None,
+    symbols: Sequence[JavaSymbols], callee: IntegrationMethod, *, module: str | None = None,
 ) -> set[str]:
     """Return indexed concrete implementations of an interface method.
 
@@ -128,22 +141,29 @@ def _interface_implementation_ids(
     the user asks for the interface declaration.  Reuse the source-backed Java
     symbol resolver here so method-name coincidence cannot create an alias.
     """
-    for root in inventory.source_roots:
-        if not root.exists():
-            continue
-        symbols = JavaSymbols(
-            root,
-            inventory.integration_methods,
-            source_paths=[method.path for method in inventory.integration_methods],
-        )
-        contract = symbols.methods.get(callee.id)
+    for resolver in symbols:
+        contract = resolver.methods.get(callee.id)
         if contract is not None and not contract.concrete:
             return {
                 candidate.method.id
-                for candidate in symbols.implementations(contract)
+                for candidate in resolver.implementations(contract)
                 if module is None or candidate.method.module == module
             }
     return set()
+
+
+def _typing_notes(symbols: Sequence[JavaSymbols], caller: IntegrationMethod) -> list[dict[str, object]]:
+    """Where the source pass left the caller's calls untyped (ADR-87).
+
+    The pass is re-run on the caller alone, in the closed world of the
+    ``source`` engine: calls whose overloads stayed unresolved, and JDK
+    accessor calls whose receiver has no container view.
+    """
+    for resolver in symbols:
+        if caller.id in resolver.methods:
+            resolver.fallback_calls(set(), closed_world=True, callers={caller.id})
+            return resolver.typing_notes(caller.id)
+    return []
 
 
 def _direct_engine_method_ids(
@@ -272,9 +292,10 @@ def diagnose_call_edge(
     callees = _matching_methods(
         inventory.integration_methods, callee_query, module=selected_module,
     )
+    symbols = _source_symbols(inventory) if len(callees) == 1 or len(callers) == 1 else []
     callee_alias_ids = (
         _interface_implementation_ids(
-            inventory, callees[0], module=selected_module,
+            symbols, callees[0], module=selected_module,
         )
         if len(callees) == 1 else set()
     )
@@ -335,6 +356,11 @@ def diagnose_call_edge(
         return result
 
     caller, callee = callers[0], callees[0]
+    typing_notes = _typing_notes(symbols, caller)
+    result["typing_notes"] = typing_notes
+    unresolved_lines = {
+        note["line"] for note in typing_notes if note["reason"] == "overload unresolved"
+    }
     callee_ids = {callee.id} | callee_alias_ids
     callee_alias_names = {
         method.qualified_method
@@ -353,6 +379,12 @@ def diagnose_call_edge(
             "line": edge.line,
             "dispatch_confidence": edge.dispatch_confidence,
             "inferred": edge.inferred,
+            # The persisted edge does not hold its reason: the source pass
+            # gives it again for an unresolved overload (ADR-87).
+            **(
+                {"reason": "overload unresolved"}
+                if edge.path == caller.path and edge.line in unresolved_lines else {}
+            ),
         }
         for edge in matching_edges
     ]
@@ -525,10 +557,18 @@ def render_call_edge_diagnostic_text(result: Mapping[str, object]) -> str:
         for edge in edges:
             if isinstance(edge, dict):
                 suffix = " inferred" if edge.get("inferred") else ""
+                reason = f" ({edge['reason']})" if edge.get("reason") else ""
                 lines.append(
                     f"- edge : {edge['path']}:{edge['line']} "
-                    f"confidence={edge['dispatch_confidence']}{suffix}"
+                    f"confidence={edge['dispatch_confidence']}{suffix}{reason}"
                 )
+    notes = result.get("typing_notes", [])
+    if isinstance(notes, list):
+        for note in notes:
+            if isinstance(note, dict):
+                targets = note.get("targets") or []
+                listed = f" -> {', '.join(str(target) for target in targets)}" if targets else ""
+                lines.append(f"- typage : ligne {note['line']} {note['name']} : {note['reason']}{listed}")
     flow_ids = result.get("flow_ids", [])
     if isinstance(flow_ids, list) and flow_ids:
         lines.append(f"Flux : {', '.join(str(flow_id) for flow_id in flow_ids)}")

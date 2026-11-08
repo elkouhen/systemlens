@@ -679,8 +679,9 @@ def test_a_provably_incompatible_argument_separates_same_arity_overloads(tmp_pat
     )
 
     # ``span`` cannot be a ``String`` and ``toString()`` returns one; the
-    # unknown arguments of ``put`` select nothing and it stays unresolved.
-    assert calls == [(5, 13, "exact"), (6, 14, "exact")]
+    # unknown arguments of ``put`` select nothing, so both overloads stay
+    # possible targets (ADR-87).
+    assert calls == [(5, 13, "exact"), (6, 14, "exact"), (7, 15, "possible"), (8, 15, "possible")]
 
 
 def test_a_test_source_set_never_reaches_the_call_graph(tmp_path: Path) -> None:

@@ -2364,8 +2364,9 @@ typing stopped.
    `low`, and `engine_edge_confidence: exact` drops it.
 3. A typed argument that selects one overload keeps today's behaviour:
    one target, `exact` when the dispatch rules allow it.
-4. A varargs candidate and a call on an external receiver keep today's
-   rules: no target is added.
+4. A varargs candidate, a call on an external receiver and a method
+   reference keep today's rules: no target is added. A reference whose
+   parameter types are unproven stays unresolved, as BL-37 decided.
 5. `analyze call-edge` re-runs the source pass on the caller and lists
    its typing notes: each call left with the reason `overload
    unresolved`, and each JDK accessor call (`get`, `orElse`,

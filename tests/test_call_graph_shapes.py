@@ -304,6 +304,81 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"Svc.f.Base": "exact"}),
+    Shape("S10", """
+        import com.lib.Source;
+        class Order {}
+        class Line {}
+        class Taker {
+          void take(Order o, int n) {} //@Taker.take.Order
+          void take(Line l, int n) {} //@Taker.take.Line
+          void take(Order o, String s) {} //@Taker.take.String
+        }
+        class Use {
+          Taker taker;
+          Source source;
+          void run() { //@Use.run
+            taker.take(source.next(), 1);
+          }
+        }
+        """, "Use.run", {"Taker.take.Order": "possible", "Taker.take.Line": "possible"},
+        absent=("Taker.take.String",),
+        note="ADR-87: every overload no known argument excludes"),
+    Shape("S10-typed-argument", """
+        import com.lib.Source;
+        class Order {}
+        class Line {}
+        class Taker {
+          void take(Order o) {} //@Taker.take.Order
+          void take(Line l) {} //@Taker.take.Line
+        }
+        class Use {
+          Taker taker;
+          Order order;
+          void run() { //@Use.run
+            taker.take(order);
+          }
+        }
+        """, "Use.run", {"Taker.take.Order": "exact"}, absent=("Taker.take.Line",),
+        note="a typed argument selects one overload, exact as before ADR-87"),
+    Shape("S10-method-reference", """
+        import com.lib.Source;
+        class Order {}
+        class Line {}
+        class Taker {
+          void take(Order o) {} //@Taker.take.Order
+          void take(Line l) {} //@Taker.take.Line
+        }
+        class Use {
+          Taker taker;
+          Source source;
+          void run() { //@Use.run
+            source.each(taker::take);
+          }
+        }
+        """, "Use.run", {}, absent=("Taker.take.Order", "Taker.take.Line"),
+        note="a method reference with unproven parameter types stays unresolved (BL-37)"),
+    Shape("S10-interface", """
+        import com.lib.Source;
+        class Order {}
+        class Line {}
+        interface Taker {
+          void take(Order o); //@Taker.take.Order
+          void take(Line l); //@Taker.take.Line
+        }
+        class FastTaker implements Taker {
+          public void take(Order o) {} //@FastTaker.take.Order
+          public void take(Line l) {} //@FastTaker.take.Line
+        }
+        class Use {
+          Taker taker;
+          Source source;
+          void run() { //@Use.run
+            taker.take(source.next());
+          }
+        }
+        """, "Use.run", {"FastTaker.take.Order": "possible", "FastTaker.take.Line": "possible"},
+        absent=("Taker.take.Order", "Taker.take.Line"),
+        note="each overload dispatches to its implementations; no declared row"),
     Shape("S5-widening-before-boxing", """
         class Svc {
           void m(long x) {} //@Svc.m.long
@@ -353,8 +428,8 @@ SHAPES: list[Shape] = [
             svc.m(u);
           }
         }
-        """, "Use.run", {}, absent=("Svc.m.Object", "Svc.m.Collection"),
-        note="an argument of unknown hierarchy never selects one overload"),
+        """, "Use.run", {"Svc.m.Object": "possible", "Svc.m.Collection": "possible"},
+        note="an argument of unknown hierarchy never selects one overload: both stay possible (ADR-87)"),
     Shape("S6", """
         class Base {}
         class Sub extends Base {}

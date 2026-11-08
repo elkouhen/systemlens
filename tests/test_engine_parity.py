@@ -397,6 +397,7 @@ package p;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -769,6 +770,10 @@ class CascadeCases {
   void d06() { //@D06
     orders.forEach(taker::take); //@d06
   }
+
+  void d07(Comparator<Order> cmp) { //@D07
+    taker.take(Collections.max(orders, cmp)); //@d07
+  }
 }
 
 // E02: a generic return declared on an interface and on an abstract class.
@@ -1024,6 +1029,11 @@ CASES: list[Case] = [
           ("d05", "Catalog.list", "exact"), ("d05", "Taker.takeOrder", "exact")),
     _case("D06", "D06", None,
           ("d06", "Taker.takeOrder", "exact")),
+    # ADR-87: the pass does not type ``Collections.max``, so it keeps both
+    # overloads ``possible`` where CodeQL selects ``take(Order)``.
+    _case("D07", "D07", None,
+          ("d07", "Taker.takeOrder", "exact"),
+          deviation=[("d07", "Taker.takeOrder", "possible"), ("d07", "Taker.takeLine", "possible")]),
     _case("E02", "E02", None,
           ("e02", "OrderBoxes.wrap", "exact"), ("e02", "Box.get", "exact"), ("e02", "Order.ship", "exact")),
 ]
