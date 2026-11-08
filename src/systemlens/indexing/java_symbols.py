@@ -4028,8 +4028,13 @@ class JavaSymbols:
             (this := receiver.child_by_field_name("field")) is not None and this.type == "this"
         ):
             return self._qualified_this(info, receiver)
-        if receiver.type == "field_access" and parser.node_text(source, receiver).startswith("this."):
-            return self.variable_type(info, parser.node_text(source, receiver)[5:], invocation, field_only=True)
+        if receiver.type == "field_access" and (
+            (target := receiver.child_by_field_name("object")) is not None and target.type == "this"
+            and (field := receiver.child_by_field_name("field")) is not None and field.type == "identifier"
+        ):
+            # ``this.client``: a field of the innermost class. A longer
+            # chain ``this.client.api`` is a field access on it (BC-17).
+            return self.variable_type(info, parser.node_text(source, field), invocation, field_only=True)
         if receiver.type == "field_access":
             # ``obj.field`` or ``Type.CONSTANT``: the declared field type.
             target = receiver.child_by_field_name("object")

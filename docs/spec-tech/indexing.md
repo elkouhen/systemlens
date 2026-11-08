@@ -1358,7 +1358,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 
 | # | Shape | Status | Plan |
 |---|---|---|---|
-| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors; dotted and nested generic type names | `covered` (BC-07, BC-16) | |
+| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors; dotted and nested generic type names; a field chain from `this` | `covered` (BC-07, BC-16, BC-17) | |
 | S2 | Static call and static import; an import an external supertype may shadow stays unresolved | `covered` (BC-13) | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
@@ -1569,6 +1569,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E13 | `f.go()` in an enum constant body declaring its own `f`; `Seed13.compute()` in an interface field initializer | `covered` | BC-14 |
 | E14 | `log.log("x")` on `Log14.log(String...)` with a subclass `IntLog14.log(int...)` | `covered` | BC-15 |
 | E15 | `Map.Entry<String, Order>` under `import java.util.*`; `Outer15<String>.Inner15<Order> i; i.z()` | `covered` | BC-16 |
+| E16 | `this.client.api.call()` with `Client16.api` a field of type `Api16` | `covered` | BC-17 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

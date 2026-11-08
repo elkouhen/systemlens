@@ -153,6 +153,23 @@ SHAPES: list[Shape] = [
         """, "Use.run", {"Order.ship": "exact", "Outer.Inner.z": "exact"},
         note="BC-16: Map.Entry resolves through import java.util.*; type arguments are erased by "
              "bracket depth"),
+    Shape("S1-this-chain", """
+        class Api {
+          void call() {} //@Api.call
+        }
+        class Client {
+          Api api;
+          Api next() { return api; } //@Client.next
+        }
+        class Use {
+          Client client;
+          void run() { //@Use.run
+            this.client.api.call();
+            this.client.next().call();
+          }
+        }
+        """, "Use.run", {"Api.call": "exact", "Client.next": "exact"},
+        note="BC-17: only this.field reads the innermost class's field; this.a.b is a field access on it"),
     Shape("S2", """
         class Base {
           static void util() {} //@Base.util

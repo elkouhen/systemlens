@@ -1101,6 +1101,23 @@ class Types15 {
     i.z(); //@e15.inner
   }
 }
+
+// E16: a receiver chain from this (BC-17).
+class Api16 {
+  void call() {} //@Api16.call
+}
+
+class Client16 {
+  Api16 api;
+}
+
+class Chain16 {
+  Client16 client;
+
+  void e16() { //@E16
+    this.client.api.call(); //@e16
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1379,6 +1396,8 @@ CASES: list[Case] = [
           ("e14", "Log14.log", "exact")),
     _case("E15", "E15", None,
           ("e15.entry", "Order.ship", "exact"), ("e15.inner", "Outer15.Inner15.z", "exact")),
+    _case("E16", "E16", None,
+          ("e16", "Api16.call", "exact")),
 ]
 
 
