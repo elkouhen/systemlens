@@ -701,6 +701,16 @@ SHAPES: list[Shape] = [
         }
         """, "Use.clinit", {"Service.count": "exact", "Service.warm": "exact"},
         note="ADR-75: static initializer code belongs to <clinit>"),
+    Shape("S8-interface-field", """
+        class Impl {
+          static int compute() { return 1; } //@Impl.compute
+          Impl(int i) {} //@Impl.init
+        }
+        interface Defaults { //@Defaults.clinit
+          Impl DEFAULT = new Impl(Impl.compute());
+        }
+        """, "Defaults.clinit", {"Impl.compute": "exact", "Impl.init": "exact"},
+        note="BC-14: an interface field initializer is static code of the interface's <clinit>"),
     Shape("S9", """
         class Service {
           void log(String fmt, Object... args) {} //@Service.log
@@ -1037,6 +1047,23 @@ SHAPES: list[Shape] = [
         }
         """, "Use.exec", {"Op.A.run": "possible", "Op.B.run": "possible"},
         note="each constant body is a method of the enum type, on its own line"),
+    Shape("H9-constant-field", """
+        class W {
+          void go() {} //@W.go
+        }
+        class V {
+          void go() {} //@V.go
+        }
+        enum E {
+          A {
+            W f = new W();
+            void x() { f.go(); } //@E.A.x
+          };
+          V f = new V();
+          void x() {}
+        }
+        """, "E.A.x", {"W.go": "exact"}, absent=("V.go",),
+        note="BC-14: a constant body's own field hides the enum's"),
     Shape("H10", """
         import com.example.ext.Listener;
         class Impl implements Listener {

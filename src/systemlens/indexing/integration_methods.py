@@ -104,6 +104,15 @@ def initializer_members(type_node: Node, source: bytes, *, static: bool) -> list
             member_static = True
         elif member.type == "block":
             member_static = False
+        elif member.type == "constant_declaration":
+            # An interface field is implicitly static (JLS 9.3, BC-14).
+            if not any(
+                declarator.type == "variable_declarator"
+                and declarator.child_by_field_name("value") is not None
+                for declarator in member.named_children
+            ):
+                continue
+            member_static = True
         elif member.type == "field_declaration":
             if not any(
                 declarator.type == "variable_declarator"
@@ -152,7 +161,8 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
     Every written constructor is a node, a record's compact constructor
     included (BL-39). A class or enum without one gets
     an implicit ``<init>`` node when its instance initializer code makes a
-    call; a type gets ``<clinit>`` when its static initializer code does.
+    call; a type gets ``<clinit>`` when its static initializer code does,
+    an interface's field initializers included (BC-14).
     Code that calls nothing would be a node without an edge.
     """
     found: list[InitializerDeclaration] = []
@@ -165,7 +175,7 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
                     node.start_point.row + 1, node.end_point.row + 1,
                 ))
             continue
-        if node.type not in _INITIALIZED_TYPES:
+        if node.type not in _INITIALIZED_TYPES and node.type != "interface_declaration":
             continue
         body = node.child_by_field_name("body")
         if body is None:
@@ -173,7 +183,7 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
         header = (node.start_point.row + 1, body.start_point.row + 1)
         members = type_members(node)
         if (
-            node.type != "record_declaration"
+            node.type not in {"record_declaration", "interface_declaration"}
             and not any(member.type in CONSTRUCTOR_DECLARATIONS for member in members)
             and _contains_call(initializer_members(node, source, static=False))
         ):

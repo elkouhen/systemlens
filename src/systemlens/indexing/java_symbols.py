@@ -562,6 +562,14 @@ def _is_anonymous_body(node: Node) -> bool:
     return node.type == "class_body" and node.parent is not None and node.parent.type == "object_creation_expression"
 
 
+def _is_class_scope_body(node: Node) -> bool:
+    """An anonymous class body or an enum constant's body: an unnamed class
+    whose own fields come before those of the type around it (BC-14)."""
+    return node.type == "class_body" and node.parent is not None and node.parent.type in {
+        "object_creation_expression", "enum_constant",
+    }
+
+
 _CALL_SITES = {"method_invocation", "method_reference"}
 # In-process events (PDR-16): a listener annotation and a publisher type.
 _EVENT_LISTENERS = frozenset({"EventListener", "TransactionalEventListener"})
@@ -576,7 +584,7 @@ _PATTERN_SCOPES = {
 _CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation"}
 # Nodes a switch arm's value cannot cross to reach its switch expression.
 _FUNCTIONAL_BOUNDARIES = {"lambda_expression", "method_declaration", "class_body", "constructor_declaration"}
-_INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer"}
+_INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer", "constant_declaration"}
 
 
 def _call_context(node: Node) -> Node | None:
@@ -593,7 +601,7 @@ def _call_context(node: Node) -> Node | None:
                 return current
         elif (
             current.type in _INITIALIZER_MEMBERS and current.parent is not None
-            and current.parent.type in {"class_body", "enum_body_declarations"}
+            and current.parent.type in {"class_body", "enum_body_declarations", "interface_body"}
             and not _is_anonymous_body(current.parent)
         ):
             return current
@@ -2181,7 +2189,7 @@ class JavaSymbols:
                 declarator = self._declarator(info, scope, name, invocation)
                 if declarator is not None:
                     return self._declarator_type(info, declarator)
-            if scope.type in _TYPES or _is_anonymous_body(scope):
+            if scope.type in _TYPES or _is_class_scope_body(scope):
                 declared, field_type = self._class_scope_field(info, scope, name)
                 if declared or field_only:
                     return field_type
@@ -2211,7 +2219,7 @@ class JavaSymbols:
                 declarator = self._declarator(info, scope, name, invocation)
                 if declarator is not None:
                     return self._created_local(info, name, declarator)
-            if _is_anonymous_body(scope):
+            if _is_class_scope_body(scope):
                 declared, _type = self._class_scope_field(info, scope, name)
                 if declared or field_only:
                     return None
@@ -2457,7 +2465,7 @@ class JavaSymbols:
         while scope is not None and scope != info.node:
             if self._declarator(info, scope, name, invocation) is not None:
                 return None
-            if scope.type in _TYPES or _is_anonymous_body(scope):
+            if scope.type in _TYPES or _is_class_scope_body(scope):
                 declared, _type = self._class_scope_field(info, scope, name)
                 if declared:
                     return None
@@ -3663,7 +3671,7 @@ class JavaSymbols:
                     if declarator.type_node is None or declarator.lambda_slot is not None or declarator.dimensions:
                         return None
                     return path, declarator.type_node, info.owner, None
-            if _is_anonymous_body(scope):
+            if _is_class_scope_body(scope):
                 declared, _type = self._class_scope_field(info, scope, name)
                 if declared or field_only:
                     return None
@@ -3691,9 +3699,11 @@ class JavaSymbols:
     def _class_scope_field(self, info: _Method, scope: Node, name: str) -> tuple[bool, str | None]:
         """A field ``name`` that the class ``scope`` declares or inherits.
 
-        ``scope`` is a named type declaration or an anonymous class body.
-        An anonymous class's own fields come first, then those of its source
-        supertype; an external supertype is assumed to declare none.
+        ``scope`` is a named type declaration, an anonymous class body or
+        an enum constant's body. An anonymous class's own fields come first,
+        then those of its source supertype; an external supertype is assumed
+        to declare none. A constant body's own fields come first; the enum's
+        are then found as those of the enclosing type (BC-14).
         """
         path = info.method.path
         source = self.units[path].source

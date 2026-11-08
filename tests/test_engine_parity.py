@@ -1034,6 +1034,37 @@ class Named12 extends Base12 {
     super(new Step12Impl());
   }
 }
+
+// E13: an enum constant body's own field, and an interface field
+// initializer (BC-14).
+class Walker13 {
+  void go() {} //@Walker13.go
+}
+
+class Viewer13 {
+  void go() {} //@Viewer13.go
+}
+
+enum Mode13 {
+  A {
+    Walker13 f = new Walker13();
+
+    void x() { //@E13.constant
+      f.go(); //@e13.constant
+    }
+  };
+
+  Viewer13 f = new Viewer13();
+
+  void x() {}
+}
+
+class Seed13 {
+  static int compute() { return 1; } //@Seed13.compute
+}
+
+// The implicit <clinit> spans the type header: the call shares its line.
+interface Defaults13 { int SEED = Seed13.compute(); } //@E13.interface
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1304,6 +1335,10 @@ CASES: list[Case] = [
           ("e11.catch", "Conn11.ping", "exact")),
     _case("E12", "E12", None,
           ("e12", "Step12Impl.run", "possible"), ("e12", "Step12.run", "possible")),
+    _case("E13-constant", "E13.constant", None,
+          ("e13.constant", "Walker13.go", "exact")),
+    _case("E13-interface", "E13.interface", None,
+          ("E13.interface", "Seed13.compute", "exact")),
 ]
 
 

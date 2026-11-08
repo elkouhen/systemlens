@@ -759,7 +759,8 @@ resource is in scope in the later resources and the try body, not in
 fields, and a local class the enclosing method's locals.
 An anonymous class's own fields come before those of its source
 supertype; an external supertype is assumed to declare none, a known
-limit. A field hides any field of the same name farther up the hierarchy:
+limit. An enum constant's body is such a class: its own fields come
+before the enum's (BC-14). A field hides any field of the same name farther up the hierarchy:
 the type is searched first, then its supertypes by distance. Field
 accesses and Lombok getters follow the same rule.
 A type name resolves where it is written. A type parameter of an
@@ -1100,7 +1101,8 @@ constructor is its canonical one: it takes the record components as
 parameters (BL-39). A record with no written constructor gets no node. A
 class or enum without one gets an implicit `Owner.<init>` when its field initializers or
 instance initializer blocks make a call; a type gets `Owner.<clinit>` when
-its static code does. Both implicit nodes span the type's header, from the
+its static code does. An interface's field initializers are static code
+(BC-14). Both implicit nodes span the type's header, from the
 first annotation to the opening brace, where the typed engines locate
 them. These nodes own no port, so they never start or end a flow.
 
@@ -1351,7 +1353,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
-| S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer | `covered` (ADR-75, BL-39) | |
+| S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer, an interface's included | `covered` (ADR-75, BL-39, BC-14) | |
 | S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
 | S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
@@ -1362,7 +1364,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | H6 | `super.m()` with same-arity overloads | `covered` | |
 | H7 | Interfaces: chains, abstract intermediate class, inherited body, `default` and `static` methods | `covered` | |
 | H8 | Records implementing an interface | `covered` | |
-| H9 | Enum constant bodies | `covered` | |
+| H9 | Enum constant bodies, whose own fields hide the enum's | `covered` (BC-14) | |
 | H10 | External interface implemented in the sources | `covered` (ADR-71) | |
 | H11 | External class extended in the sources (`Thread`, servlet filters); created once, unseparable overloads, visible modules | `covered` (BL-31) | |
 | H12 | `X.super.m()` on a direct superinterface or an outer class | `covered` | |
@@ -1552,6 +1554,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E10 | `register(this)` in an anonymous `Thread` and in its creating method, with `register(Runnable)` and `register(Anonymous10)` | `covered` | BC-10 |
 | E11 | `take(x)` with `Foo11 x[]`; `Foo11 a = new Foo11(), b = a.n()` beside a field `Bar11 a`; a resource `c` shadowing a field in the try body only | `covered` | BC-11 |
 | E12 | `step.run()` in a constructor that `super(() -> {})` and `super(new Step12Impl())` both reach | `covered` | BC-12 |
+| E13 | `f.go()` in an enum constant body declaring its own `f`; `Seed13.compute()` in an interface field initializer | `covered` | BC-14 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
