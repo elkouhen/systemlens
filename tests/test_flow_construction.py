@@ -8,7 +8,13 @@ from dataclasses import replace
 from pathlib import Path
 
 from systemlens.callgraph.model import MethodCall
-from systemlens.domain.code_flows import CodeFlow, CodeFlowStep, IntegrationMethod
+from systemlens.domain.code_flows import (
+    CallGraphEdge,
+    CodeFlow,
+    CodeFlowStep,
+    IntegrationMethod,
+)
+from systemlens.domain.models import MessageEndpoint
 from systemlens.indexing.code_flows import (
     _deduplicate_code_flows,
     materialize_call_graph_flows,
@@ -338,3 +344,42 @@ def test_only_a_post_commit_listener_phase_marks_after_commit(tmp_path: Path) ->
         flows = _index(_write(tmp_path / f"repo{index}", _listener(phase)))
 
         assert [flow.steps[-1].phase for flow in flows] == [expected], phase
+
+
+def test_the_reverse_call_chain_walk_is_bounded_on_fan_in() -> None:
+    """BC-28: the ``--show-call-chains`` walk keeps one route per (caller, depth).
+
+    Checking cycles per route only enumerated every simple path: twelve
+    fully connected layers of three callers printed 797,211 lines.
+    """
+    output = IntegrationMethod("out", "app", "p.Out.send", "Out.java", 1, 3, (), ("o",))
+    methods, edges, previous = [output], [], [output]
+    layers, width = 12, 3
+    for layer in range(layers):
+        current = [
+            IntegrationMethod(
+                f"m{layer}_{index}", "app", f"p.L{layer}_{index}.run",
+                f"L{layer}_{index}.java", 1, 3, (), (),
+            )
+            for index in range(width)
+        ]
+        methods += current
+        edges += [
+            CallGraphEdge(caller.id, callee.id, caller.path, 2, "exact")
+            for caller in current for callee in previous
+        ]
+        previous = current
+    endpoint = MessageEndpoint(
+        "o", "produce", "kafka", "t", False, "code", "test", "Out.java", 2, 2, "t",
+        module="app",
+    )
+    lines: list[str] = []
+
+    materialize_call_graph_flows(
+        methods, [endpoint], [], persisted_edges=edges,
+        call_chain_progress=lines.append, call_chain_module="app",
+    )
+
+    explored = [line for line in lines if "Chaîne explorée" in line]
+    assert len(explored) == 1 + layers * width
+    assert any("[arrêt profondeur=12 : limite de profondeur]" in line for line in lines)

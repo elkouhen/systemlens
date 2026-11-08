@@ -1622,6 +1622,10 @@ def materialize_call_graph_flows(
                     list[tuple[IntegrationMethod, MethodCall, bool]],
                 ] = {}
                 report_reverse_chain(output_method, output, [], explored=True)
+                # One route per (caller, depth): checking cycles per route
+                # alone enumerated every simple path, exponential on fan-in
+                # (BC-28). The walk now costs O(edges x max_hops).
+                reverse_visited: set[tuple[str, int]] = {(output_method.id, 0)}
 
                 def remember_reverse_terminal(
                     route: list[tuple[IntegrationMethod, MethodCall, bool]],
@@ -1661,6 +1665,9 @@ def materialize_call_graph_flows(
                         ):
                             remember_reverse_terminal(next_route, "cycle détecté")
                             continue
+                        if (caller.id, len(next_route)) in reverse_visited:
+                            continue
+                        reverse_visited.add((caller.id, len(next_route)))
                         report_reverse_chain(
                             output_method, output, next_route, explored=True
                         )

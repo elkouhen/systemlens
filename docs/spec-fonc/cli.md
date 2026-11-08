@@ -289,6 +289,9 @@ prefix is also printed during the join, starting at an indexed OUT method and
 walking through callers toward an indexed IN method. Constructed OUT-to-IN
 chains and terminal paths without an input are shown. Terminal paths include
 their stop reason, such as no indexed caller, a cycle, or the hop limit.
+The walk prints one chain per caller and depth: a caller reached again at
+the same depth by another route is not printed again. Its cost is
+therefore linear in the call edges times the hop limit, even on fan-in.
 
 Direct IN-to-OUT calls show the indexed entry method before the output in the
 final flow report. Every live line includes the current call depth, and every
