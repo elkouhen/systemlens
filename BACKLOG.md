@@ -3,8 +3,7 @@
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
 owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33, BL-34, BL-35, BL-39 and BL-42; each Delivery line names its
-commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
+BL-33 to BL-42; each Delivery line names its commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
 product owner's mandate, to be confirmed by them. Owner: SystemLens
@@ -89,10 +88,10 @@ defect in the join is visible in a test). A target is never invented
 | [BL-35](#bl-35) | Type the element of a container returned by a source method or held by `var` | P1 | `delivered` |
 | [BL-36](#bl-36) | Complete the JDK signature table | P1 | `delivered` |
 | [BL-37](#bl-37) | Type lambdas and method references from JDK functional types | P1 | `delivered` |
-| [BL-38](#bl-38) | Keep an overloaded call when one argument is untyped | P1 | `open` |
+| [BL-38](#bl-38) | Keep an overloaded call when one argument is untyped | P1 | `delivered` |
 | [BL-39](#bl-39) | Index record compact constructors as methods | P1 | `delivered` |
-| [BL-40](#bl-40) | Follow element-type transforms through `map` and `flatMap` | P2 | `open` |
-| [BL-41](#bl-41) | Resolve nested type arguments | P2 | `open` |
+| [BL-40](#bl-40) | Follow element-type transforms through `map` and `flatMap` | P2 | `delivered` |
+| [BL-41](#bl-41) | Resolve nested type arguments | P2 | `delivered` |
 | [BL-42](#bl-42) | Type enum `valueOf`/`values`, array `var` loops and `null` ternaries | P2 | `delivered` |
 | [BL-43](#bl-43) | Add a documented Spring signature table | P2 | `open` |
 | [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `open` |
@@ -355,7 +354,23 @@ decision the owner has not taken.
   `exact` rule; the owner decides whether an ADR is wanted. The typing
   reviewer recommended fixing the typing first (BL-35, BL-37) and the
   lead proposes this as the robustness fallback.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-87, accepted under the owner's mandate and to be
+  confirmed, gives the rule. In the closed world, unseparable same-arity
+  overloads each reach their targets as `possible` edges; a provably
+  excluded overload, a varargs candidate, a method reference and the
+  open-world gap filler keep their rules (commit `262b404`).
+
+  `analyze call-edge` re-runs the source pass on the caller and lists
+  `typing_notes`: `overload unresolved` sites, whose edges carry that
+  reason, and `accessor chain broken` sites (Appendix B.6). New parity
+  case D07 (`Collections.max` argument) is a documented deviation:
+  CodeQL selects `take(Order)` `exact`.
+
+  Call shapes S10 and two diagnostic tests add the negative cases;
+  S5-unknown-stays-open now expects both overloads `possible`.
+  Train-ticket and lab unchanged: no new edge, no confidence change.
+  Commit `0c5ada3`.
 - **Why P1:** robustness: it bounds the damage of every remaining typing
   gap to one edge.
 
@@ -404,7 +419,16 @@ decision the owner has not taken.
   is one expression the pass types; anything else keeps the chain
   untyped. The cases pass.
 - **Depends on:** BL-33, BL-36.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `map` and `flatMap` of a stream or an `Optional`, and a
+  future's `thenApply` and `thenCompose`, take the new element from a
+  method reference with one declared arity (0 or 1) and a written,
+  non-variable return type, or from `_lambda_result`, which also reads
+  agreeing `return`s. `flatMap` needs a container of the same kind.
+
+  A18, A24 and A41 pass; call shapes T18 add the negative cases. The
+  code-flow signature moves to `code-flow-v54-overloads-and-transforms`.
+  Train-ticket and lab counts unchanged. Commit `2831eb1`.
 - **Why P2:** rare on the reference projects, more code than the other
   typing items.
 
@@ -423,7 +447,15 @@ decision the owner has not taken.
   nesting; the cases pass. A design note in `docs/SPEC-TECH.md` records
   the data structure change.
 - **Depends on:** BL-33, BL-35.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** a view argument may be a nested view (`_Nested`, one
+  level deep) when it is a JDK container; its own type variables are
+  substituted. Accessors return it, `entrySet()` gives `Map.Entry`
+  elements and a `var` loop takes it. The BL-26 environment keeps flat
+  arguments. The design note is in `docs/spec-tech/indexing.md`.
+
+  A39 and A43 pass; call shapes T17 add the negative cases. Train-ticket
+  and lab counts unchanged. Commit `12c33a5`.
 - **Why P2:** changes shared data structures; moderate frequency.
 
 <a id="bl-42"></a>
@@ -853,4 +885,4 @@ Decisions the product owner may want to take, and facts worth keeping.
 6. **Diagnostic on a broken chain.** In `receiver_type`, an accessor
    name with no view falls through to the owner path, which cannot
    succeed for a JDK owner; a diagnostic there would show where a chain
-   broke on a real project. Fold into BL-38's call-edge diagnostic.
+   broke on a real project. Folded into BL-38's call-edge diagnostic.
