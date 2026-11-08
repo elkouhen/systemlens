@@ -7,8 +7,9 @@ owner, who asked for it to be implemented. Fully processed on
 each Delivery line names its commit and tests. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
-product owner's mandate, to be confirmed by them. Owner: SystemLens
-implementer. Reviewer: product owner. Baseline: `main` at `b8f23a0`.
+product owner's mandate; the owner confirmed them on 2026-11-08.
+Owner: SystemLens implementer. Reviewer: product owner. Baseline:
+`main` at `b8f23a0`.
 
 The previous backlog (BL-21 to BL-32, source-vs-CodeQL alignment) is
 fully delivered and lives in Git at `f3a94e5`. Item IDs continue its
@@ -356,7 +357,7 @@ decision the owner has not taken.
   reviewer recommended fixing the typing first (BL-35, BL-37) and the
   lead proposes this as the robustness fallback.
 - **Status:** `delivered`.
-- **Delivery:** ADR-87, accepted under the owner's mandate and to be
+- **Delivery:** ADR-87, accepted under the owner's mandate and
   confirmed, gives the rule. In the closed world, unseparable same-arity
   overloads each reach their targets as `possible` edges; a provably
   excluded overload, a varargs candidate, a method reference and the
@@ -521,7 +522,7 @@ decision the owner has not taken.
   hold a hand-kept table of external signatures, its version policy and
   the `<S extends T> S save(S)` rule.
 - **Status:** `delivered`.
-- **Delivery:** ADR-90, accepted on 2026-11-08 under the mandate, to be
+- **Delivery:** ADR-90, accepted on 2026-11-08 under the mandate and
   confirmed (commit `e354e79`). `_REPOSITORY_RETURNS` types `findById`,
   `findAll()`, `findAllById` and `save` of `CrudRepository`,
   `ListCrudRepository` and `JpaRepository` through the source `extends`
@@ -587,7 +588,7 @@ decision the owner has not taken.
   is filtered by type argument).
 - **Status:** `delivered`.
 - **Delivery:** ADR-81 amendment, accepted on 2026-11-08 under the
-  mandate, to be confirmed (commit `21ebcfd`). Two concrete arguments
+  mandate and confirmed (commit `21ebcfd`). Two concrete arguments
   exclude an implementor only when they differ and are not related by
   subtyping, as far as the sources and the final JDK classes prove it;
   a filter that would exclude every target does not apply. Shapes s3
@@ -626,7 +627,7 @@ decision the owner has not taken.
 - **Depends on:** BL-33; a new ADR extending ADR-86 to returns, unions
   and call context.
 - **Status:** `delivered`.
-- **Delivery:** ADR-89, accepted on 2026-11-08 under the mandate, to be
+- **Delivery:** ADR-89, accepted on 2026-11-08 under the mandate and
   confirmed (commit `21ebcfd`). Cases B10, B39 and shapes s17, s19 give
   CodeQL's rows; call shapes T19 to T21 hold the negatives, and parity
   cases E04, E05 compare with CodeQL. CodeQL's raw rows at E04 include
@@ -666,7 +667,7 @@ decision the owner has not taken.
 - **Depends on:** an amendment of ADR-43.
 - **Status:** `delivered`.
 - **Delivery:** the ADR-43 amendment of 2026-11-08 (commit `13b7e3c`)
-  is accepted under the mandate, to be confirmed. The traversal state
+  is accepted under the mandate and confirmed. The traversal state
   carries whether every hop runs on `this`; `JavaSymbols.receiver_sites`
   reads each call's receiver, and a call without receiver to a target
   outside the caller's hierarchy leaves `this` too. Each persisted edge
@@ -701,7 +702,7 @@ decision the owner has not taken.
   sentence is replaced.
 - **Depends on:** an ADR (the entry method of an inherited route).
 - **Status:** `delivered`.
-- **Delivery:** ADR-88, accepted on 2026-11-08 under the mandate, to be
+- **Delivery:** ADR-88, accepted on 2026-11-08 under the mandate and
   confirmed (commit `6248844`). An inherited route's snippet names the
   declaring method's file and line; `materialize_integration_methods`
   gives the route to that method, and the join runs it with the
@@ -737,7 +738,7 @@ decision the owner has not taken.
   triggers; `extraction-rules.md` lists them.
 - **Depends on:** a PDR entry.
 - **Status:** `delivered`.
-- **Delivery:** PDR-16, accepted on 2026-11-08 under the mandate, to be
+- **Delivery:** PDR-16, accepted on 2026-11-08 under the mandate and
   confirmed (commit `6248844`). `@RabbitListener` (with class-level
   `@RabbitHandler`) and `@JmsListener` are consume endpoints and pair
   with a publication of the same system and channel in another module

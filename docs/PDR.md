@@ -25,7 +25,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-13](#pdr-13-init-chooses-the-engine-and-the-strategy-separately) | `init` chooses the engine and the strategy separately | Yes, product owner |
 | [PDR-14](#pdr-14-a-two-finger-scroll-pans-and-a-pinch-zooms) | A two-finger scroll pans and a pinch zooms | Yes, product owner |
 | [PDR-15](#pdr-15-a-flow-ends-on-an-effect-and-rabbit-and-jms-publications-are-effects) | A flow ends on an effect; Rabbit and JMS publications are effects | Yes, product owner |
-| [PDR-16](#pdr-16-rabbit-jms-events-and-startup-code-start-flows) | Rabbit, JMS, events and startup code start flows | Yes, product owner; to be confirmed |
+| [PDR-16](#pdr-16-rabbit-jms-events-and-startup-code-start-flows) | Rabbit, JMS, events and startup code start flows | Yes, product owner |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -442,8 +442,8 @@ flows. The `GET /ping` probe keeps no flow; a regression test asserts it.
 ## PDR-16: Rabbit, JMS, events and startup code start flows
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-implement the internal-flow backlog; to be confirmed by the product
-owner (BL-49). It replaces points 1 and 4 of the proposed PDR-11.
+implement the internal-flow backlog, and confirmed by the product owner
+the same day (BL-49). It replaces points 1 and 4 of the proposed PDR-11.
 
 **Problem:** a flow starts only at a REST route, a Kafka consumption or a
 `@Scheduled` method. On the flow probe, `@RabbitListener`,

@@ -810,8 +810,8 @@ while base-typed fields retain explicit alternatives. Runtime bean selection,
 generic substitution that cannot be proven, and reflection remain unresolved.
 
 Amendment of 2026-11-08 (BL-47). Status: accepted on 2026-11-08 under the
-product owner's mandate to implement the internal-flow backlog; to be
-confirmed by the product owner.
+product owner's mandate to implement the internal-flow backlog, and
+confirmed by the product owner the same day.
 
 The entry-subtype restriction assumes that the receiver of the inherited
 body is the entry instance. That holds only while every hop since the
@@ -2145,8 +2145,8 @@ and checks the declaring type rather than a narrowed one; both widen the
 check, never narrow it.
 
 Amendment of 2026-11-08 (BL-45). Status: Accepted on 2026-11-08 under
-the product owner's mandate to implement the internal-flow backlog; to be
-confirmed by the product owner.
+the product owner's mandate to implement the internal-flow backlog, and
+confirmed by the product owner the same day.
 
 Context: the dispatch index is keyed by erased type. A field
 `MessageHandler<String> handler` dispatches to every implementor of
@@ -2417,8 +2417,8 @@ flows and 1712 edges between indexed methods.
 ## ADR-87: Keep every overload of a call the arguments cannot separate
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-implement the internal-flow backlog; to be confirmed by the product
-owner. Backlog item BL-38. Folds in Appendix B.6 of that backlog.
+implement the internal-flow backlog, and confirmed by the product owner
+the same day. Backlog item BL-38. Folds in Appendix B.6 of that backlog.
 
 **Context:** The source pass picks one overload of a call by its argument
 types (JLS 15.12.2). When the arity matches several overloads and an
@@ -2463,8 +2463,8 @@ is unchanged.
 ## ADR-88: Own an inherited route by the inherited method
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-implement the internal-flow backlog; to be confirmed by the product
-owner. Backlog item BL-48.
+implement the internal-flow backlog, and confirmed by the product owner
+the same day. Backlog item BL-48.
 
 **Context:** a mapping declared on a base controller or an interface,
 and not overridden, belongs to the controller that inherits it (BL-04).
@@ -2497,8 +2497,8 @@ same method can appear as the entry of several flows, one per inheritor.
 ## ADR-89: Narrow a receiver by returned creations, ternaries and call context
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-implement the internal-flow backlog; to be confirmed by the product
-owner. Backlog item BL-46. Extends ADR-86.
+implement the internal-flow backlog, and confirmed by the product owner
+the same day. Backlog item BL-46. Extends ADR-86.
 
 **Context:** ADR-86 narrows a local or a `final` field that holds one
 created value. Three shapes CodeQL narrows by type flow stay at the
@@ -2560,8 +2560,8 @@ call's declaration, stays untyped as before.
 ## ADR-90: Hold a documented table of Spring signatures in the source engine
 
 **Status:** Accepted on 2026-11-08 under the product owner's mandate to
-implement the internal-flow backlog; to be confirmed by the product
-owner. Backlog items BL-43 and BL-44.
+implement the internal-flow backlog, and confirmed by the product owner
+the same day. Backlog items BL-43 and BL-44.
 
 **Context:** The `source` engine reads no jar. A method inherited from
 an external generic supertype has no source declaration, so its return
