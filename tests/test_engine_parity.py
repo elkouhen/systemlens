@@ -1,10 +1,11 @@
 """Engine parity: the ``source`` engine against CodeQL on the alignment shapes.
 
-Two fixture files hold every shape the ``source`` engine and the CodeQL
+Three fixture files hold every shape the ``source`` engine and the CodeQL
 query were measured on: ``FIXTURE`` the alignment shapes (rows A1 to A10
 and B1 to B6 of the engine-parity table in ``docs/spec-tech/indexing.md``),
 ``REVIEW_FIXTURE`` the shapes of the 2026-11-08 review (two-digit rows such
-as A01 or C14, and E02 to E05). They tag lines as
+as A01 or C14, and E02 to E05), and ``COPILOT_FIXTURE`` those of the
+Copilot backlog (E06 on). They tag lines as
 ``tests/test_call_graph_shapes.py`` does, with a trailing ``//@Tag``
 comment: each caller's declaration line, each target's declaration line,
 and each call line.
@@ -41,6 +42,7 @@ from systemlens.indexing.java_symbols import JavaSymbols
 
 _PATH = "app/src/main/java/p/Shapes.java"
 _REVIEW_PATH = "app/src/main/java/p/Review.java"
+_COPILOT_PATH = "app/src/main/java/p/Copilot.java"
 _TAG = re.compile(r"//@([\w.]+)\s*$")
 
 FIXTURE = """\
@@ -857,7 +859,32 @@ class PrinterCases {
 }
 """
 
-_SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE}
+# The Copilot backlog (backlog-copilot.md): one section per BC item.
+COPILOT_FIXTURE = """\
+package p;
+
+// E06: the implicit supertypes of an enum and a record (BC-06).
+enum Tint { RED }
+
+record Point(int x) {}
+
+class Implicit {
+  void o(Object x) {} //@Implicit.oObject
+  void o(Enum<?> x) {} //@Implicit.oEnum
+  void r(Object x) {} //@Implicit.rObject
+  void r(Record x) {} //@Implicit.rRecord
+  void c(Comparable<?> x) {} //@Implicit.cComparable
+  void c(Runnable x) {} //@Implicit.cRunnable
+
+  void e06() { //@E06
+    o(Tint.RED); //@e06.enum
+    r(new Point(1)); //@e06.record
+    c(Tint.RED); //@e06.comparable
+  }
+}
+"""
+
+_SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
 
 Row = tuple[str, str, str]
 
@@ -1107,6 +1134,9 @@ CASES: list[Case] = [
           deviation=[("e04", "CsvPrinter.print", "possible"), ("e04", "JsonPrinter.print", "possible")]),
     _case("E05", "E05", None,
           ("e05", "CsvPrinter.print", "exact"), ("e05", "Printer.print", "possible")),
+    _case("E06", "E06", None,
+          ("e06.enum", "Implicit.oEnum", "exact"), ("e06.record", "Implicit.rRecord", "exact"),
+          ("e06.comparable", "Implicit.cComparable", "exact")),
 ]
 
 

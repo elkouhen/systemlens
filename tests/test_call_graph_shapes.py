@@ -414,6 +414,31 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Svc.k.long": "exact", "Svc.f.float": "exact"},
         note="review S4: a literal's suffix gives its type"),
+    Shape("S5-implicit-supertypes", """
+        enum Color { RED }
+        record Pt(int x) {}
+        class Svc {
+          void o(Object x) {} //@Svc.o.Object
+          void o(Enum<?> x) {} //@Svc.o.Enum
+          void m(Enum<?> x) {} //@Svc.m.Enum
+          void m(String x) {} //@Svc.m.String
+          void r(Object x) {} //@Svc.r.Object
+          void r(Record x) {} //@Svc.r.Record
+          void c(Comparable<?> x) {} //@Svc.c.Comparable
+          void c(Runnable x) {} //@Svc.c.Runnable
+        }
+        class Use {
+          Svc svc;
+          void run() { //@Use.run
+            svc.o(Color.RED);
+            svc.m(Color.RED);
+            svc.r(new Pt(1));
+            svc.c(Color.RED);
+          }
+        }
+        """, "Use.run",
+        {"Svc.o.Enum": "exact", "Svc.m.Enum": "exact", "Svc.r.Record": "exact", "Svc.c.Comparable": "exact"},
+        note="BC-06: an enum is an Enum, Comparable, Serializable and Constable; a record is a Record"),
     Shape("S5-unknown-stays-open", """
         import java.util.ArrayList;
         import java.util.Collection;

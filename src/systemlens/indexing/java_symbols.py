@@ -182,6 +182,14 @@ _FINAL_JDK_SUPERTYPES: dict[str, frozenset[str]] = {
         "java.lang.Object", "java.io.Serializable", "java.lang.Comparable", "java.lang.constant.Constable",
     }) for name in ("Boolean", "Character")},
 }
+# The supertypes every enum and every record has without writing them
+# (JLS 8.9, 8.10): ``Enum<E>`` and its interfaces, and ``Record`` (BC-06).
+_IMPLICIT_SUPERTYPES: dict[str, frozenset[str]] = {
+    "enum_declaration": frozenset({
+        "java.lang.Enum", "java.lang.Comparable", "java.io.Serializable", "java.lang.constant.Constable",
+    }),
+    "record_declaration": frozenset({"java.lang.Record"}),
+}
 # The supertypes of every array type (JLS 4.10.3).
 _ARRAY_SUPERTYPES = frozenset({"java.lang.Object", "java.lang.Cloneable", "java.io.Serializable"})
 # Functional JDK interfaces: a lambda or method reference can implement them
@@ -1797,7 +1805,9 @@ class JavaSymbols:
             if any(owner == parameter for owner, _module in ancestors):
                 return True
             externals = {base for ancestor in ancestors for base in self.external_bases.get(ancestor, ())}
-            if parameter in externals:
+            if parameter in externals or any(
+                parameter in self._implicit_supertypes(ancestor) for ancestor in ancestors
+            ):
                 return True
             if parameter in self.types or parameter in _FIXED_SUPERTYPES:
                 # No external type extends a source type, and a source type
@@ -2451,11 +2461,17 @@ class JavaSymbols:
             }
         return self._context_methods.get((path, context.start_byte, context.end_byte))
 
+    def _implicit_supertypes(self, owner: tuple[str, str]) -> frozenset[str]:
+        """The JDK supertypes a source enum or record has without naming
+        them (BC-06): empty for any other type."""
+        kinds = {node.type for _path, node in self._module_locations(*owner)}
+        return frozenset().union(*(_IMPLICIT_SUPERTYPES.get(kind, frozenset()) for kind in kinds))
+
     def _subtype_of(self, owner: str, module: str, supertype: str) -> bool:
         """Whether ``owner`` extends or implements ``supertype``, through its
         source ancestors and the external types they name directly."""
         for ancestor in self.ancestors(owner, module):
-            if ancestor[0] == supertype:
+            if ancestor[0] == supertype or supertype in self._implicit_supertypes(ancestor):
                 return True
             for base in self.external_bases.get(ancestor, ()):
                 if base == supertype or supertype in _KNOWN_EXTERNAL_SUPERTYPES.get(base or "", ()):

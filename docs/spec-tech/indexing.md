@@ -790,7 +790,9 @@ Same-arity overloads follow Java's phases. The first allows identity,
 widening primitive conversion and subtyping; the second adds boxing and
 unboxing. The first phase with an applicable overload keeps its most
 specific one. Subtyping is known for source types, the external interfaces
-they list, `String` and the boxes.
+they list, `String` and the boxes. A source enum also has the supertypes it
+does not write, `Enum`, `Comparable`, `Serializable` and `Constable`, and a
+record has `Record` (BC-06).
 A phase decides only when every argument and parameter type is known and
 no overload's applicability depends on an unknown hierarchy. Otherwise the
 pass drops only the overloads a known argument provably cannot reach.
@@ -1321,7 +1323,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S2 | Static call and static import | `covered` | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
-| S5 | Overload by argument type: subtype, widening before boxing, literal suffixes | `covered` | |
+| S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
 | S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer | `covered` (ADR-75, BL-39) | |
@@ -1426,8 +1428,11 @@ under the review's numbering. A missing number is a shape on which the
 engines already agree, or D03, which is invalid Java. E02 is the generic
 return of the review's Appendix B.4, E03 the dispatch BL-45 filters by
 type argument, and E04 and E05 the ternary and call-context narrowing of
-BL-46. CodeQL types the A-family library
-shapes from the jars it fetches while it builds its database.
+BL-46. CodeQL types the A-family library shapes from the jars it fetches
+while it builds its database.
+
+Rows E06 on are the shapes of the Copilot backlog's BC items
+(`backlog-copilot.md`), in a third fixture file.
 
 | # | Shape | Status | Item |
 |---|---|---|---|
@@ -1515,6 +1520,7 @@ shapes from the jars it fetches while it builds its database.
 | E03 | `Codec<String> codec; codec.encode(..)` with `TextCodec implements Codec<String>` and `BinaryCodec implements Codec<byte[]>` | `covered` | BL-45 |
 | E04 | `Printer chosen = flag ? csv : json; chosen.print()` with a third `XmlPrinter` | `covered` | BL-46; E04 omits CodeQL's declared row `Printer.print`, whose rebuilt dispatch reaches `XmlPrinter` (ADR-89) |
 | E05 | `printer.print()` in a private `printWith(Printer)` whose one call passes a `CsvPrinter` field | `covered` | BL-46 |
+| E06 | `o(Tint.RED)`, `r(new Point(1))` and `c(Tint.RED)` against `Object`, `Enum`, `Record`, `Comparable` and `Runnable` overloads | `covered` | BC-06 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
