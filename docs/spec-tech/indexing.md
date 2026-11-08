@@ -909,12 +909,12 @@ searches interface `X`, or the superclass of an enclosing class `X`.
 The pass matches each indexed method to its declaration by start line,
 end line and written signature, so two methods on one line stay distinct
 in the symbol table. The join locates a method by name, path and start
-line. When two same-name overloads share that line, the CodeQL row's
-declared parameter types choose between them: each side is reduced to
-simple erased names (`java.util.List<String>` is `List`, `String...` is
+line. When two same-name overloads share that line, the row's declared
+parameter types choose between them: each side is reduced to simple
+erased names (`java.util.List<String>` is `List`, `String...` is
 `String[]`). The indexed method has no column, so the types replace it.
-The source pass's rows carry no types, so its edge to one of two such
-overloads is still dropped, and so is a CodeQL edge when an indexed
+CodeQL rows and the source pass's rows both carry the caller's and the
+callee's types (BC-23). An edge is still dropped when an indexed
 signature is unknown or the types name no difference.
 
 The closed world adds two shapes of the CodeQL query (ADR-70). When the
@@ -1387,7 +1387,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
-| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
+| S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the join of both engines (BC-23) | |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)`; constructor reference `X::new` | `covered` (ADR-75, BC-19) | |
 | S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer, an interface's included; an enum constant's arguments and constructor | `covered` (ADR-75, BL-39, BC-14, BC-18) | |
 | S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
@@ -1619,6 +1619,8 @@ signature to `code-flow-v57-dispatch-precision`, and BL-43 and BL-44 to
 a URL credential re-extracts every file and drops it. BC-06 to BC-16 moved
 the code-flow signature to `code-flow-v59-java-semantics`: they change the
 edges, and BC-14 the initializer nodes, of unchanged sources.
+BC-17 to BC-23 moved it to `code-flow-v60-lost-edges`: they add edges,
+and BC-18 enum `<clinit>` nodes, to unchanged sources.
 
 ### Internal-flow shapes
 

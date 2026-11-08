@@ -5158,6 +5158,7 @@ class JavaSymbols:
                         info.method.qualified_method, info.method.path, info.method.start_line,
                         listener.method.qualified_method, listener.method.path,
                         listener.method.start_line, line, "possible",
+                        info.method.parameter_types, listener.method.parameter_types,
                     )
                     for listener, listened in listeners
                     if listened in received
@@ -5362,6 +5363,7 @@ class JavaSymbols:
                         MethodCall(
                             info.method.qualified_method, info.method.path, info.method.start_line,
                             target.qualified_method, target.path, target.start_line, line, dispatch,
+                            info.method.parameter_types, target.parameter_types,
                         )
                         for target in targets
                         if (info.method.id, line, target.id) not in resolved_sites
@@ -5631,6 +5633,9 @@ class JavaSymbols:
                     MethodCall(
                         info.method.qualified_method, info.method.path, info.method.start_line,
                         target.qualified_method, target.path, target.start_line, line, dispatch,
+                        # Same-name overloads on one line share the
+                        # locator: the join tells them apart by these (BC-23).
+                        info.method.parameter_types, target.parameter_types,
                     )
                     for target in targets
                     if (info.method.id, line, target.id) not in resolved_sites
@@ -5644,6 +5649,7 @@ class JavaSymbols:
                     witness_call = replace(
                         site_calls[0], callee=witness.qualified_method, callee_path=witness.path,
                         callee_line=witness.start_line, dispatch_confidence="possible",
+                        callee_parameter_types=witness.parameter_types,
                     )
                     calls.append(witness_call)
                     self.interface_witnesses[witness_call] = site_calls[0]

@@ -44,7 +44,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v59-java-semantics"
+CODE_FLOW_SIGNATURE = "code-flow-v60-lost-edges"
 _TRIGGER_ROLES = {("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS)}
 _EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
@@ -1144,7 +1144,10 @@ def _build_call_graph(
             resolved_sites, closed_world=closed_world, exact_sites=exact_resolved_sites,
         ):
             caller = locate_caller(call)
-            resolved_target = locate(call.callee, call.callee_path, call.callee_line)
+            resolved_target = locate(
+                call.callee, call.callee_path, call.callee_line,
+                parameter_types=call.callee_parameter_types,
+            )
             if caller is None or resolved_target is None:
                 continue
             target = resolved_target[0]
@@ -1156,7 +1159,10 @@ def _build_call_graph(
             synthetic_calls.add(call)
             exact_call = symbols.interface_witnesses.get(call)
             implementation = (
-                locate(exact_call.callee, exact_call.callee_path, exact_call.callee_line)
+                locate(
+                    exact_call.callee, exact_call.callee_path, exact_call.callee_line,
+                    parameter_types=exact_call.callee_parameter_types,
+                )
                 if exact_call is not None else None
             )
             if exact_call is not None and implementation is not None:
@@ -1189,7 +1195,10 @@ def _build_call_graph(
     if symbols is not None:
         for call in symbols.event_dispatch_calls():
             caller = locate_caller(call)
-            listener = locate(call.callee, call.callee_path, call.callee_line)
+            listener = locate(
+                call.callee, call.callee_path, call.callee_line,
+                parameter_types=call.callee_parameter_types,
+            )
             if caller is None or listener is None or not visible(caller, listener[0]):
                 continue
             synthetic_calls.add(call)

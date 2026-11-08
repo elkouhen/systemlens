@@ -572,3 +572,33 @@ def test_engine_methods_never_duplicate_an_indexed_method(tmp_path: Path) -> Non
         ("example.Outer.annotated", 3),
         ("example.Outer.plain", 8),
     ]
+
+
+def test_source_calls_reach_same_line_overloads(tmp_path: Path) -> None:
+    """BC-23: overloads declared on one line share a name, a file and a line.
+
+    The join tells them apart by the parameter types a call carries. The
+    symbol pass left them out, so ``locate`` found two candidates and
+    dropped every edge to or from such an overload.
+    """
+    path = "app/src/main/java/p/Over.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(
+        "package p;\n"
+        "class Over { void f(int x) {} void f(String s) {} }\n"
+        "class Use {\n"
+        "  void run(Over o) {\n"
+        "    o.f(1);\n"
+        "    o.f(\"a\");\n"
+        "  }\n"
+        "}\n"
+        "class Callers { void t() {} void g(int x) { t(); } void g(String s) { t(); } }\n",
+        encoding="utf-8",
+    )
+    edges = _derived_query_edges(tmp_path, [path], [], closed_world=True)
+    assert sorted((caller, callee, line) for caller, callee, line, _confidence, _inferred in edges) == [
+        ("p.Callers.g", "p.Callers.t", 9),
+        ("p.Callers.g", "p.Callers.t", 9),
+        ("p.Use.run", "p.Over.f", 5),
+        ("p.Use.run", "p.Over.f", 6),
+    ]
