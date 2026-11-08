@@ -251,6 +251,15 @@ index; non-Java build outputs remain excluded. SystemLens does not invoke
 compile or test tasks. Maven must find its plugins and dependencies in the
 local cache.
 
+A Maven project with a `mvnw` wrapper at its root runs `./mvnw`; otherwise
+SystemLens runs `mvn` from the `PATH`. A Gradle project runs only through
+its own `gradlew`. A Gradle project that no `gradlew` generates is skipped
+with a progress line that names it.
+
+A build tool that is missing or not executable, a failed phase, or the
+engine time limit stops the index. The CLI then prints
+`Indexation impossible : <cause>` and exits with status 2.
+
 ## Engine progress and recovery
 
 When the engine reaches its time limit, the CLI prints `systemlens index`

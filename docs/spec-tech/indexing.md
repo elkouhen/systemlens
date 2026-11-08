@@ -1145,6 +1145,11 @@ analysis. Other non-Java build output remains excluded. The repository is not
 compiled or tested; Maven generation uses the local cache and can therefore
 fail when the required plugin or dependency is unavailable.
 
+`indexing/source_generation.py` prefers a project's `mvnw` over `mvn` and
+reports each outermost Gradle project that no generation root covers.
+Every failure, including `OSError` from `Popen` and the timeout, is raised
+as `SourceGenerationError`, a `RuntimeError` the CLI prints.
+
 The call query keeps both caller and callee in source code, folds exact
 dispatch before viable-dispatch expansion, and computes that resolution once
 per call. The Python post-processing has two distinct stages: it first resolves
