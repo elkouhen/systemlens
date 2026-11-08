@@ -768,6 +768,11 @@ def run_call_graph_stage(
                 "jointure des méthodes...",
             )
         timer.begin("call-graph-join", f"→ {engine_label} : jointure des méthodes et matérialisation des flux...")
+        # Without prepared flows the engine timed out. A module refresh then
+        # joins over the persisted graph and leaves it untouched: its sink
+        # would replace the view with the few rows obtained before the
+        # deadline (BC-29).
+        refresh_timed_out = refresh_call_graph_view and call_graph_timed_out
         call_graph_flows = prepared_call_graph_flows if prepared_call_graph_flows is not None else materialize_call_graph_flows(
             methods, flow_endpoints(), calls, repo_root=repo_root,
             modules=relation_modules,
@@ -784,7 +789,9 @@ def run_call_graph_stage(
             join_checkpoint=publish_join_checkpoint,
             resume_from_entry=resume_join_entries,
             initial_flows=resume_join_flows,
-            call_graph_sink=persist_call_graph,
+            call_graph_sink=None if refresh_timed_out else persist_call_graph,
+            persisted_edges=persisted_call_edges if refresh_timed_out else None,
+            persisted_methods=persisted_call_graph_methods if refresh_timed_out else (),
         )
         # AST and the interprocedural engine can describe the same
         # endpoint-to-endpoint flow. One merge, shared with ``flows

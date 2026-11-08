@@ -39,6 +39,11 @@ is intentionally module-scoped to support creating the method view gradually;
 passing `--engine-database` reuses the same global CodeQL database for each
 module refresh.
 
+A refresh that reaches the engine deadline keeps the persisted method rows
+and call edges unchanged. The join rebuilds the flows from that persisted
+graph, and the snapshot is marked `partial`, so the next index retries the
+engine.
+
 The `systemlens flows calculate` command reconstructs the complete persisted
 flow snapshot from stored endpoints, integration methods, call edges, modules,
 data operations and `graph_facts`. It does not extract endpoints or run an
