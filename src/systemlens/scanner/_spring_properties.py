@@ -93,6 +93,22 @@ def _candidate_spring_roots(repo_root: Path, source_path: str | None) -> list[Pa
 def _discover_spring_property_files(
     repo_root_str: str, source_path: str | None
 ) -> tuple[str, ...]:
+    """Spring property files visible from ``source_path``, nearest first.
+
+    The answer depends only on the source's directory, so it is cached per
+    directory for the indexing pass (BC-39): every lookup from one class,
+    or one package, globs the configuration directories once.
+    """
+    directory = None if source_path is None else Path(source_path).parent.as_posix()
+    return _discover_spring_property_files_from(repo_root_str, directory)
+
+
+@lru_cache(maxsize=1024)
+def _discover_spring_property_files_from(
+    repo_root_str: str, directory: str | None
+) -> tuple[str, ...]:
+    # A file name stands for its directory: the roots are its ancestors.
+    source_path = None if directory is None else f"{directory}/_"
     repo_root = Path(repo_root_str)
     discovered: list[str] = []
     seen: set[Path] = set()

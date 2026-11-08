@@ -785,3 +785,45 @@ def test_an_empty_allowed_path_list_projects_no_source(tmp_path: Path) -> None:
 
     assert project_java_sources(tmp_path / "repo", tmp_path / "all") == 1
     assert project_java_sources(tmp_path / "repo", tmp_path / "none", allowed_paths=[]) == 0
+
+
+def test_the_inventory_walk_prunes_dependency_and_build_trees(tmp_path: Path) -> None:
+    """BC-39: the walk entered ``.git``, ``node_modules`` and ``target``.
+
+    The configured ``node_modules/**`` matched the root only, so a
+    module's ``node_modules`` was inventoried. Like the build-layout walk,
+    the inventory skips them at any depth, and a build output directory
+    outside ``src``; ``target`` stays when generated sources are requested.
+    """
+    _write(tmp_path / "svc/pom.xml", POM.format(name="svc", deps=""))
+    _write(tmp_path / "svc/src/main/java/demo/Ctl.java", CONTROLLER)
+    _write(tmp_path / "svc/src/main/java/demo/target/Kept.java", "class Kept {}")
+    _write(tmp_path / "svc/node_modules/pkg/README.md", "# topic manifest?")
+    _write(tmp_path / "svc/.git/config", "[core]")
+    _write(tmp_path / "svc/target/generated-sources/G.java", "class G {}")
+
+    assert sorted(list_repo_files(tmp_path, Config())) == [
+        "svc/pom.xml",
+        "svc/src/main/java/demo/Ctl.java",
+        "svc/src/main/java/demo/target/Kept.java",
+    ]
+    assert "svc/target/generated-sources/G.java" in list_repo_files(
+        tmp_path, Config(), include_generated_sources=True,
+    )
+
+
+def test_spring_property_files_are_discovered_once_per_directory(tmp_path: Path) -> None:
+    """BC-39: each property lookup globbed the configuration directories."""
+    from systemlens.scanner import _spring_properties as properties
+
+    repo = _service(tmp_path, {
+        "src/main/resources/application.yml": "app:\n  a: x\n  b: y\n",
+    })
+    clear_analysis_caches()
+    source = "svc/src/main/java/demo/A.java"
+    for key in ("app.a", "app.b", "app.a"):
+        properties.resolve_spring_property(repo, key, source)
+    properties.resolve_spring_property(repo, "app.a", "svc/src/main/java/demo/B.java")
+
+    info = properties._discover_spring_property_files_from.cache_info()
+    assert (info.misses, info.hits) == (1, 3)

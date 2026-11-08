@@ -63,7 +63,12 @@ are also excluded from the production index; `attestation-service` stays
 indexed. An engine artifact that the engine's declaration recognizes, such
 as a CodeQL database (any directory holding `codeql-database.yml`), is never
 inventoried, whatever `exclude` says: it copies the sources and holds
-thousands of analyzer files. The
+thousands of analyzer files.
+
+Neither is a `.git` or `node_modules` directory at any depth, nor a
+`target`, `build` or `out` build output outside `src`, whatever `include`
+says; `target` stays with `--generate-sources` and for Strategy1's
+generated OpenAPI sources. The
 `min_severity` setting remains accepted for database compatibility
 but does not alter AST endpoint extraction.
 

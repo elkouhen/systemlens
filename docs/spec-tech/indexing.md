@@ -133,6 +133,14 @@ processing order, hashing provides the change decision, and pattern checks are
 applied once per file. Incrementality limits AST extraction to changed files,
 but it does not avoid this complete inventory pass.
 
+Like the build-layout walk, the inventory walk never enters `.git`,
+`node_modules` at any depth, or a `target`, `build` or `out` directory
+outside `src`, whose files it would drop anyway; `target` stays when
+generated sources are requested. On train-ticket this cuts the walk from
+2,860 to 1,139 files and the inventory from 2,691 to 1,034, since a
+module's own `node_modules` escaped the root-anchored `node_modules/**`
+exclusion (BC-39).
+
 A file the inventory cannot read, because of its permissions or because it
 disappeared after the walk, stays out of the inventory. So does a symbolic
 link that resolves outside the indexed root. The index continues, and its
@@ -1632,6 +1640,11 @@ the code-flow signature to `code-flow-v59-java-semantics`: they change the
 edges, and BC-14 the initializer nodes, of unchanged sources.
 BC-17 to BC-23 moved it to `code-flow-v60-lost-edges`: they add edges,
 and BC-18 enum `<clinit>` nodes, to unchanged sources.
+Lot 4 moved it to `code-flow-v61-flow-construction`. BC-31 to
+BC-39 moved the endpoint inventory to
+`endpoint-inventory-v31-scanner-precision` and the code-flow signature to
+`code-flow-v62-scanner-precision`: they change the endpoints of unchanged
+sources, and so their flows.
 
 ### Internal-flow shapes
 

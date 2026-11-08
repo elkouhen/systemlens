@@ -21,7 +21,9 @@ precedence where no active-profile selection exists. A document activated by
 `on-profile` or `spring.profiles` counts as a profile file:
 `_lookup_spring_property` reports a key on which profiles disagree as
 ambiguous, and `resolve_spring_property` then ignores the placeholder
-default (BC-31). YAML parse failures,
+default (BC-31). The property files visible from a source directory are
+discovered once per indexing pass: one discovery globs every configuration
+directory, about 0.2 s on train-ticket (BC-39). YAML parse failures,
 including unrendered Helm Go-template expressions, leave that file without
 Spring-property facts and never abort the repository index. A failure is
 a `yaml.YAMLError`, a `ValueError` such as an impossible date

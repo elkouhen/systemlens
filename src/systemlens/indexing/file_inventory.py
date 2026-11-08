@@ -123,19 +123,34 @@ def is_in_excluded_module(path: Path, excluded_module_paths: tuple[Path, ...]) -
     return any(module_path == path.parent or module_path in path.parents for module_path in excluded_module_paths)
 
 
-def _repository_files(repo_root: Path) -> list[Path]:
+_PRUNED_DIRECTORIES = frozenset({".git", "node_modules"})
+_BUILD_DIRECTORIES = frozenset({"target", "build", "out"})
+
+
+def _repository_files(repo_root: Path, *, keep_target: bool = False) -> list[Path]:
     """Return the repository files in path order, without engine artifacts.
 
     An analyzer database holds a copy of the sources and its own data,
     wherever it lives; walking into it would hash and inventory thousands
     of files. Each engine declares how to recognize its artifacts.
+
+    Like the build-layout walk, it never enters ``.git``, ``node_modules``
+    at any depth, or a build output directory outside ``src``, whose files
+    the inventory would drop anyway; ``target`` is kept when generated
+    sources are requested (BC-39).
     """
     files: list[Path] = []
     for directory, subdirectories, names in os.walk(repo_root):
         current = Path(directory)
+        below_src = "src" in current.relative_to(repo_root).parts
         subdirectories[:] = [
             name for name in subdirectories
-            if not is_engine_artifact(current / name)
+            if name not in _PRUNED_DIRECTORIES
+            and not (
+                name in _BUILD_DIRECTORIES and not below_src
+                and not (keep_target and name == "target")
+            )
+            and not is_engine_artifact(current / name)
         ]
         files.extend(
             current / name for name in names if (current / name).is_file()
@@ -162,7 +177,8 @@ def list_repo_files(
     repo_root = repo_root.resolve()
     hashes: dict[str, str] = {}
     nested_roots = _nested_build_roots(repo_root)
-    for path in _repository_files(repo_root):
+    keep_target = include_generated_sources or include_strategy1_generated_sources
+    for path in _repository_files(repo_root, keep_target=keep_target):
         if is_in_excluded_module(path, excluded_module_paths):
             continue
         if nested_roots and not any(root == path.parent or root in path.parents for root in nested_roots):

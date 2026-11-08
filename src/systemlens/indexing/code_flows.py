@@ -44,7 +44,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v61-flow-construction"
+CODE_FLOW_SIGNATURE = "code-flow-v62-scanner-precision"
 _TRIGGER_ROLES = {("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS)}
 _EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 

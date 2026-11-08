@@ -1,4 +1,4 @@
-ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v30-redacted-url-secrets"
+ENDPOINT_INVENTORY_SIGNATURE = "endpoint-inventory-v31-scanner-precision"
 
 
 def current_endpoint_inventory_signature() -> str:
