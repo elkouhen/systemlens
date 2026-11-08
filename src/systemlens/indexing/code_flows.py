@@ -44,7 +44,7 @@ from systemlens.storage.persisted_names import (
 )
 
 
-CODE_FLOW_SIGNATURE = "code-flow-v60-lost-edges"
+CODE_FLOW_SIGNATURE = "code-flow-v61-flow-construction"
 _TRIGGER_ROLES = {("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS)}
 _EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
@@ -430,8 +430,25 @@ def _transient_trigger_steps(
     ]
 
 
+_POST_COMMIT_PHASES = frozenset({"AFTER_COMMIT", "AFTER_COMPLETION"})
+
+
+def _runs_after_commit(annotation: Node, source: bytes) -> bool:
+    """Whether a ``@TransactionalEventListener`` runs after a commit (PDR-17).
+
+    ``phase`` defaults to ``AFTER_COMMIT``. ``BEFORE_COMMIT``,
+    ``AFTER_ROLLBACK`` and an unreadable phase, such as a constant, mark
+    nothing.
+    """
+    phase = java_parser.annotation_argument(annotation, source, "phase")
+    if phase is None:
+        return True
+    name = java_parser.node_text(source, phase).strip().rsplit(".", 1)[-1]
+    return name in _POST_COMMIT_PHASES
+
+
 def _after_commit_lines(repo_root: Path, path: str) -> list[tuple[int, int]]:
-    """Line ranges of methods annotated ``@TransactionalEventListener``."""
+    """Line ranges of transactional listener methods that run after a commit."""
     parsed = java_parser.parse_java(str(repo_root.resolve()), path)
     if parsed is None:
         return []
@@ -442,6 +459,7 @@ def _after_commit_lines(repo_root: Path, path: str) -> list[tuple[int, int]]:
             continue
         if any(
             java_parser.annotation_name(annotation, source) == "TransactionalEventListener"
+            and _runs_after_commit(annotation, source)
             for annotation in java_parser.annotations_of(node)
         ):
             ranges.append((node.start_point.row + 1, node.end_point.row + 1))
@@ -451,7 +469,7 @@ def _after_commit_lines(repo_root: Path, path: str) -> list[tuple[int, int]]:
 def mark_after_commit_publications(
     repo_root: Path | None, flows: list[CodeFlow],
 ) -> list[CodeFlow]:
-    """Phase a publication ``after_commit`` when its method is a transactional listener.
+    """Phase a publication ``after_commit`` when its listener runs after a commit.
 
     The annotation is scope evidence for the dual-write review aid only; it
     neither confirms a transaction nor an outbox. Without a repository root

@@ -706,12 +706,13 @@ same known transaction, and otherwise `potential_lost_update` with
 "protection not established" and the missing transaction or key evidence
 listed. A dual-write candidate pairs a data write and a Kafka publication
 under the same trigger, names the method where they fork, and is
-`potential_dual_write` with "recovery not established"; an outbox write
-under the same trigger or a publication in a `@TransactionalEventListener`
-method downgrades it to `recovery_mechanism_present`. Alternative routes to
-the same two source sites are one item. Neither aid claims a defect, and
-both stay off by default until the precision record of the data-operations
-plan promotes them.
+`potential_dual_write` with "recovery not established". An outbox write
+under the same trigger, or a publication in a post-commit
+`@TransactionalEventListener` method (PDR-17), downgrades it to
+`recovery_mechanism_present`. Alternative routes to the same two source
+sites are one item. Neither aid claims a defect, and both stay off by
+default until the precision record of the data-operations plan promotes
+them.
 
 The renderer includes action, phase, transaction, fields, guards, causal/order
 evidence, limitations, and paired read source locations in service tooltips.

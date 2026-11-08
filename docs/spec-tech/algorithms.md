@@ -606,8 +606,9 @@ transaction or unproven record identity. It does not need two sequences.
 
 A dual-write candidate requires a data write and a Kafka publication under
 the same trigger. The last method both routes share is named as the fork.
-An outbox write under that trigger, or a publication inside a method
-annotated `@TransactionalEventListener`, downgrades the candidate to
+An outbox write under that trigger, or a publication inside a
+`@TransactionalEventListener` method whose phase runs after a commit
+(PDR-17), downgrades the candidate to
 "recovery mechanism present, not verified". Both aids collapse alternative
 routes to the same source sites and cost O(writes × reads) and
 O(writes × publications) per export.

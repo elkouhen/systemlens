@@ -450,6 +450,13 @@ of its ancestors. The event type is the `classes` or `value` attribute,
 else the single parameter. The publisher's flow continues through the
 listener, with low confidence; an untyped `x` gives no call.
 
+A publication in a `@TransactionalEventListener` method gets the
+`after_commit` phase only when the listener runs after a commit (PDR-17).
+Its `phase` attribute, `AFTER_COMMIT` when absent, must be `AFTER_COMMIT`
+or `AFTER_COMPLETION`. `BEFORE_COMMIT`, `AFTER_ROLLBACK` and an unreadable
+phase, such as a constant, leave the publication unphased. The phase never
+changes the listener's trigger or hop.
+
 `main`, `@SqsListener`, Spring Cloud Stream functional beans,
 `RouterFunction` handlers, `@MessageMapping`, gRPC services, Spring Batch
 and Quartz jobs start no flow. The HTML architecture graph draws Kafka

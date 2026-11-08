@@ -299,3 +299,42 @@ def test_a_nested_engine_caller_traces_its_key(tmp_path: Path) -> None:
     }
 
     assert identities == {f"{ORDER}:parameter:entry:0"}
+
+
+def _listener(phase: str) -> dict[str, str]:
+    return {f"{PACKAGE}/Relay.java": f"""package example.app;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
+import static org.springframework.transaction.event.TransactionPhase.AFTER_COMPLETION;
+@Component
+public class Relay {{
+    private final KafkaTemplate<String, String> kafkaTemplate;
+    public Relay(KafkaTemplate<String, String> t) {{ this.kafkaTemplate = t; }}
+    @TransactionalEventListener{phase}
+    public void relay(String e) {{
+        kafkaTemplate.send("relay-out", e);
+    }}
+}}
+"""}
+
+
+def test_only_a_post_commit_listener_phase_marks_after_commit(tmp_path: Path) -> None:
+    """BC-27, PDR-17: the listener's ``phase`` decides the ``after_commit`` mark.
+
+    A publication in an ``AFTER_ROLLBACK`` listener was persisted as
+    ``after_commit``, which downgraded a dual-write candidate.
+    """
+    phases = {
+        "": "after_commit",
+        "(phase = TransactionPhase.AFTER_COMMIT)": "after_commit",
+        "(phase = AFTER_COMPLETION)": "after_commit",
+        "(phase = TransactionPhase.AFTER_ROLLBACK)": None,
+        "(phase = TransactionPhase.BEFORE_COMMIT)": None,
+        "(classes = String.class, phase = Phases.CUSTOM)": None,
+    }
+    for index, (phase, expected) in enumerate(phases.items()):
+        flows = _index(_write(tmp_path / f"repo{index}", _listener(phase)))
+
+        assert [flow.steps[-1].phase for flow in flows] == [expected], phase
