@@ -2128,8 +2128,27 @@ class JavaSymbols:
                 return None
             found = branches.pop()
             return _BOXED.get(found, found) if found is not None and len(typed) < len(nodes) else found
+        if node.type == "this" and (creation := self._anonymous_instance(info, node)) is not None:
+            # Inside an anonymous class body, ``this`` is that instance: its
+            # one supertype stands for it, as an argument (BC-10).
+            type_node = creation.child_by_field_name("type")
+            return self.resolve(
+                info.method.path, parser.node_text(source, type_node), self.owner(info.method.path, creation),
+                allow_ambiguous=True, at=type_node,
+            ) if type_node is not None else None
         if node.type in {"identifier", "this", "method_invocation", "field_access", "array_access"}:
             return self.receiver_type(info, node, invocation, depth + 1)
+        return None
+
+    @staticmethod
+    def _anonymous_instance(info: _Method, node: Node) -> Node | None:
+        """The anonymous class creation whose body holds ``node`` innermost,
+        below the code of ``info``; ``None`` outside any."""
+        current = node.parent
+        while current is not None and current != info.node:
+            if _is_anonymous_body(current):
+                return current.parent
+            current = current.parent
         return None
 
     def variable_type(self, info: _Method, name: str, invocation: Node, *, field_only: bool = False) -> str | None:

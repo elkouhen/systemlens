@@ -944,6 +944,22 @@ class Hooks09 {
     reg(named);
   }
 }
+
+// E10: this inside an anonymous class body (BC-10).
+class Anonymous10 {
+  void register(Runnable r) {} //@Anonymous10.registerRunnable
+
+  void register(Anonymous10 m) {} //@Anonymous10.registerSelf
+
+  void e10() { //@E10
+    new Thread() {
+      public void run() {
+        register(this); //@e10.anonymous
+      }
+    };
+    register(this); //@e10.self
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1205,6 +1221,9 @@ CASES: list[Case] = [
           ("e08.text", "Varargs08.fVarargs", "exact"), ("e08.number", "Varargs08.fInt", "exact")),
     _case("E09", "E09", None,
           ("e09", "Hook09Impl.before", "possible"), ("e09", "Hook09.before", "possible")),
+    _case("E10", "E10", None,
+          ("e10.anonymous", "Anonymous10.registerRunnable", "exact"),
+          ("e10.self", "Anonymous10.registerSelf", "exact")),
 ]
 
 

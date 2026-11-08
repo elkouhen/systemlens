@@ -1810,6 +1810,24 @@ SHAPES: list[Shape] = [
         }
         """, "Local.call", {"Service.go": "exact"},
         note="a local class sees the enclosing method's locals before the outer fields"),
+    Shape("T5-anonymous-this", """
+        interface Task {
+          void go();
+        }
+        class Main {
+          void register(Runnable r) {} //@Main.register.Runnable
+          void register(Main m) {} //@Main.register.Main
+          void register(Task t) {} //@Main.register.Task
+          void run() { //@Main.run
+            new Thread() { public void run() { register(this); } };
+            new Task() { public void go() { register(this); } };
+            Runnable r = () -> register(this);
+          }
+        }
+        """, "Main.run",
+        {"Main.register.Runnable": "exact", "Main.register.Task": "exact", "Main.register.Main": "exact"},
+        note="BC-10: this in an anonymous class body is that instance, typed by its supertype; "
+             "in a lambda it stays the enclosing class"),
     Shape("T6", """
         class Service {
           void go() {} //@Service.go

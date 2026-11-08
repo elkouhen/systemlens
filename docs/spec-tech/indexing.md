@@ -785,7 +785,9 @@ external supertype keeps the call unresolved.
 A name no enclosing type has resolves through a single static import, then
 through the one static wildcard import whose source type declares that name
 and arity. Several candidates stay unresolved.
-Literals, `new`, casts, and typed variables give argument types. A numeric
+Literals, `new`, casts, and typed variables give argument types. Inside
+an anonymous class body, `this` is that instance, typed by the supertype it
+creates (BC-10); in a lambda it stays the enclosing class. A numeric
 literal takes its suffix: `L` gives `long`, `f` gives `float`, and a
 decimal, hexadecimal, octal or binary integer is otherwise `int`.
 Same-arity overloads follow Java's phases. The first allows identity,
@@ -1366,7 +1368,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T2 | Pattern variable of `instanceof Circle c` | `covered` (BL-23) | |
 | T3 | Pattern variable of a `switch` pattern | `covered` (BL-23) | |
 | T4 | `var` initializer typed where it is written | `covered` | |
-| T5 | Names in anonymous, local and inner classes, innermost scope first | `covered` | |
+| T5 | Names in anonymous, local and inner classes, innermost scope first; `this` in an anonymous class body | `covered` (BC-10) | |
 | T6 | Field hiding: the nearest declaration in the hierarchy | `covered` | |
 | T7 | A local class is visible only to the end of its block | `covered` | |
 | T8 | A type parameter hides a source type of the same simple name | `covered` | |
@@ -1536,6 +1538,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E07 | `child.a(1).get()` with `Base07.a(Integer)` returning `Store07` and `Child07.a(String)` returning `Cache07` | `covered` | BC-07 |
 | E08 | `f("x")` and `f(1)` with `f(int)` and `f(Object...)` | `covered` | BC-08 |
 | E09 | `x.before()` on a parameter that receives a lambda and a named `Hook09Impl`, with a `default` `before` the named class overrides | `covered` | BC-09 |
+| E10 | `register(this)` in an anonymous `Thread` and in its creating method, with `register(Runnable)` and `register(Anonymous10)` | `covered` | BC-10 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
