@@ -1,7 +1,7 @@
 # Backlog: Copilot review of source indexing
 
 Status: written on 2026-11-08 and validated the same day by the product
-owner, who asked for it to be processed. Lots 1 to 3 (BC-01 to BC-23)
+owner, who asked for it to be processed. Lots 1 to 5 (BC-01 to BC-30)
 are `delivered`; the other items are `open`. Lot order: 1 to 6. A
 decision record an item depends on is written and accepted under the
 product owner's mandate, to be confirmed by them.
@@ -60,13 +60,13 @@ the change.
 | [BC-21](#bc-21) | Reach static imports from anonymous class bodies | S12 | low | `delivered` |
 | [BC-22](#bc-22) | Resolve qualified type receivers | S13 | low-med | `delivered` |
 | [BC-23](#bc-23) | Carry parameter types on source `MethodCall`s | S14 | low | `delivered` |
-| [BC-24](#bc-24) | Persist the real `alternative_count` | F1, F5 | med | `open` |
-| [BC-25](#bc-25) | Identify data steps by operation, not by line | F2 | med | `open` |
-| [BC-26](#bc-26) | Fix key tracing's usage line and caller comparison | F3 | med | `open` |
-| [BC-27](#bc-27) | Honour `@TransactionalEventListener(phase)` | F4 | low-med | `open` |
-| [BC-28](#bc-28) | Bound the reverse call-chain diagnostic | F6 | low | `open` |
-| [BC-29](#bc-29) | Keep the persisted graph when a module refresh times out | P1 | high (CodeQL) | `open` |
-| [BC-30](#bc-30) | Keep a refreshed module's method rows | P2 | med (CodeQL) | `open` |
+| [BC-24](#bc-24) | Persist the real `alternative_count` | F1, F5 | med | `delivered` |
+| [BC-25](#bc-25) | Identify data steps by operation, not by line | F2 | med | `delivered` |
+| [BC-26](#bc-26) | Fix key tracing's usage line and caller comparison | F3 | med | `delivered` |
+| [BC-27](#bc-27) | Honour `@TransactionalEventListener(phase)` | F4 | low-med | `delivered` |
+| [BC-28](#bc-28) | Bound the reverse call-chain diagnostic | F6 | low | `delivered` |
+| [BC-29](#bc-29) | Keep the persisted graph when a module refresh times out | P1 | high (CodeQL) | `delivered` |
+| [BC-30](#bc-30) | Keep a refreshed module's method rows | P2 | med (CodeQL) | `delivered` |
 | [BC-31](#bc-31) | Keep profile-conflicting properties dynamic | C2 | med | `open` |
 | [BC-32](#bc-32) | Scope `@Value` field resolution to the declaring class | C3 | med | `open` |
 | [BC-33](#bc-33) | Join Feign `url` and `path`; resolve empty and nested defaults | C4 | med | `open` |
@@ -546,6 +546,13 @@ code-flow and constructor-node tests, and
   group. `record_flow` also resets seeded flows to 1 on resume.
 - **Fix:** take the maximum of the incoming counts in the final dedupe,
   and keep the count when seeding.
+- **Status:** `delivered`.
+- **Delivery:** `8852981`. Reproduced on `174be5b`: the diamond was
+  persisted with 1 route, and a seeded flow, a resumed checkpoint or a
+  flow kept after the reachability pass, was reset to 1. Tests
+  `test_a_diamond_persists_its_route_count`,
+  `test_the_final_deduplication_keeps_the_counted_routes` and
+  `test_a_seeded_flow_keeps_its_route_count`.
 
 <a id="bc-25"></a>
 ### BC-25. Identify data steps by operation, not by line
@@ -557,6 +564,16 @@ code-flow and constructor-node tests, and
   `compute_code_flow_id` promises an id that survives line movement.
 - **Fix:** use `operation_id` in both keys and in the id coordinate.
 - **Acceptance:** flow ids change once; the delivery note says so.
+- **Status:** `delivered`.
+- **Delivery:** `47d9edf`. Reproduced on `174be5b`: the `Item` read was
+  lost. Both keys use the operation ID. The ID coordinate cannot use it,
+  since an operation ID embeds the line: it uses the operation's owner
+  method, technology, operation, resource and key expression, and twins,
+  the same call twice in one method, are numbered in source order.
+  **Data-flow IDs change once.** `data-model.md` says so. Tests
+  `test_two_operations_on_one_line_are_two_flows`,
+  `test_a_data_flow_id_survives_line_movement` and
+  `test_twin_operations_keep_distinct_ids_across_line_movement`.
 
 <a id="bc-26"></a>
 ### BC-26. Fix key tracing's usage line and caller comparison
@@ -568,6 +585,12 @@ code-flow and constructor-node tests, and
   with CodeQL and `flows calculate` disagree on nested callers.
 - **Fix:** pass `operation.line`, and compare normalised names or
   method ids.
+- **Status:** `delivered`.
+- **Delivery:** `012b08e`. Both halves reproduced on `174be5b` with the
+  review probe. The join passes the operation's line, and the caller
+  check compares names with `$` read as `.`; `algorithms.md` says both.
+  Tests `test_a_local_declared_after_the_operation_is_not_its_key` and
+  `test_a_nested_engine_caller_traces_its_key`.
 
 <a id="bc-27"></a>
 ### BC-27. Honour `@TransactionalEventListener(phase)`
@@ -579,6 +602,14 @@ code-flow and constructor-node tests, and
 - **Depends on:** a PDR entry deciding which phases mark `after_commit`.
 - **Fix:** read `phase` (default `AFTER_COMMIT`) and mark only
   `AFTER_COMMIT` and `AFTER_COMPLETION`.
+- **Status:** `delivered`.
+- **Delivery:** PDR-17 (`1a454af`), accepted under the product owner's
+  mandate and to be confirmed by them; fix `85b4e5d`. Reproduced on
+  `174be5b`. An unreadable phase, such as a constant, marks nothing; the
+  listener stays a trigger and a hop (PDR-16). `extraction-rules.md`,
+  `algorithms.md` and `data-model.md` name the phases. Test
+  `test_only_a_post_commit_listener_phase_marks_after_commit`. This
+  commit moves `CODE_FLOW_SIGNATURE` to `code-flow-v61-flow-construction`.
 
 <a id="bc-28"></a>
 ### BC-28. Bound the reverse call-chain diagnostic
@@ -588,6 +619,32 @@ code-flow and constructor-node tests, and
   every simple path up to `max_hops`, which is exponential on fan-in.
 - **Fix:** add a visited set per (method, depth), or cap the route count
   and report the cap.
+- **Status:** `delivered`.
+- **Delivery:** `4a0b5ea`. Proven on `174be5b` with a fan-in fixture:
+  fully connected layers of three callers printed 171 lines at 4 layers
+  and 797,211 at 12, tripling per layer. The walk keeps one route per
+  (caller, depth), checked before printing, and costs O(edges × max_hops);
+  12 layers print 37 explored chains. `cli.md` says so. Test
+  `test_the_reverse_call_chain_walk_is_bounded_on_fan_in`.
+
+Lot 4 validation, on fresh scratch copies at `88c6c16` against a
+`174be5b` baseline: every finding reproduced, and BC-28 was proven on a
+fan-in fixture. PDR-17 is new; PDR-16 is unchanged.
+
+Train-ticket keeps 451 flows, 447 flow pairs and 1763 edges, and every
+flow keeps its steps. Its 273 data-flow IDs change once (BC-25). Its
+other IDs do not change, and no ID needs a collision suffix. Seventeen
+REST flows go from 1 to 2 routes (BC-24), all ending on an HTTP call,
+such as `PreserveController.preserve` to `POST /api/v1/seatservice/seats`.
+No phase or key identity changes, and no flow splits.
+
+The lab keeps 25 flows and 105 edges. Its 19 data-flow IDs change once;
+no route count, phase or key identity changes.
+
+`analyze compare-engines --engines source,codeql` reports zero
+differences on both: 447 and 25 flow pairs, 1763 and 105 edges. A CodeQL
+index of each copy persists the same flow IDs, route counts and steps
+as the `source` index.
 
 ## Lot 5: CodeQL module refresh
 
@@ -604,6 +661,11 @@ affect CodeQL and not `source`.
   dangling.
 - **Fix:** skip the sink and the flow replacement when a refresh times
   out, or pass the persisted data to the fallback.
+- **Status:** `delivered`.
+- **Delivery:** `c631732`. A timed-out refresh joins over the persisted
+  graph and calls no sink; the snapshot stays `partial`. `indexing.md`
+  says so. Test `test_a_refresh_timeout_keeps_the_persisted_graph`
+  (recorded engine).
 
 <a id="bc-30"></a>
 ### BC-30. Keep a refreshed module's method rows
@@ -613,6 +675,21 @@ affect CodeQL and not `source`.
   then dangled, which contradicts `indexing.md:34-37`.
 - **Fix:** apply the prefix filter to the old table only, and add the
   refreshed module's methods unfiltered.
+- **Status:** `delivered`.
+- **Delivery:** `88c6c16`. An engine method no row covers is still
+  added. `indexing.md` describes the kept rows. Test
+  `test_a_refresh_keeps_the_module_method_rows` (recorded engine).
+
+Lot 5 validation: both findings reproduced with real CodeQL on a
+two-module fixture (`fx2`). At `174be5b`, a refresh of module `app`
+left 9 of 17 method rows with all 5 edges dangling, and a refresh with
+`engine_timeout_seconds: 1` left 0 rows. At `88c6c16` both keep the 17
+rows and 0 dangling edges, and the flows are unchanged. The `source`
+engine has no module refresh, so the reference projects are unaffected.
+
+Ruff, mypy, the default suite, the slow parity, internal-flow and
+code-flow tests, and `scripts/check_companion_contracts.py` pass after
+both lots. The companion skill names none of the changed behaviour.
 
 ## Lot 6: scanner precision
 
