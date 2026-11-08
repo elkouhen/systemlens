@@ -791,7 +791,7 @@ outside this static fact.
 
 ## ADR-43: Preserve receiver context in inherited dispatch
 
-**Status:** Accepted.
+**Status:** Accepted. Amended on 2026-11-08 by BL-47 (see below).
 
 **Context:** Source-only Java resolution can see a base method, several
 overrides, and a concrete entry subtype at the same time. Selecting one
@@ -808,6 +808,34 @@ fallback edges at possible dispatch and low flow confidence.
 **Consequences:** Sibling implementations no longer enter one concrete flow,
 while base-typed fields retain explicit alternatives. Runtime bean selection,
 generic substitution that cannot be proven, and reflection remain unresolved.
+
+Amendment of 2026-11-08 (BL-47). Status: accepted on 2026-11-08 under the
+product owner's mandate to implement the internal-flow backlog; to be
+confirmed by the product owner.
+
+The entry-subtype restriction assumes that the receiver of the inherited
+body is the entry instance. That holds only while every hop since the
+entry is a call on `this`: a call without receiver, on `this` or on
+`super`, inherited calls included. A call on another object, such as
+`secondStep.execute()` in `FirstStep`, leaves `this`.
+
+The restriction now applies only while the route stays on `this`. Once a
+hop leaves it, dispatch from an inherited body is unrestricted for the
+rest of the route. A call written without receiver whose target is not
+in the caller's class hierarchy, such as an outer-class method or a
+static import, also leaves `this`.
+
+The fresh join reads the receiver from the source symbols. Each persisted
+call edge records it in an additive `other_receiver` flag, so a rebuild
+and the call-chain diagnostics apply the same rule without source. An
+edge whose receiver is unknown, or an index written before the flag,
+keeps the restriction.
+
+Consequences: the sibling template shape (S24) yields its flow with every
+engine; a job calling its own inherited template method (S25) still
+excludes the sibling. A route may now reach a sibling override after a
+call on another object of the same base type, which is a valid runtime
+path.
 
 ## ADR-44: The resource catalogue is a snapshot projection
 
