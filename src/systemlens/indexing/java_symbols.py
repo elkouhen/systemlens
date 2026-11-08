@@ -3832,10 +3832,7 @@ class JavaSymbols:
         if len(locations) != 1:
             return None
         module = self.path_modules.get(locations[0][0], info.module)
-        declarations = [candidate for candidate in self.by_owner.get((owner, name, len(arguments), module), [])]
-        if not declarations:
-            declarations = [candidate for base, base_module in self.ancestors(owner, module)
-                            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])]
+        declarations = self._returning_declarations(info, owner, module, name, arguments, receiver, depth)
         if not declarations and (inherited := self._repository_return(info, receiver, depth + 1)) is not None:
             # ``repo.save(o)``, ``repo.findAll()`` inherited from Spring
             # Data: the type the signature table gives (BL-43, ADR-90).
@@ -3939,13 +3936,37 @@ class JavaSymbols:
         if len(locations) != 1:
             return None
         module = self.path_modules.get(locations[0][0], info.module)
-        declarations = self.by_owner.get((owner, name, len(arguments), module), []) or [
-            candidate for base, base_module in self.ancestors(owner, module)
-            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])
-        ]
+        declarations = self._returning_declarations(info, owner, module, name, arguments, invocation, depth)
         if len({candidate.parameters for candidate in declarations}) != 1:
             return None
         return context, declarations, arguments
+
+    def _returning_declarations(
+        self, info: _Method, owner: str, module: str, name: str, arguments: list[Node], invocation: Node,
+        depth: int,
+    ) -> list[_Method]:
+        """The declarations of ``name`` a call on ``owner`` binds to, for
+        its return type: the receiver's own and its source ancestors',
+        narrowed by Java's overload selection, then without those an
+        override in a subtype hides (BC-07). Several parameter lists left
+        mean the call is not told apart."""
+        declarations = [
+            candidate for base, base_module in self.ancestors(owner, module)
+            for candidate in self.by_owner.get((base, name, len(arguments), base_module), [])
+        ]
+        if len({candidate.parameters for candidate in declarations}) > 1:
+            declarations = self._select_overload(declarations, tuple(
+                self.expression_type(info, argument, invocation, depth + 1) for argument in arguments
+            ))
+        return [
+            candidate for candidate in declarations
+            if not any(
+                other.parameters == candidate.parameters
+                and (other.owner, other.module) != (candidate.owner, candidate.module)
+                and (candidate.owner, candidate.module) in self.ancestors(other.owner, other.module)
+                for other in declarations
+            )
+        ]
 
     def _returned(self, info: _Method, invocation: Node, depth: int) -> tuple[str, _Env] | None:
         """The declared return type of a call and its type arguments, when

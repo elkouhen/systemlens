@@ -624,11 +624,13 @@ The view also starts at a call to a source method (BL-35): with
 The declared return type is read through the declarations and type
 arguments the source-generics model uses below.
 
-Those declarations are the receiver's own, else its source ancestors'.
-Several declarations of one parameter list must give the same view, as
-`Box<T> wrap()` declared on an interface and again on an abstract class.
-Same-arity overloads, disagreeing declarations, and a raw return give
-no view.
+Those declarations are the receiver's own and its source ancestors'
+(BC-07). Overload selection, as for a call target, picks among them, and
+an override in a subtype hides the declaration it overrides, as Java's
+covariant return does. Several declarations of one parameter list left,
+as `Box<T> wrap()` on two unrelated interfaces, must give the same view.
+Unseparated overloads, disagreeing declarations and a raw return give no
+view.
 
 A `var` local takes the view of its initializer, read where it is
 written: `var l = catalog.list(); l.get(0)` and `var s =
@@ -1115,11 +1117,13 @@ source method. On a generated project of 800 such classes the symbol pass
 fell from 10.5 s to 0.8 s.
 
 For a method invocation used as a receiver, the fallback reads source-declared
-return types through the receiver hierarchy. It requires one parameter signature
-and one resolved return type, and bounds nested receiver analysis to 16 calls.
+return types through the receiver hierarchy: the receiver's and its
+ancestors' declarations, narrowed by overload selection and override hiding
+(BC-07). It requires one parameter signature and one resolved return type,
+and bounds nested receiver analysis to 16 calls.
 A zero-argument call with no declared method reads a record component of the
 same name as its implicit accessor; a declared accessor takes precedence.
-Ambiguous overload selection is unsupported.
+Overloads the arguments do not separate give no return type.
 These inferred calls retain `possible` dispatch and low flow confidence.
 Known positions in a partially resolved generic signature still constrain
 candidate implementations. Unknown positions may widen the candidate set, but
@@ -1319,7 +1323,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 
 | # | Shape | Status | Plan |
 |---|---|---|---|
-| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return | `covered` | |
+| S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors | `covered` (BC-07) | |
 | S2 | Static call and static import | `covered` | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
@@ -1521,6 +1525,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E04 | `Printer chosen = flag ? csv : json; chosen.print()` with a third `XmlPrinter` | `covered` | BL-46; E04 omits CodeQL's declared row `Printer.print`, whose rebuilt dispatch reaches `XmlPrinter` (ADR-89) |
 | E05 | `printer.print()` in a private `printWith(Printer)` whose one call passes a `CsvPrinter` field | `covered` | BL-46 |
 | E06 | `o(Tint.RED)`, `r(new Point(1))` and `c(Tint.RED)` against `Object`, `Enum`, `Record`, `Comparable` and `Runnable` overloads | `covered` | BC-06 |
+| E07 | `child.a(1).get()` with `Base07.a(Integer)` returning `Store07` and `Child07.a(String)` returning `Cache07` | `covered` | BC-07 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

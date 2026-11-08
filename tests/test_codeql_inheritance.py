@@ -972,7 +972,9 @@ def test_declared_getter_return_type_reaches_interface_implementation(tmp_path: 
     "Port getPort(String v) { return null; } Port getPort(Integer v) { return null; }",
 ])
 def test_unresolved_or_overloaded_getter_does_not_guess_receiver(tmp_path: Path, getter: str):
-    argument = '"x"' if "String" in getter else ""
+    # An argument of unknown type cannot select an overload (BC-07 selects
+    # one only from a typed argument).
+    argument = "v" if "String" in getter else ""
     sources = {
         "app/Port.java": "package app; public interface Port { void send(); }",
         "app/Adapter.java": """package app; public class Adapter implements Port {
@@ -981,7 +983,7 @@ def test_unresolved_or_overloaded_getter_does_not_guess_receiver(tmp_path: Path,
 }""",
         "app/Controller.java": f"""package app; public class Controller {{
   {getter}
-  public void entry() {{ getPort({argument}).send(); }}
+  public void entry(Unknown v) {{ getPort({argument}).send(); }}
 }}""",
     }
     methods, endpoints = _project(tmp_path, sources)

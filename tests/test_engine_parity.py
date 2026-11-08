@@ -882,6 +882,31 @@ class Implicit {
     c(Tint.RED); //@e06.comparable
   }
 }
+
+// E07: a call's return type read across the receiver's ancestors (BC-07).
+class Store07 {
+  void get() {} //@Store07.get
+}
+
+class Cache07 {
+  void get() {} //@Cache07.get
+}
+
+class Base07 {
+  Store07 a(Integer i) { return null; } //@Base07.a
+}
+
+class Child07 extends Base07 {
+  Cache07 a(String s) { return null; } //@Child07.a
+}
+
+class Returns07 {
+  Child07 child;
+
+  void e07() { //@E07
+    child.a(1).get(); //@e07
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1137,6 +1162,8 @@ CASES: list[Case] = [
     _case("E06", "E06", None,
           ("e06.enum", "Implicit.oEnum", "exact"), ("e06.record", "Implicit.rRecord", "exact"),
           ("e06.comparable", "Implicit.cComparable", "exact")),
+    _case("E07", "E07", None,
+          ("e07", "Base07.a", "exact"), ("e07", "Store07.get", "exact")),
 ]
 
 

@@ -105,6 +105,32 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run",
         {"Service.a": "exact", "Service.self": "exact", "Service.b": "exact"}),
+    Shape("S1-return-across-ancestors", """
+        class Repo {
+          void get() {} //@Repo.get
+        }
+        class Cache {
+          void get() {} //@Cache.get
+        }
+        class Base {
+          Repo a(Integer i) { return null; } //@Base.a
+          Object b(String s) { return null; } //@Base.b
+        }
+        class Child extends Base {
+          Cache a(String s) { return null; } //@Child.a
+          Cache b(String s) { return null; } //@Child.b
+        }
+        class Use {
+          Child child;
+          void run() { //@Use.run
+            child.a(1).get();
+            child.b("s").get();
+          }
+        }
+        """, "Use.run",
+        {"Base.a": "exact", "Repo.get": "exact", "Child.b": "exact", "Cache.get": "exact"},
+        note="BC-07: the return type comes from the overload Java selects among the receiver's and its "
+             "ancestors' declarations; an override's return hides its ancestor's"),
     Shape("S2", """
         class Base {
           static void util() {} //@Base.util
@@ -2249,8 +2275,10 @@ SHAPES: list[Shape] = [
             r.get(0).area();
           }
         }
-        """, "Use.run", {"LeafImpl.items": "exact", "Store.raw": "exact", "Store.any": "exact"},
-        note="BL-35: disagreeing declarations, unseparated overloads, a raw or wildcard return give nothing"),
+        """, "Use.run",
+        {"LeafImpl.items": "exact", "Circle.area": "exact", "Store.raw": "exact", "Store.any": "exact"},
+        note="BL-35: unseparated overloads, a raw or wildcard return give nothing; BC-07: Mid's "
+             "List<Circle> items() hides Api's, as in Java"),
     Shape("T15", """
         enum Status {
           ACTIVE, DONE;
