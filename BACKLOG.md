@@ -3,7 +3,7 @@
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
 owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33 to BL-42 and BL-47 to BL-53; each Delivery line names its commit
+BL-33 to BL-42 and BL-45 to BL-53; each Delivery line names its commit
 and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
@@ -96,8 +96,8 @@ defect in the join is visible in a test). A target is never invented
 | [BL-42](#bl-42) | Type enum `valueOf`/`values`, array `var` loops and `null` ternaries | P2 | `delivered` |
 | [BL-43](#bl-43) | Add a documented Spring signature table | P2 | `open` |
 | [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `open` |
-| [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `open` |
-| [BL-46](#bl-46) | Narrow a receiver by the creations a method returns or a ternary holds | P3 | `open` |
+| [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `delivered` |
+| [BL-46](#bl-46) | Narrow a receiver by the creations a method returns or a ternary holds | P3 | `delivered` |
 | [BL-47](#bl-47) | Apply the ADR-43 entry rule only while the route stays on `this` | P1 | `delivered` |
 | [BL-48](#bl-48) | Start flows from routes inherited from a base controller | P2 | `delivered` |
 | [BL-49](#bl-49) | Recognise more entry triggers | P2 | `delivered` |
@@ -562,7 +562,16 @@ decision the owner has not taken.
   `exact` only under ADR-81. Shapes s3 and s4 give CodeQL's rows.
 - **Depends on:** BL-33; an amendment of ADR-81 (the implementor set
   is filtered by type argument).
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-81 amendment, accepted on 2026-11-08 under the
+  mandate, to be confirmed (commit `21ebcfd`). Two concrete arguments
+  exclude an implementor only when they differ and are not related by
+  subtyping, as far as the sources and the final JDK classes prove it;
+  a filter that would exclude every target does not apply. Shapes s3
+  and s4 give CodeQL's rows; call shapes G7 (with related, raw,
+  wildcard, type-variable and library negatives), parity case E03, and
+  T8-dispatch, which now expects CodeQL's `exact` row. Train-ticket and
+  the lab keep every edge, confidence and flow. Commit `8637485`.
 - **Why P2:** a false route today, and the first of the "possible where
   CodeQL proves exact" causes; the rule is local and conservative.
 
@@ -593,7 +602,18 @@ decision the owner has not taken.
   and after.
 - **Depends on:** BL-33; a new ADR extending ADR-86 to returns, unions
   and call context.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** ADR-89, accepted on 2026-11-08 under the mandate, to be
+  confirmed (commit `21ebcfd`). Cases B10, B39 and shapes s17, s19 give
+  CodeQL's rows; call shapes T19 to T21 hold the negatives, and parity
+  cases E04, E05 compare with CodeQL. CodeQL's raw rows at E04 include
+  the declared row `Printer.print`, which `source` omits because a
+  rebuild would dispatch it to `XmlPrinter` (BL-28); at s17 `source`
+  therefore never reaches `export-xml`, fresh or rebuilt. A ternary
+  receiver whose branches differ and no declared variable names the
+  call stays untyped. Signature `code-flow-v57-dispatch-precision`.
+  Train-ticket (447 flow pairs, 1712 edges) and the lab (25 flows, 104
+  edges) are unchanged. Commit `8a0ff7c`.
 - **Why P3:** interprocedural; the owner decides how far the `source`
   engine should follow type flow.
 
