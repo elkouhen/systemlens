@@ -970,6 +970,12 @@ passed to. The last one is read by name and arity, a superset of the
 real target. The types are collected once, on the first call that needs
 them.
 
+A parameter type also counts through `this(..)`, `super(..)` and an
+enum constant's arguments, which name constructors, and through a varargs
+parameter, which takes every trailing argument. An array initializer's
+element takes the array's element type, and a switch arm or `yield` the
+target of its switch expression (BC-12).
+
 Second, a variable that the ADR-86 conditions prove to hold a lambda, a
 method reference or an anonymous class reaches no named body of a method
 the value implements. Its call keeps only the BL-28 declared row, when
@@ -1389,7 +1395,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T20 | Ternary of two source types dispatches on their union; a `null` branch gives nothing; a branch of the declared type keeps it | `covered` (BL-46) | |
 | T21 | Parameter of a private method whose every call site passes one class; mixed sites, a package method, a method reference or a reassigned parameter keep the declared type | `covered` (BL-46) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
-| F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default`, also behind a parameter | `covered` (BL-30, BC-09) | |
+| F2 | Lambda or method reference implementing a source interface: written target types, also through `super(..)`, an enum constant, varargs, an array initializer or a switch arm; created once; inherited `default`, also behind a parameter | `covered` (BL-30, BC-09, BC-12) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
 | F4 | JDK callbacks: `Executor`, `Callable`, `Runnable` | `covered` (ADR-71) | |
 | F5 | Lambda parameter typed by a source functional interface; method reference overload picked by its target | `covered` (BL-24) | |
@@ -1543,6 +1549,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E09 | `x.before()` on a parameter that receives a lambda and a named `Hook09Impl`, with a `default` `before` the named class overrides | `covered` | BC-09 |
 | E10 | `register(this)` in an anonymous `Thread` and in its creating method, with `register(Runnable)` and `register(Anonymous10)` | `covered` | BC-10 |
 | E11 | `take(x)` with `Foo11 x[]`; `Foo11 a = new Foo11(), b = a.n()` beside a field `Bar11 a`; a resource `c` shadowing a field in the try body only | `covered` | BC-11 |
+| E12 | `step.run()` in a constructor that `super(() -> {})` and `super(new Step12Impl())` both reach | `covered` | BC-12 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

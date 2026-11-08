@@ -1006,6 +1006,34 @@ class Scopes11 {
     }
   }
 }
+
+// E12: a lambda passed through super(..) implements the parameter type
+// (BC-12).
+interface Step12 {
+  void run(); //@Step12.run
+}
+
+class Step12Impl implements Step12 {
+  public void run() {} //@Step12Impl.run
+}
+
+class Base12 {
+  Base12(Step12 step) { //@E12
+    step.run(); //@e12
+  }
+}
+
+class Lambda12 extends Base12 {
+  Lambda12() {
+    super(() -> {});
+  }
+}
+
+class Named12 extends Base12 {
+  Named12() {
+    super(new Step12Impl());
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1274,6 +1302,8 @@ CASES: list[Case] = [
           ("e11.array", "Scopes11.takeArray", "exact"), ("e11.declarator", "Foo11.n", "exact"),
           ("e11.open", "Scopes11.open", "exact"), ("e11.resource", "Other11.ping", "exact"),
           ("e11.catch", "Conn11.ping", "exact")),
+    _case("E12", "E12", None,
+          ("e12", "Step12Impl.run", "possible"), ("e12", "Step12.run", "possible")),
 ]
 
 

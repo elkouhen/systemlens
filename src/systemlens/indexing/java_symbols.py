@@ -574,6 +574,8 @@ _PATTERN_SCOPES = {
     "switch_block_statement_group", "block", "constructor_body",
 }
 _CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation"}
+# Nodes a switch arm's value cannot cross to reach its switch expression.
+_FUNCTIONAL_BOUNDARIES = {"lambda_expression", "method_declaration", "class_body", "constructor_declaration"}
 _INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer"}
 
 
@@ -718,6 +720,7 @@ class JavaSymbols:
         # Strict type arguments an implementor gives an ancestor (BL-45).
         self._implemented: dict[tuple[str, str, str], _Env | None] = {}
         self._by_name_arity: dict[tuple[str, int], list[_Method]] | None = None
+        self._varargs_by_name: dict[str, list[_Method]] = defaultdict(list)
         # External classes and the source classes that extend them directly
         # (BL-31, ADR-74).
         self.external_subclasses: dict[str, set[tuple[str, str]]] = defaultdict(set)
@@ -2781,18 +2784,35 @@ class JavaSymbols:
         """The source types a lambda or a method reference implements, when
         the code writes them: the type of the variable it initializes or is
         assigned to, a cast, the return type of its method, or a source
-        parameter type it is passed to. Any other target does not count."""
+        parameter type it is passed to. A switch arm or ``yield`` takes the
+        switch expression's target, and an array initializer element its
+        array's element type (BC-12). Any other target does not count."""
         current, parent = node, node.parent
-        while parent is not None and (
-            parent.type == "parenthesized_expression"
-            or parent.type == "ternary_expression" and current != parent.child_by_field_name("condition")
-        ):
-            current, parent = parent, parent.parent
+        while parent is not None:
+            if (
+                parent.type == "parenthesized_expression"
+                or parent.type == "ternary_expression" and current != parent.child_by_field_name("condition")
+            ):
+                current, parent = parent, parent.parent
+            elif parent.type in {"switch_rule", "yield_statement"} or (
+                parent.type == "expression_statement" and parent.parent is not None
+                and parent.parent.type == "switch_rule"
+            ):
+                switch: Node | None = parent
+                while switch is not None and switch.type != "switch_expression":
+                    switch = None if switch.type in _FUNCTIONAL_BOUNDARIES else switch.parent
+                if switch is None:
+                    return set()
+                current, parent = switch, switch.parent
+            else:
+                break
         if parent is None:
             return set()
         owner = self.owner(path, node)
         written: list[Node | None] = []
-        if parent.type == "variable_declarator" and parent.child_by_field_name("value") == current:
+        if parent.type == "array_initializer":
+            written = [self._initialized_element(parent)]
+        elif parent.type == "variable_declarator" and parent.child_by_field_name("value") == current:
             written = [parent.parent.child_by_field_name("type") if parent.parent is not None else None]
         elif parent.type == "cast_expression":
             written = [parent.child_by_field_name("type")]
@@ -2817,6 +2837,22 @@ class JavaSymbols:
             found for type_node in written
             if (found := self._written_target(path, type_node, owner)) is not None
         }
+
+    @staticmethod
+    def _initialized_element(initializer: Node) -> Node | None:
+        """The element type an array initializer's values have: that of
+        the array creation or the declaration it initializes (BC-12)."""
+        while initializer.parent is not None and initializer.parent.type == "array_initializer":
+            initializer = initializer.parent
+        holder = initializer.parent
+        type_node: Node | None = None
+        if holder is not None and holder.type == "array_creation_expression":
+            type_node = holder.child_by_field_name("type")
+        elif holder is not None and holder.type == "variable_declarator" and holder.parent is not None:
+            type_node = holder.parent.child_by_field_name("type")
+        while type_node is not None and type_node.type == "array_type":
+            type_node = type_node.child_by_field_name("element")
+        return type_node
 
     def _written_target(self, path: str, type_node: Node | None, owner: str) -> str | None:
         if type_node is None:
@@ -2850,21 +2886,33 @@ class JavaSymbols:
     ) -> list[tuple[Node | None, str, str]]:
         """The written parameter types an argument may bind to: those of every
         source method of the call's name and arity, or of every constructor
-        of the created type. A superset of the true target, so a lambda
-        never escapes the rule."""
+        of the created type, of ``this(..)`` or ``super(..)``, or of an enum
+        constant's enum; a varargs parameter takes every trailing argument
+        (BC-12). A superset of the true target, so a lambda never escapes
+        the rule."""
         source = self.units[path].source
+        arguments_node = argument.parent
+        arguments = [
+            child for child in (arguments_node.named_children if arguments_node is not None else [])
+            if "comment" not in child.type
+        ]
         if call.type == "method_invocation":
             _receiver, name, arguments = parser.invocation_parts(call, source)
-            declarations = self._methods_named(name, len(arguments))
-        elif call.type == "object_creation_expression":
-            arguments_node = call.child_by_field_name("arguments")
-            arguments = [
-                child for child in (arguments_node.named_children if arguments_node is not None else [])
-                if "comment" not in child.type
-            ]
-            created = self._written_target(path, call.child_by_field_name("type"), owner)
+            declarations = self._methods_named(name, len(arguments), variable_arity=True)
+        elif call.type in {"object_creation_expression", "explicit_constructor_invocation", "enum_constant"}:
+            if call.type == "object_creation_expression":
+                created = self._written_target(path, call.child_by_field_name("type"), owner)
+            elif call.type == "enum_constant":
+                created = owner
+            elif any(child.type == "super" for child in call.children):
+                module = self.path_modules.get(path, "")
+                superclass = self._superclass(owner, module)
+                created = superclass[0] if superclass is not None else None
+            else:
+                created = owner
             declarations = [
-                info for info in self._methods_named("<init>", len(arguments)) if info.owner == created
+                info for info in self._methods_named("<init>", len(arguments), variable_arity=True)
+                if info.owner == created
             ] if created is not None else []
         else:
             return []
@@ -2883,16 +2931,27 @@ class JavaSymbols:
             ]
             if index < len(typed) and typed[index].type == "formal_parameter":
                 found.append((typed[index].child_by_field_name("type"), declaration.method.path, declaration.owner))
+            elif typed and typed[-1].type == "spread_parameter" and index >= len(typed) - 1:
+                found.append((_spread_type(typed[-1]), declaration.method.path, declaration.owner))
         return found
 
-    def _methods_named(self, name: str, arity: int) -> list[_Method]:
+    def _methods_named(self, name: str, arity: int, *, variable_arity: bool = False) -> list[_Method]:
+        """The methods of a name and arity; ``variable_arity`` adds the
+        varargs ones that take that arity."""
         if self._by_name_arity is None:
             self._by_name_arity = defaultdict(list)
             for info in self.methods.values():
-                self._by_name_arity[
-                    (info.method.qualified_method.rsplit(".", 1)[-1], len(info.parameters))
-                ].append(info)
-        return self._by_name_arity.get((name, arity), [])
+                name_of = info.method.qualified_method.rsplit(".", 1)[-1]
+                self._by_name_arity[(name_of, len(info.parameters))].append(info)
+                if info.varargs:
+                    self._varargs_by_name[name_of].append(info)
+        found = self._by_name_arity.get((name, arity), [])
+        if not variable_arity:
+            return found
+        return found + [
+            info for info in self._varargs_by_name.get(name, [])
+            if len(info.parameters) - 1 <= arity and len(info.parameters) != arity
+        ]
 
     def _declarator(self, info: _Method, scope: Node, name: str, invocation: Node) -> _Declarator | None:
         """How ``scope`` declares ``name`` for ``invocation``: as a variable

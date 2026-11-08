@@ -3198,6 +3198,52 @@ SHAPES: list[Shape] = [
             "HnImpl.apply": "possible", "Hn.apply": "possible",
         },
         note="BL-30: a returned lambda, a cast and an assignment write the target type"),
+    Shape("F2-more-contexts", """
+        interface Sn { void apply(); } //@Sn.apply
+        interface En { void apply(); } //@En.apply
+        interface Vn { void apply(); } //@Vn.apply
+        interface An { void apply(); } //@An.apply
+        interface Wn { void apply(); } //@Wn.apply
+        class SnImpl implements Sn { public void apply() {} } //@SnImpl.apply
+        class EnImpl implements En { public void apply() {} } //@EnImpl.apply
+        class VnImpl implements Vn { public void apply() {} } //@VnImpl.apply
+        class AnImpl implements An { public void apply() {} } //@AnImpl.apply
+        class WnImpl implements Wn { public void apply() {} } //@WnImpl.apply
+        class Base { Base(Sn s) {} }
+        class Sub extends Base { Sub() { super(() -> {}); } }
+        enum Op {
+          A(() -> {});
+          Op(En e) {}
+        }
+        class Pipe {
+          static void of(Vn... values) {}
+          static void use() { of(() -> {}, () -> {}); }
+        }
+        class Arrays {
+          An[] fixed = { () -> {} };
+          Wn pick(int i) {
+            return switch (i) { case 0 -> () -> {}; default -> { yield new WnImpl(); } };
+          }
+        }
+        class Use {
+          Sn s; En e; Vn v; An a; Wn w;
+          void run() { //@Use.run
+            s.apply();
+            e.apply();
+            v.apply();
+            a.apply();
+            w.apply();
+          }
+        }
+        """, "Use.run", {
+            "SnImpl.apply": "possible", "Sn.apply": "possible",
+            "EnImpl.apply": "possible", "En.apply": "possible",
+            "VnImpl.apply": "possible", "Vn.apply": "possible",
+            "AnImpl.apply": "possible", "An.apply": "possible",
+            "WnImpl.apply": "possible", "Wn.apply": "possible",
+        },
+        note="BC-12: super(..), an enum constant, a varargs parameter, an array initializer and a "
+             "switch arm write the target type of a lambda"),
     Shape("F2-created", """
         interface Fn {
           void apply(); //@Fn.apply
