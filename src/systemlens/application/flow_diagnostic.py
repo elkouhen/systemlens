@@ -7,11 +7,11 @@ from systemlens.application.architecture_inventory import ArchitectureInventory
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
 from systemlens.domain.code_flows import CodeFlow, IntegrationMethod
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
-from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.models import MESSAGE_SYSTEMS, MessageEndpoint
 
 
-_ENTRY_ROLES = {("rest", "serve"), ("kafka", "consume")}
-_EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
+_ENTRY_ROLES = {("rest", "serve"), *((system, "consume") for system in MESSAGE_SYSTEMS)}
+_EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
 
 def _endpoint_index(endpoints: Iterable[MessageEndpoint]) -> dict[str, MessageEndpoint]:

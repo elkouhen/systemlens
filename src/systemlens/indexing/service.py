@@ -40,6 +40,7 @@ from systemlens.callgraph.registry import DEFAULT_ENGINE, load_engine
 from systemlens.indexing.source_generation import generate_sources as _generate_sources
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import (
+    MESSAGE_SYSTEMS,
     ExtractionDiagnostic,
     MessageEndpoint,
     ensure_unique_endpoint_ids,
@@ -54,6 +55,7 @@ from systemlens.indexing.relations import build_architecture_relations
 from systemlens.scanner import (
     clear_analysis_caches,
     infer_framework_endpoints,
+    infer_broker_endpoints,
     infer_kafka_endpoints,
     infer_json_kafka_flow_graph_endpoints,
     infer_markdown_topic_manifest_endpoints,
@@ -445,6 +447,7 @@ def _index_repo(
         endpoints.extend(
             infer_kafka_endpoints(repo_root, changed, strategy1=strategy1_enabled)
         )
+        endpoints.extend(infer_broker_endpoints(repo_root, changed))
         endpoints.extend(infer_markdown_topic_manifest_endpoints(repo_root, changed))
         endpoints.extend(infer_json_kafka_flow_graph_endpoints(repo_root, changed))
         _report_progress(progress, "  ✓ AST 1/1 : analyse terminée")
@@ -612,7 +615,7 @@ def _index_repo(
     timer.begin("statistics", "→ Indexation : calcul des statistiques finales...")
     indexed_ports = [
         endpoint for endpoint in store.all_endpoints()
-        if endpoint.system in {"rest", "kafka"}
+        if endpoint.system in {"rest", *MESSAGE_SYSTEMS}
         and endpoint.role in {"serve", "consume", "call", "produce"}
     ]
     input_ports = [endpoint for endpoint in indexed_ports if endpoint.role in {"serve", "consume"}]

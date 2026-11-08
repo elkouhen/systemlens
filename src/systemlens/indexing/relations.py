@@ -6,7 +6,9 @@ from dataclasses import replace
 from pathlib import Path
 from typing import TypedDict
 
-from systemlens.domain.models import ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id
+from systemlens.domain.models import (
+    BROKER_SYSTEMS, ArchitectureRelation, MessageEndpoint, compute_architecture_relation_id,
+)
 from systemlens.domain.message_types import message_type_key
 from systemlens.domain.graph import DEFAULT_REST_TARGET_POLICY, build_graph, group_endpoints_by_module
 from systemlens.conventions.strategy1.graph import STRATEGY1_REST_TARGET_POLICY
@@ -120,7 +122,11 @@ def build_architecture_relations(
         if endpoint.module is None:
             continue
         source_kind = module_kinds.get(endpoint.module, "module")
-        target_kind = "topic" if endpoint.system == "kafka" else "api"
+        target_kind = (
+            "topic" if endpoint.system == "kafka"
+            else "channel" if endpoint.system in BROKER_SYSTEMS
+            else "api"
+        )
         relation = {
             "produce": "publishes",
             "consume": "consumes",

@@ -22,7 +22,9 @@ import shutil
 
 import pytest
 
+from systemlens.application.architecture_inventory import load_architecture_inventory
 from systemlens.application.flow_calculation import calculate_persisted_flows
+from systemlens.application.flow_diagnostic import diagnose_flows
 from systemlens.callgraph.registry import declaration
 from systemlens.domain.code_flows import CodeFlow
 from systemlens.indexing.service import index_repo
@@ -39,7 +41,10 @@ Flow = tuple[str, tuple[str, ...]]
 def _flow(confidence: str, *steps: str) -> Flow:
     # ``Type.method`` steps are methods of ``example.orders``; the others
     # are endpoint names.
-    return confidence, tuple(f"{_ORDERS}{step}" if "." in step and " " not in step else step for step in steps)
+    return confidence, tuple(
+        f"{_ORDERS}{step}" if step[:1].isupper() and "." in step and " " not in step else step
+        for step in steps
+    )
 
 
 @dataclass(frozen=True)
@@ -91,7 +96,16 @@ CASES = [
           _flow("medium", *_TO_PUBLISHER)),
     _case("command-line-runner", f"{_ORDERS}StartupRunner.run", "BL-49",
           _flow("medium", *_TO_PUBLISHER)),
-    FlowCase("dead-end", f"{_ORDERS}PingController.ping", None, "BL-50"),
+    # PDR-15: Rabbit and JMS publications are effects. The default
+    # exchange names the queue; a named exchange keeps exchange/routing-key.
+    _case("rabbit-publication", f"{_ORDERS}BrokerController.rabbit", None,
+          _flow("medium", "rabbit-in")),
+    _case("rabbit-exchange-publication", f"{_ORDERS}BrokerController.exchange", None,
+          _flow("medium", "orders-exchange/orders.created")),
+    _case("jms-publication", f"{_ORDERS}BrokerController.jms", None,
+          _flow("medium", "jms-in")),
+    # PDR-15: a route that reaches no effect is not a flow (BL-50).
+    _case("dead-end", f"{_ORDERS}PingController.ping", None),
     # s3, s4: MessageHandler<String> excludes BinaryHandler, a
     # MessageHandler<byte[]>; CodeQL dispatches exactly to TextHandler.
     _case("s3-generic-cast", f"{_ORDERS}HandlerController.registry", "BL-45",
@@ -154,6 +168,25 @@ def test_source_engine_persists_the_shape_flows(
         assert got == set(case.flows), (
             f"{case.id}: missing {sorted(set(case.flows) - got)}, extra {sorted(got - set(case.flows))}"
         )
+
+
+def test_dead_end_route_is_diagnosed_and_not_persisted(
+    source_flows: dict[str, list[tuple[str, str, str, tuple[str, ...]]]], tmp_path: Path,
+) -> None:
+    # PDR-15 (BL-50): GET /ping reaches no effect. No flow is persisted and
+    # the flow diagnostic names the route as an entry without an effect.
+    assert not [flow for flow in source_flows["index"] if flow[1] == "GET /ping"]
+    repo = tmp_path / "repo"
+    shutil.copytree(FIXTURE, repo)
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+    entries = {
+        entry["entry"]: entry["status"]
+        for entry in diagnose_flows(load_architecture_inventory(repo))["entries"]
+    }
+    assert entries["GET /ping"] == "entry_method_without_external_effect"
+    # A route with a local flow and no paired consumer.
+    assert entries["POST /broker/rabbit"] == "external_relation_unresolved"
 
 
 def test_source_rebuild_reproduces_the_indexed_flows(

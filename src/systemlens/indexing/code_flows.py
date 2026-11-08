@@ -25,7 +25,7 @@ from systemlens.domain.code_flows import IntegrationMethod
 from systemlens.domain.data_operation_projection import data_operations_from_modules
 from systemlens.domain.data_operations import DataOperation, key_identity_base
 from systemlens.domain.graph import GraphEdge
-from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.models import MESSAGE_SYSTEMS, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, ModuleDependency, module_identity
 from systemlens.callgraph.model import MethodCall, MethodReachability
 from systemlens.indexing.integration_methods import (
@@ -44,7 +44,7 @@ from systemlens.storage.persisted_names import (
 
 CODE_FLOW_SIGNATURE = "code-flow-v56-inherited-routes-and-triggers"
 _TRIGGER_ROLES = {("rest", "serve"), ("kafka", "consume")}
-_EFFECT_ROLES = {("rest", "call"), ("kafka", "produce")}
+_EFFECT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
 
 CallEdgeEntry = tuple[IntegrationMethod, MethodCall, bool]
@@ -323,12 +323,10 @@ def _endpoint_step(endpoint: MessageEndpoint, order: int) -> CodeFlowStep:
             order=order, kind="cron_entry", name=endpoint.topic, path=endpoint.path,
             start_line=endpoint.start_line, end_line=endpoint.end_line,
         )
-    kind = {
-        ("rest", "serve"): "http_entry",
-        ("kafka", "consume"): "message_entry",
-        ("rest", "call"): "http_call",
-        ("kafka", "produce"): "message_publish",
-    }[(endpoint.system, endpoint.role)]
+    if endpoint.system in MESSAGE_SYSTEMS:
+        kind = {"consume": "message_entry", "produce": "message_publish"}[endpoint.role]
+    else:
+        kind = {"serve": "http_entry", "call": "http_call"}[endpoint.role]
     return CodeFlowStep(
         order=order,
         kind=kind,

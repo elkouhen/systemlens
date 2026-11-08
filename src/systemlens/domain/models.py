@@ -48,6 +48,12 @@ class Finding:
     qualified_name: str | None = None
 
 
+# Message brokers beside Kafka whose ports are channels named like a topic
+# (PDR-15, PDR-16). Kafka keeps its own topic model and topology view.
+BROKER_SYSTEMS = frozenset({"rabbitmq", "jms"})
+MESSAGE_SYSTEMS = frozenset({"kafka", *BROKER_SYSTEMS})
+
+
 def compute_endpoint_id(
     role: str,
     topic: str,

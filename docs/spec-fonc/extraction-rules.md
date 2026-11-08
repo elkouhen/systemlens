@@ -57,7 +57,8 @@ be correlated. If the operation or contract is ambiguous, no route is fabricated
 The Java AST extractor covers Spring MVC/WebFlux, Feign, Spring HTTP interfaces
 (`@HttpExchange` with `@GetExchange`/`@PostExchange` and related annotations),
 RestTemplate, RestClient, WebClient, Spring Cloud Gateway, Spring Data REST, Spring Kafka and Spring
-Cloud Stream. Markdown and JSON Kafka manifests are supported as explicit
+Cloud Stream. It also reads RabbitMQ and JMS publications through
+`RabbitTemplate`, `AmqpTemplate` and `JmsTemplate`. Markdown and JSON Kafka manifests are supported as explicit
 sources and are labelled `source=manifest`.
 
 Module discovery records JPA entity classes only when source imports or fully
@@ -412,6 +413,19 @@ the first of the `cron`, `fixedRate` and `fixedDelay` arguments, as
 `@Scheduled(cron=0 * * * * *)`, `@Scheduled(fixedRate=5000)` or
 `@Scheduled(fixedDelay=5000)`, and `@Scheduled` without any of them. The
 schedule is retained as source evidence.
+
+A flow goes from a trigger to an effect (PDR-15). An effect is an HTTP
+call, a message publication or a data operation. A route whose calls
+reach none of them is not a flow, however deep its call tree; `analyze
+flows-diagnostic` reports it as `entry_method_without_external_effect`.
+Calls to Redis, Elasticsearch, R2DBC, S3 or SQS are not effects.
+
+A RabbitMQ or JMS publication is an effect with a `Publication message`
+step. The channel is resolved as a Kafka topic is; an unresolved one is
+dynamic. A Rabbit publication on the default exchange is named by its
+routing key, the queue name. One to a named exchange is named
+`exchange/routing-key` and pairs with no queue, since exchange bindings
+are not read. A JMS publication is named by its destination.
 
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service edge requires the same

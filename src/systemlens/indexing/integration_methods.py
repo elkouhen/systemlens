@@ -12,13 +12,13 @@ from tree_sitter import Node
 
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.code_flows import IntegrationMethod, inherited_method_anchor
-from systemlens.domain.models import MessageEndpoint
+from systemlens.domain.models import MESSAGE_SYSTEMS, MessageEndpoint
 from systemlens.domain.module_inventory import DiscoveredModule, module_identity
 
 # A scheduler trigger is transient: it exists only while flows are built.
 SCHEDULER_TRIGGER = ("scheduler", "trigger")
 _INPUT_ROLES = {("rest", "serve"), ("kafka", "consume"), SCHEDULER_TRIGGER}
-_OUTPUT_ROLES = {("rest", "call"), ("kafka", "produce")}
+_OUTPUT_ROLES = {("rest", "call"), *((system, "produce") for system in MESSAGE_SYSTEMS)}
 
 # ADR-75: a constructor is ``Owner.<init>``, a type's static initializer
 # code is ``Owner.<clinit>``. Neither can collide with a Java method name.

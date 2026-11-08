@@ -1401,16 +1401,17 @@ flows of each entry in both results.
 
 A shape whose gap an open item owns is a strict expected failure naming
 it: the Rabbit, JMS, `@EventListener` and `CommandLineRunner` entries
-(BL-49), the route that reaches no integration point (BL-50), the
-dispatch a generic type argument decides (BL-45), and the ternary and
-call-context dispatch (BL-46).
+(BL-49), the dispatch a generic type argument decides (BL-45), and the
+ternary and call-context dispatch (BL-46).
 
 Controls pass today: a controller-service-client chain, a job calling its
 own inherited template method, a template method called on a sibling
 subtype (BL-47), a `@Scheduled(fixedDelay = ...)` entry, and a CRUD route
 two controllers inherit from one base method (BL-48): each route reaches
-its own controller's hook only. A `slow` test checks both template shapes
-with CodeQL.
+its own controller's hook only. Rabbit and JMS publications end their
+routes' flows (BL-50), and `GET /ping`, which reaches no effect, has no
+flow and the diagnostic status `entry_method_without_external_effect`.
+A `slow` test checks both template shapes with CodeQL.
 
 The rebuild reproduces the indexed flows with `source`, and a `slow` test
 runs the same check with CodeQL: `PluginNotifier`, in a module

@@ -153,6 +153,26 @@ of served routes, matching costs `O(C + S + M)`, where `M` is the number of
 actual route candidates, rather than comparing every call with every served
 route.
 
+`infer_broker_endpoints` in `scanner/broker_ast.py` adds RabbitMQ and JMS
+publications (PDR-15). A `send` or `convertAndSend` call is a `produce`
+endpoint, of system `rabbitmq` or `jms`, when its receiver is a variable
+the file declares as `RabbitTemplate`, `AmqpTemplate` or `JmsTemplate`, or
+a name ending with one of those types. The channel goes through the Kafka
+topic resolver, so a literal, a source-local constant or a resolvable
+property names it; any other value is `<dynamic>`. No payload type is read.
+
+A Rabbit call picks its overload by arity and by the shape of its extra
+argument. With one argument, or a message and a post-processor callback,
+the template's defaults apply and the channel is dynamic. `(routingKey,
+message)`, with an optional post-processor or correlation argument, uses
+the default exchange: the routing key names the queue. Three or more
+other arguments are `(exchange, routingKey, ...)`; the empty exchange is
+the default one, and a named exchange gives `exchange/routing-key`.
+
+A JMS call names its destination by its first argument. One argument, or
+`convertAndSend(message, postProcessor)`, uses the default destination and
+is dynamic. In `send(destination, creator)` a lambda is the message creator.
+
 When source generation is requested for a Maven project, SystemLens invokes
 `mvn generate-sources` in batch, non-interactive and offline mode. It does not
 compile the project or run tests. If the local Maven cache lacks a required

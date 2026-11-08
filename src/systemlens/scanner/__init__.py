@@ -39,6 +39,7 @@ from systemlens.scanner._spring_properties import (
     _load_unique_value_annotated_fields,
     _local_spring_application_names,
 )
+from systemlens.scanner.broker_ast import infer_broker_endpoints
 from systemlens.scanner.kafka_ast import infer_kafka_endpoints as _infer_kafka_endpoints
 from systemlens.scanner.kafka_payload_types import clear_payload_type_caches
 from systemlens.scanner.rest_inheritance import clear_rest_inheritance_cache
@@ -86,6 +87,7 @@ def infer_kafka_endpoints(
 
 __all__ = [
     "apply_kafka_topic_strategy1",
+    "infer_broker_endpoints",
     "clear_analysis_caches",
     "infer_framework_endpoints",
     "infer_json_kafka_flow_graph_endpoints",
