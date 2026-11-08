@@ -3,8 +3,8 @@
 Status: written on 2026-11-08 from the review of the `source` engine's
 internal-flow detection, and validated the same day by the product
 owner, who asked for it to be implemented. Delivered on 2026-11-08:
-BL-33 and BL-34; each Delivery line names its commit and tests. The
-other items are `open`. Lot order: 0, 1, 4, 3, 2.
+BL-33, BL-34, BL-35, BL-39 and BL-42; each Delivery line names its
+commit and tests. The other items are `open`. Lot order: 0, 1, 4, 3, 2.
 
 Decision records an item depends on are written and accepted under the
 product owner's mandate, to be confirmed by them. Owner: SystemLens
@@ -86,14 +86,14 @@ defect in the join is visible in a test). A target is never invented
 |---|---|---|---|
 | [BL-33](#bl-33) | Make every review gap a visible parity or flow test | P1 | `delivered` |
 | [BL-34](#bl-34) | Fix the documentation drifts the review found | P2 | `delivered` |
-| [BL-35](#bl-35) | Type the element of a container returned by a source method or held by `var` | P1 | `open` |
+| [BL-35](#bl-35) | Type the element of a container returned by a source method or held by `var` | P1 | `delivered` |
 | [BL-36](#bl-36) | Complete the JDK signature table | P1 | `open` |
 | [BL-37](#bl-37) | Type lambdas and method references from JDK functional types | P1 | `open` |
 | [BL-38](#bl-38) | Keep an overloaded call when one argument is untyped | P1 | `open` |
-| [BL-39](#bl-39) | Index record compact constructors as methods | P1 | `open` |
+| [BL-39](#bl-39) | Index record compact constructors as methods | P1 | `delivered` |
 | [BL-40](#bl-40) | Follow element-type transforms through `map` and `flatMap` | P2 | `open` |
 | [BL-41](#bl-41) | Resolve nested type arguments | P2 | `open` |
-| [BL-42](#bl-42) | Type enum `valueOf`/`values`, array `var` loops and `null` ternaries | P2 | `open` |
+| [BL-42](#bl-42) | Type enum `valueOf`/`values`, array `var` loops and `null` ternaries | P2 | `delivered` |
 | [BL-43](#bl-43) | Add a documented Spring signature table | P2 | `open` |
 | [BL-44](#bl-44) | Type `getBean(Class<T>)` and class literals | P3 | `open` |
 | [BL-45](#bl-45) | Exclude implementors whose type argument contradicts the receiver's | P2 | `open` |
@@ -230,7 +230,20 @@ decision the owner has not taken.
   `ProductPersistenceAdapter` chains (`map`, `orElseGet`) are measured
   before and after.
 - **Depends on:** BL-33.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `_generic_view` reads a source method's declared
+  container return through `_return_declarations`, shared with
+  `_returned`, and a `var` initializer under the `_typing` guard. The
+  shared lookup accepts several declarations of one parameter list when
+  they agree, which fixes B.4 (E02). A10, C01 to C08, C12, C14 and E02
+  pass; C05 and D01 needed only this typing, so BL-37 and BL-38 need
+  other cases for their own gaps. A44 also needs `Optional.of` and moves
+  to BL-36; A38 and A42 keep BL-43, D05 keeps BL-37. Call shapes T14
+  (`-var`, `-inherited`, `-unproven`) add the negative cases. Train-ticket
+  and lab counts unchanged; the lab's `ProductPersistenceAdapter` edges
+  are identical before and after: `findById` feeds a written local or a
+  method reference, and `save` is inherited from `JpaRepository`
+  (BL-43). Commit `1578903`.
 - **Why P1:** the most frequent lost shape on Spring code, pure typing,
   and it unblocks BL-38's overload cases.
 
@@ -334,7 +347,17 @@ decision the owner has not taken.
   record's name and the component arity; case B23 passes for both
   engines; a regression test in the ADR-75 test module.
 - **Depends on:** none (ADR-75 delivery note updated).
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `initializer_declarations` makes a compact constructor
+  an `Owner.<init>` node; `declaration_parameters` gives it the record
+  components, for the persisted parameter types, the arity `new R(..)`
+  selects on and the names its body sees. B23 passes for both engines
+  and loses its `codeql_item`; `test_constructor_nodes.py` gains a
+  regression test; ADR-75's delivery notes record the change. The lab
+  gains `Quantity.of → Quantity.<init>` and `Product.reserve →
+  StockReservation.<init>`, `exact` for both engines (source 102 to 104,
+  codeql 103 to 105 edges, 23 flows); train-ticket has no compact
+  constructor. Commit `42f670d`.
 - **Why P1:** a defect in the inventory, cheap.
 
 <a id="bl-40"></a>
@@ -392,7 +415,15 @@ decision the owner has not taken.
   type; a ternary with one `null` branch takes the other branch's type.
   The cases pass.
 - **Depends on:** BL-33.
-- **Status:** `open`.
+- **Status:** `delivered`.
+- **Delivery:** `receiver_type` types a source enum's `valueOf(String)`
+  and `values()`; a `var` loop over an array takes the element type; a
+  ternary with one `null` branch takes the other's type, boxed when
+  primitive. B14, B15, B44 and C11 pass; call shapes T9-array,
+  T10-null and T15 add the negative cases (`Enum.valueOf(Class,
+  String)`, a non-enum class, two `null` branches). The same commit
+  moves `CODE_FLOW_SIGNATURE` to `code-flow-v52-receiver-typing` (B.5).
+  Train-ticket counts unchanged. Commit `391a472`.
 - **Why P2:** cheap, but the shapes are uncommon.
 
 ## Lot 2: library signatures, behind a decision record
