@@ -244,7 +244,10 @@ When the index knows module dependencies, a typed engine's edge, the
 dispatch the join adds for it and the symbol fallback beside it never join
 two modules the build graph does not relate: the callee's module is the
 caller's, one of its transitive dependencies, or a module that depends on
-it (ADR-71, J2). An
+it (ADR-71, J2). A rebuild from persisted edges expands a declared
+contract edge through the same `dispatch_expansion` helper as the fresh
+join, so it applies the same scope and `index` and `flows calculate`
+agree (BL-51). An
 `exact` engine edge to an enum method that a constant body overrides
 becomes `possible`, and each overriding body is a `possible` target: an
 engine without constant-body methods cannot prove the receiver (H9, J4).
@@ -1390,9 +1393,11 @@ integration point (BL-50), the dispatch a generic type argument decides
 Controls pass today: a controller-service-client chain, a job calling its
 own inherited template method, a template method called on a sibling
 subtype (BL-47), and a `@Scheduled(fixedDelay = ...)` entry. A `slow`
-test checks both template shapes with CodeQL. The rebuild reproduces the indexed flows with `source`. A `slow`
-test runs the same check with CodeQL; it is a strict expected failure
-until BL-51 applies the ADR-71 module check to the rebuild.
+test checks both template shapes with CodeQL.
+
+The rebuild reproduces the indexed flows with `source`, and a `slow` test
+runs the same check with CodeQL: `PluginNotifier`, in a module
+`orders-app` cannot see, stays out of both (BL-51).
 
 ## Build layout
 

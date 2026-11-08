@@ -167,13 +167,15 @@ def codeql_flows(tmp_path_factory: pytest.TempPathFactory) -> Iterator[dict[str,
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, reason="BL-51")
 def test_codeql_rebuild_reproduces_the_indexed_flows(
     codeql_flows: dict[str, list[tuple[str, str, str, tuple[str, ...]]]],
 ) -> None:
     # ADR-71: the fresh join leaves out PluginNotifier, which orders-app
-    # cannot see; the rebuild expands the declared Notifier row without the
-    # check and adds a POST /notices flow to plugin-notices.
+    # cannot see; the rebuild shares its expansion helper and leaves it out
+    # too, with no POST /notices flow to plugin-notices (BL-51).
+    assert not any(
+        "plugin-notices" in steps for _method, _trigger, _confidence, steps in codeql_flows["flows calculate"]
+    )
     assert sorted(codeql_flows["flows calculate"]) == sorted(codeql_flows["index"])
 
 

@@ -1344,6 +1344,47 @@ def test_persisted_rebuild_reads_the_receiver_flag(tmp_path: Path):
     assert outputs(True) == {"app/First.java", "app/Second.java"}
 
 
+def test_persisted_rebuild_keeps_dispatch_in_the_callers_visible_modules(tmp_path: Path):
+    """BL-51: the rebuild expands a declared contract edge with ADR-71's check."""
+    from systemlens.domain.module_inventory import ModuleDependency
+
+    sources = {
+        "core/Notifier.java": "package core; public interface Notifier { void send(); }",
+        "core/Local.java": """package core; public class Local implements Notifier {
+  public void send() { output(); }
+  void output() {}
+}""",
+        "plugin/Plugin.java": """package plugin; import core.Notifier; public class Plugin implements Notifier {
+  public void send() { otherOutput(); }
+  void otherOutput() {}
+}""",
+        "app/Caller.java": """package app; import core.Notifier; public class Caller {
+  private Notifier notifier;
+  public void entry() { notifier.send(); }
+}""",
+    }
+    methods, endpoints = _project(tmp_path, sources)
+    by_name = {method.qualified_method: method for method in methods}
+    edges = [
+        # A typed engine's declared row; the rebuild expands it.
+        CallGraphEdge(by_name["app.Caller.entry"].id, by_name["core.Notifier.send"].id,
+                      "app/Caller.java", 3, "possible"),
+        CallGraphEdge(by_name["core.Local.send"].id, by_name["core.Local.output"].id,
+                      "core/Local.java", 2, "exact"),
+        CallGraphEdge(by_name["plugin.Plugin.send"].id, by_name["plugin.Plugin.otherOutput"].id,
+                      "plugin/Plugin.java", 2, "exact"),
+    ]
+    flows = materialize_call_graph_flows(
+        methods, endpoints, [], repo_root=tmp_path, source_paths=list(sources),
+        persisted_edges=edges,
+        module_dependencies=[ModuleDependency("app", "core"), ModuleDependency("plugin", "core")],
+    )
+    # ``plugin`` is neither on ``app``'s module path nor built on it.
+    assert {flow.steps[-1].path for flow in flows if flow.method == "app.Caller.entry"} == {
+        "core/Local.java",
+    }
+
+
 def test_placeholder_methods_carry_the_discovered_module_identity(tmp_path: Path):
     """An engine method without an indexed row still respects app boundaries."""
     sources = {

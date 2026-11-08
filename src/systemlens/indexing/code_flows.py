@@ -911,6 +911,72 @@ def _build_call_graph(
             seen_edges.add(key)
             adjacency[caller.id].append((callee, call, inferred))
 
+    dependencies_by_module: dict[str, set[str]] = defaultdict(set)
+    for dependency in module_dependencies:
+        dependencies_by_module[dependency.source].add(dependency.target)
+    visible_by_module: dict[str, frozenset[str]] = {}
+
+    def module_path(module: str) -> frozenset[str]:
+        """``module`` and its transitive build dependencies."""
+        modules = visible_by_module.get(module)
+        if modules is None:
+            seen = {module}
+            pending = [module]
+            while pending:
+                for target in dependencies_by_module.get(pending.pop(), ()):
+                    if target not in seen:
+                        seen.add(target)
+                        pending.append(target)
+            modules = visible_by_module[module] = frozenset(seen)
+        return modules
+
+    def visible(caller: IntegrationMethod, callee: IntegrationMethod) -> bool:
+        """Whether a typed engine's edge may join two modules (ADR-71).
+
+        A typed engine resolves over every projected type, without the
+        module dependencies. The callee's module must be on the caller's
+        module path, or depend on the caller's module: a module built on a
+        library can implement the library's interfaces, as an adapter
+        implements a port. Two modules unrelated by the build graph are
+        never joined. A method without a module is not judged, and neither
+        is any edge when the index knows no module dependency at all:
+        without a build graph, the engine's typed evidence stands.
+        """
+        if (
+            not dependencies_by_module or not caller.module or not callee.module
+            or caller.module == callee.module
+        ):
+            return True
+        return callee.module in module_path(caller.module) or caller.module in module_path(callee.module)
+
+    def dispatch_expansion(
+        caller: IntegrationMethod, callee: IntegrationMethod, exact_targets: set[str],
+    ) -> tuple[IntegrationMethod, ...]:
+        """The implementations a call on a declared contract dispatches to.
+
+        Those of the caller's module come first; a typed engine's dispatch
+        keeps to the modules the caller can see (ADR-71). When the site
+        already reaches one of them exactly, the expansion opens no new
+        route and keeps only that target (ADR-70). The fresh join and the
+        rebuild from persisted edges share this rule (BL-51).
+        """
+        assert symbols is not None
+        target_key = (callee.id, caller.module)
+        if target_key not in implementation_targets:
+            info = symbols.methods.get(callee.id)
+            implementation_targets[target_key] = prefer_caller_module(
+                tuple(candidate.method for candidate in symbols.implementations(info))
+                if info is not None and not info.concrete else (),
+                caller,
+            )
+        candidates = tuple(
+            candidate for candidate in implementation_targets[target_key]
+            if visible(caller, candidate)
+        )
+        if any(candidate.id in exact_targets for candidate in candidates):
+            candidates = tuple(candidate for candidate in candidates if candidate.id in exact_targets)
+        return candidates
+
     if persisted_edges is not None:
         methods_by_id = {method.id: method for method in methods}
         for persisted in persisted_methods:
@@ -959,19 +1025,11 @@ def _build_call_graph(
             if symbols is not None and not edge.inferred:
                 callee_info = symbols.methods.get(callee.id)
                 if callee_info is not None and not callee_info.concrete:
-                    target_key = (callee.id, caller.module)
-                    candidates = implementation_targets.setdefault(
-                        target_key,
-                        prefer_caller_module(
-                            tuple(candidate.method for candidate in symbols.implementations(callee_info)),
-                            caller,
-                        ),
-                    )
                     exact_targets = persisted_exact.get((caller.id, edge.line), set())
-                    if any(candidate.id in exact_targets for candidate in candidates):
-                        # The exact edge already reaches the site's target.
-                        continue
-                    for candidate in candidates:
+                    for candidate in dispatch_expansion(caller, callee, exact_targets):
+                        if candidate.id in exact_targets:
+                            # The exact edge already reaches the site's target.
+                            continue
                         synthetic = MethodCall(
                             caller=caller.qualified_method,
                             caller_path=caller.path,
@@ -996,44 +1054,6 @@ def _build_call_graph(
             symbols=symbols,
             other_receiver_sites=frozenset(persisted_other_receiver),
         )
-
-    dependencies_by_module: dict[str, set[str]] = defaultdict(set)
-    for dependency in module_dependencies:
-        dependencies_by_module[dependency.source].add(dependency.target)
-    visible_by_module: dict[str, frozenset[str]] = {}
-
-    def module_path(module: str) -> frozenset[str]:
-        """``module`` and its transitive build dependencies."""
-        modules = visible_by_module.get(module)
-        if modules is None:
-            seen = {module}
-            pending = [module]
-            while pending:
-                for target in dependencies_by_module.get(pending.pop(), ()):
-                    if target not in seen:
-                        seen.add(target)
-                        pending.append(target)
-            modules = visible_by_module[module] = frozenset(seen)
-        return modules
-
-    def visible(caller: IntegrationMethod, callee: IntegrationMethod) -> bool:
-        """Whether a typed engine's edge may join two modules (ADR-71).
-
-        A typed engine resolves over every projected type, without the
-        module dependencies. The callee's module must be on the caller's
-        module path, or depend on the caller's module: a module built on a
-        library can implement the library's interfaces, as an adapter
-        implements a port. Two modules unrelated by the build graph are
-        never joined. A method without a module is not judged, and neither
-        is any edge when the index knows no module dependency at all:
-        without a build graph, the engine's typed evidence stands.
-        """
-        if (
-            not dependencies_by_module or not caller.module or not callee.module
-            or caller.module == callee.module
-        ):
-            return True
-        return callee.module in module_path(caller.module) or caller.module in module_path(callee.module)
 
     started_at = time.monotonic()
     last_report_at = started_at
@@ -1096,27 +1116,10 @@ def _build_call_graph(
                 # Data query method): the symbol pass must not add it again
                 # as a second, inferred edge (review D4).
                 resolved_sites.add((caller.id, call.call_line, callee.id))
-            target_key = (callee.id, caller.module)
-            if target_key not in implementation_targets:
-                implementation_targets[target_key] = tuple(
-                    candidate.method
-                    for candidate in symbols.implementations(info)
-                ) if info is not None and not info.concrete else ()
-                implementation_targets[target_key] = prefer_caller_module(
-                    implementation_targets[target_key], caller,
-                )
-            candidates = tuple(
-                candidate for candidate in implementation_targets[target_key]
-                if visible(caller, candidate)
-            )
-            exact_targets = exact_site_targets.get(
+            # The witness opens no new route beside a resolved target.
+            candidates = dispatch_expansion(caller, callee, exact_site_targets.get(
                 (caller.id, call.caller_path, call.call_line), set()
-            )
-            if any(candidate.id in exact_targets for candidate in candidates):
-                # The witness opens no new route: keep the resolved target.
-                candidates = tuple(
-                    candidate for candidate in candidates if candidate.id in exact_targets
-                )
+            ))
             for candidate in candidates:
                 synthetic = replace(
                     call, callee=candidate.qualified_method, callee_path=candidate.path,
