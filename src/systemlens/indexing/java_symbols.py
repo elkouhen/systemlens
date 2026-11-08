@@ -4099,9 +4099,11 @@ class JavaSymbols:
             target = receiver.child_by_field_name("object")
             field = receiver.child_by_field_name("field")
             typed = self._receiver_env(info, target, invocation, depth + 1) if target is not None else None
-            if typed is None or field is None or typed[0] not in self.types:
-                return None
-            return self._field_type(typed[0], parser.node_text(source, field), info.module, typed[1])
+            if typed is not None and field is not None and typed[0] in self.types:
+                field_type = self._field_type(typed[0], parser.node_text(source, field), info.module, typed[1])
+                if field_type is not None:
+                    return field_type
+            return self._qualified_type_receiver(info, receiver, invocation)
         if receiver.type != "method_invocation":
             return None
         parent_receiver, name, arguments = parser.invocation_parts(receiver, source)
@@ -4602,6 +4604,36 @@ class JavaSymbols:
             return self.receiver_type(info, receiver, invocation)
         finally:
             self._bounds = True
+
+    def _qualified_type_receiver(self, info: _Method, receiver: Node, invocation: Node) -> str | None:
+        """``Outer.Inner`` or ``p.Util`` as a receiver: a static call on that
+        source type (BC-22).
+
+        Java reads a dotted name as an expression when its first name is a
+        variable in scope, then as a field of the type it names, and only
+        then as a type (JLS 6.5.2). The field was tried first; a variable
+        that the first name denotes, typed or not, keeps it an expression.
+        """
+        path = info.method.path
+        text = re.sub(r"\s+", "", parser.node_text(self.units[path].source, receiver))
+        if not re.fullmatch(r"[\w$]+(?:\.[\w$]+)+", text):
+            return None
+        if self._declares_variable(info, text.split(".", 1)[0], invocation):
+            return None
+        resolved = self.resolve(path, text, info.owner, at=receiver)
+        return resolved if resolved in self.types else None
+
+    def _declares_variable(self, info: _Method, name: str, invocation: Node) -> bool:
+        """Whether a local, parameter or field ``name`` is in scope, along
+        :meth:`variable_type`'s lexical lookup, whatever its type."""
+        scope = invocation.parent
+        while scope is not None:
+            if self._declarator(info, scope, name, invocation) is not None:
+                return True
+            if (scope.type in _TYPES or _is_class_scope_body(scope)) and self._class_scope_field(info, scope, name)[0]:
+                return True
+            scope = scope.parent
+        return False
 
     def _qualified_this(self, info: _Method, receiver: Node) -> str | None:
         """``Outer.this``: the named type, when it encloses the expression."""

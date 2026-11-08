@@ -298,6 +298,51 @@ SHAPES: list[Shape] = [
     }, "Use.run", {"Util.foo": "exact"}, absent=("Util.bar", "Util.baz", "Base.bar"),
         note="BC-21: no enclosing type may declare foo, so the import binds it; an anonymous body "
              "declaring bar, or an external supertype of unknown members, keeps the call unresolved"),
+    Shape("S2-qualified-type", """
+        class Outer {
+          static class Inner {
+            static void create() {} //@Outer.Inner.create
+          }
+        }
+        class Util {
+          static void run() {} //@Util.run
+        }
+        class Other {
+          void create() {} //@Other.create
+        }
+        class Hiding {
+          static Other Inner;
+          static class Inner {
+            static void create() {} //@Hiding.Inner.create
+          }
+        }
+        class Use {
+          void run() { //@Use.run
+            Outer.Inner.create();
+            p.Util.run();
+            Hiding.Inner.create();
+          }
+        }
+        """, "Use.run", {"Outer.Inner.create": "exact", "Util.run": "exact", "Other.create": "exact"},
+        absent=("Hiding.Inner.create",),
+        note="BC-22: a dotted receiver is a variable, then a field, then a source type (JLS 6.5.2)"),
+    Shape("S2-qualified-type-variable", """
+        class Util {
+          static void run() {} //@Util.run
+        }
+        class Other {
+          void run() {} //@Other.run
+        }
+        class Holder {
+          Other Util;
+        }
+        class Use {
+          void shadowed(Holder p) { //@Use.shadowed
+            p.Util.run();
+          }
+        }
+        """, "Use.shadowed", {"Other.run": "exact"}, absent=("Util.run",),
+        note="BC-22: a variable p obscures the package p"),
     Shape("S3", """
         class Outer {
           void helper() {} //@Outer.helper

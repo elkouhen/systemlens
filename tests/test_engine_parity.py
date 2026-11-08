@@ -1203,6 +1203,24 @@ class Anonymous20 {
     new Thread() { public void run() { assist20(); } }; //@e20.thread
   }
 }
+
+// E21: qualified type receivers (BC-22).
+class Outer21 {
+  static class Inner21 {
+    static void create() {} //@Outer21.Inner21.create
+  }
+}
+
+class Tools21 {
+  static void run() {} //@Tools21.run
+}
+
+class Qualified21 {
+  void e21() { //@E21
+    Outer21.Inner21.create(); //@e21.nested
+    p.Tools21.run(); //@e21.package
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1498,6 +1516,8 @@ CASES: list[Case] = [
           ("E19.helper", "Go19.go", "exact")),
     _case("E20", "E20", None,
           ("e20.runnable", "Util20.assist20", "exact"), ("e20.thread", "Util20.assist20", "exact")),
+    _case("E21", "E21", None,
+          ("e21.nested", "Outer21.Inner21.create", "exact"), ("e21.package", "Tools21.run", "exact")),
 ]
 
 

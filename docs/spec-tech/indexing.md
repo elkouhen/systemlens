@@ -424,7 +424,10 @@ methods: with the `source` engine it is the whole call graph, with `codeql`
 it fills the gaps. A receiver is typed from a field, parameter, local or
 `var` initializer, a declared return type, a field access (`obj.field`,
 `Type.CONSTANT`, enum constants), an array element, `Outer.this` from a
-type it encloses, or a capitalized type name for a static call.
+type it encloses, or a capitalized type name for a static call. A dotted
+name such as `Outer.Inner` or `p.Util` is a static call on that source
+type when its first name is no variable in scope and its last is no field
+of the type before it, as Java reads names (JLS 6.5.2, BC-22).
 `receiver::name` is a call when that name has one declared arity, or when
 the target functional interface picks one (BL-24); see the lambda
 paragraphs below.
@@ -1380,7 +1383,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | # | Shape | Status | Plan |
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors; dotted and nested generic type names; a field chain from `this` | `covered` (BC-07, BC-16, BC-17) | |
-| S2 | Static call and static import, also from an anonymous class body; an import an external supertype may shadow stays unresolved | `covered` (BC-13, BC-21) | |
+| S2 | Static call and static import, also from an anonymous class body; a qualified type receiver `Outer.Inner.m()` or `p.Util.m()`; an import an external supertype may shadow stays unresolved | `covered` (BC-13, BC-21, BC-22) | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
@@ -1595,6 +1598,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E18 | `map(Foo18::new)`, `Supplier<Foo18> make = Foo18::new` and `Foo18::<String>id` | `covered` | BC-19 |
 | E19 | A local `class Helper19` declaring `h()` in each of two methods, each calling its own | `covered` | BC-20 |
 | E20 | A statically imported `assist20()` called in an anonymous `Runnable` and an anonymous `Thread` | `covered` | BC-21 |
+| E21 | `Outer21.Inner21.create()` and `p.Tools21.run()` | `covered` | BC-22 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
