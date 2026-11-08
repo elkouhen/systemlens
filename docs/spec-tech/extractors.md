@@ -11,6 +11,11 @@ WebClient, Spring Data REST and gateway routes. It resolves literals, known Spri
 property expressions, unique never-reassigned local string base URLs, and bounded
 private String helpers with one unconditional return.
 
+`_client_base_resolver` applies the base URL a fluent client is bound to,
+for RestClient and WebClient alike. `java_parser.expanded_annotations`
+unwraps the container of a repeatable annotation, such as `@Schedules` or
+`@KafkaListeners`, for every extractor and trigger reader (BC-36).
+
 Multi-document Spring YAML is read document by document; base-document values take
 precedence where no active-profile selection exists. A document activated by
 `on-profile` or `spring.profiles` counts as a profile file:

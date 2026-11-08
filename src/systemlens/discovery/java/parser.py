@@ -280,6 +280,36 @@ def annotations_of(decl: Node) -> list[Node]:
     return [c for c in mods.children if c.type in _ANNOTATION_TYPES]
 
 
+# Container annotation of a repeatable annotation (BC-36).
+REPEATABLE_CONTAINERS = {
+    "KafkaListeners": "KafkaListener",
+    "RabbitListeners": "RabbitListener",
+    "JmsListeners": "JmsListener",
+    "Schedules": "Scheduled",
+}
+
+
+def expanded_annotations(decl: Node, source: bytes) -> list[Node]:
+    """``annotations_of`` with each repeatable container unwrapped.
+
+    ``@Schedules({@Scheduled(...), @Scheduled(...)})`` stands for its two
+    ``@Scheduled`` annotations, as does ``@KafkaListeners`` for its
+    listeners: Java writes repeated annotations either way.
+    """
+    expanded: list[Node] = []
+    for annotation in annotations_of(decl):
+        repeated = REPEATABLE_CONTAINERS.get(annotation_name(annotation, source))
+        if repeated is None:
+            expanded.append(annotation)
+            continue
+        expanded.extend(
+            node for node in walk(annotation)
+            if node is not annotation and node.type in _ANNOTATION_TYPES
+            and annotation_name(node, source) == repeated
+        )
+    return expanded
+
+
 def annotation_name(ann: Node, source: bytes) -> str:
     """Simple (last segment) name of an annotation: ``GetMapping``."""
     name = ann.child_by_field_name("name")

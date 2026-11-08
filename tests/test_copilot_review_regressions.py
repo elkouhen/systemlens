@@ -552,3 +552,132 @@ def test_rest_message_type_comes_only_from_mapped_methods(tmp_path: Path) -> Non
         }
 
     assert typed == {("spring", "POST /orders", "OrderDto")}
+
+
+def test_dropped_client_and_listener_shapes_are_recognised(tmp_path: Path) -> None:
+    """BC-36: each shape gave no endpoint, or a dynamic one, and no trace.
+
+    RestTemplate receivers are matched by declared type, with
+    ``postForLocation``; WebClient takes its builder's base URL; a message
+    send names its inline ``TOPIC`` header or is dynamic; container
+    annotations are unwrapped; a mapping value may be a same-class
+    constant; a method-level ``@HttpExchange`` names its verb; and every
+    ``_genkey_<n>`` of a gateway ``Path`` predicate is a pattern.
+    """
+    repo = _service(tmp_path, {
+        "src/main/java/demo/R.java": (
+            "package demo;\n"
+            "import org.springframework.web.client.RestTemplate;\n"
+            "import org.springframework.web.client.RestOperations;\n"
+            "import org.springframework.web.reactive.function.client.WebClient;\n"
+            "public class R {\n"
+            "  RestTemplate template; RestTemplate restTemplate; RestOperations rest;\n"
+            '  WebClient wc = WebClient.builder().baseUrl("http://inventory/v1").build();\n'
+            '  void a() { template.getForObject("http://inventory/a", String.class); }\n'
+            '  void b() { restTemplate.postForLocation("http://inventory/b", null); }\n'
+            '  void c() { rest.getForObject("http://inventory/c", String.class); }\n'
+            '  void e() { wc.get().uri("/e").retrieve(); }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/KK.java": (
+            "package demo;\n"
+            "import org.springframework.kafka.core.KafkaTemplate;\n"
+            "import org.springframework.kafka.annotation.*;\n"
+            "import org.springframework.amqp.rabbit.annotation.*;\n"
+            "import org.springframework.messaging.support.MessageBuilder;\n"
+            "import org.springframework.kafka.support.KafkaHeaders;\n"
+            "import org.springframework.messaging.Message;\n"
+            "public class KK {\n"
+            "  KafkaTemplate<String, String> kafkaTemplate;\n"
+            "  void a() { kafkaTemplate.send(MessageBuilder.withPayload(\"x\")"
+            '.setHeader(KafkaHeaders.TOPIC, "inline-t").build()); }\n'
+            "  void b(Message<String> m) { kafkaTemplate.send(m); }\n"
+            '  @KafkaListeners({@KafkaListener(topics = "multi-a"), @KafkaListener(topics = "multi-b")})\n'
+            "  void l(String s) {}\n"
+            '  @RabbitListeners({@RabbitListener(queues = "q-a")})\n'
+            "  void r(String s) {}\n"
+            "}\n"
+        ),
+        "src/main/java/demo/M.java": (
+            "package demo;\n"
+            "import org.springframework.web.bind.annotation.*;\n"
+            "@RestController\n"
+            "public class M {\n"
+            '  static final String BASE = "/base";\n'
+            '  @GetMapping({"/x", "/y"}) public String xy() { return ""; }\n'
+            '  @GetMapping(BASE + "/c") public String c() { return ""; }\n'
+            '  @GetMapping(BASE) public String b() { return ""; }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/H.java": (
+            "package demo;\n"
+            "import org.springframework.web.service.annotation.*;\n"
+            '@HttpExchange("/h")\n'
+            'public interface H { @HttpExchange(method = "POST", url = "/p") String p(); }\n'
+        ),
+        "src/main/resources/application.yml": (
+            "spring:\n  cloud:\n    gateway:\n      routes:\n"
+            "        - id: two\n          uri: lb://inv\n          predicates:\n"
+            "            - name: Path\n              args:\n"
+            "                _genkey_0: /one/**\n                _genkey_1: /two/**\n"
+        ),
+    })
+
+    assert _ports(repo) == {
+        ("call", "resttemplate", "GET /a", False),
+        ("call", "resttemplate", "POST /b", False),
+        ("call", "resttemplate", "GET /c", False),
+        ("call", "webclient", "GET /v1/e", False),
+        ("produce", "spring-kafka", "inline-t", False),
+        ("produce", "spring-kafka", "<dynamic>", True),
+        ("consume", "spring-kafka", "multi-a", False),
+        ("consume", "spring-kafka", "multi-b", False),
+        ("consume", "spring-amqp", "q-a", False),
+        ("serve", "spring", "GET <dynamic>", True),
+        ("serve", "spring", "GET /base/c", False),
+        ("serve", "spring", "GET /base", False),
+        ("call", "http-interface", "POST /h/p", False),
+        ("serve", "spring-cloud-gateway", "ANY /one/**", False),
+        ("serve", "spring-cloud-gateway", "ANY /two/**", False),
+        ("call", "spring-cloud-gateway", "ANY /one/**", False),
+        ("call", "spring-cloud-gateway", "ANY /two/**", False),
+    }
+    with Store(repo) as store:
+        hosts = {
+            endpoint.topic for endpoint in store.all_endpoints()
+            if "systemlens-api-domain:inventory" in endpoint.snippet
+        }
+    assert "GET /v1/e" in hosts
+
+
+def test_a_schedules_container_starts_a_flow_per_schedule(tmp_path: Path) -> None:
+    """BC-36: ``@Schedules`` started no flow; repeated ``@Scheduled`` did."""
+    repo = _service(tmp_path, {
+        "src/main/java/demo/Job.java": (
+            "package demo;\n"
+            "import org.springframework.kafka.core.KafkaTemplate;\n"
+            "import org.springframework.scheduling.annotation.*;\n"
+            "public class Job {\n"
+            "  KafkaTemplate<String, String> kafkaTemplate;\n"
+            '  @Scheduled(cron = "0 * * * * *")\n'
+            "  @Scheduled(fixedRate = 5000)\n"
+            '  void twice() { kafkaTemplate.send("t1", "x"); }\n'
+            '  @Schedules({@Scheduled(fixedDelay = 1000), @Scheduled(cron = "1 * * * * *")})\n'
+            '  void container() { kafkaTemplate.send("t2", "x"); }\n'
+            "}\n"
+        ),
+    })
+    clear_analysis_caches()
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True)
+        triggers = sorted(
+            (flow.method.rsplit(".", 1)[-1], flow.steps[0].name)
+            for flow in store.all_code_flows()
+        )
+
+    assert triggers == [
+        ("container", "@Scheduled(cron=1 * * * * *)"),
+        ("container", "@Scheduled(fixedDelay=1000)"),
+        ("twice", "@Scheduled(cron=0 * * * * *)"),
+        ("twice", "@Scheduled(fixedRate=5000)"),
+    ]

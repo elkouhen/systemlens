@@ -414,7 +414,7 @@ def transient_trigger_labels(declaration: Node, source: bytes) -> list[tuple[str
     method is an event trigger (PDR-16). None is a topology endpoint.
     """
     labels: list[tuple[str, str]] = []
-    for annotation in java_parser.annotations_of(declaration):
+    for annotation in java_parser.expanded_annotations(declaration, source):
         name = java_parser.annotation_name(annotation, source)
         if name == "Scheduled":
             labels.append((SCHEDULER_TRIGGER[0], scheduled_trigger_label(annotation, source)))

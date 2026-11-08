@@ -309,6 +309,21 @@ def _resolved_http_host_ast(expression, source: bytes, repo_root: Path, source_p
     )
 
 
+_HTTP_VERBS = frozenset({"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"})
+
+
+def _exchange_verb(annotation, source: bytes) -> str:
+    """Verb of a method-level ``@HttpExchange(method = ...)``, else ``ANY``."""
+    value = java_parser.annotation_argument(annotation, source, key="method")
+    if value is None:
+        return "ANY"
+    text = (
+        java_parser.string_value(value, source) if value.type == "string_literal"
+        else java_parser.node_text(source, value).rsplit(".", 1)[-1]
+    ) or ""
+    return text.upper() if text.upper() in _HTTP_VERBS else "ANY"
+
+
 def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Extract Spring HTTP interface contracts (`@HttpExchange`)."""
     parsed = java_parser.parse_java(str(repo_root), rel_path)
@@ -337,9 +352,13 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
             if method.type != "method_declaration":
                 continue
             annotation = next((a for a in java_parser.annotations_of(method)
-                               if java_parser.annotation_name(a, source) in methods), None)
+                               if java_parser.annotation_name(a, source) in methods
+                               or java_parser.annotation_name(a, source) == "HttpExchange"), None)
             if annotation is None:
                 continue
+            verb = methods.get(java_parser.annotation_name(annotation, source)) or _exchange_verb(
+                annotation, source,
+            )
             suffix, suffix_dynamic = _ast_mapping_value(
                 annotation, source, repo_root, rel_path, keys=("url", "path", "value"),
             )
@@ -353,7 +372,7 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
             endpoints.append(_build_endpoint(
                 repo_root, rel_path, annotation.start_point.row + 1,
                 method.end_point.row + 1, "call", "rest",
-                f"{methods[java_parser.annotation_name(annotation, source)]} {route}",
+                f"{verb} {route}",
                 "http-interface", snippet, topic_dynamic=dynamic,
             ))
     return endpoints
@@ -701,7 +720,15 @@ def _ast_mapping_value(
         if len(elements) == 1:
             value = elements[0]
     if value.type != "string_literal":
-        return "", True
+        # A same-class constant or a concatenation of them (BC-36).
+        written = local_string(source, value)
+        if written is None or '"' in written:
+            return "", True
+        if repo_root is not None and rel_path is not None:
+            return _resolve_rest_path_expression(
+                f'"{written}"', repo_root, rel_path, preserve_dynamic_segments=True,
+            )
+        return written, False
     if repo_root is not None and rel_path is not None:
         return _resolve_rest_path_expression(
             java_parser.node_text(source, value), repo_root, rel_path, preserve_dynamic_segments=True
@@ -1380,7 +1407,13 @@ def _file_uses_resttemplate(repo_root_str: str, rel_path: str) -> bool:
         "org.springframework.web.client.RestTemplate" in text
         or "new RestTemplate(" in text
         or " RestTemplate " in text
+        or "RestOperations" in text
     )
+
+
+_REST_TEMPLATE_DECLARATION_RE = re.compile(
+    r"\b(?:RestTemplate|RestOperations|TestRestTemplate)\s+([A-Za-z_]\w*)\s*[;=,)]"
+)
 
 
 @lru_cache(maxsize=512)
@@ -1456,9 +1489,13 @@ def _infer_resttemplate_exchange_endpoints(
     source, root = parsed
     direct_methods = {
         "getForObject": "GET", "getForEntity": "GET",
-        "postForObject": "POST", "postForEntity": "POST",
-        "put": "PUT", "delete": "DELETE",
+        "postForObject": "POST", "postForEntity": "POST", "postForLocation": "POST",
+        "put": "PUT", "delete": "DELETE", "patchForObject": "PATCH",
+        "headForHeaders": "HEAD", "optionsForAllow": "OPTIONS",
     }
+    # A receiver is a RestTemplate by its declared type, whatever its name
+    # (BC-36): ``template`` or ``rest`` typed ``RestOperations`` count.
+    declared = set(_REST_TEMPLATE_DECLARATION_RE.findall(source.decode("utf-8", errors="replace")))
     inferred: list[MessageEndpoint] = []
     for invocation in java_parser.walk(root):
         if invocation.type != "method_invocation":
@@ -1467,7 +1504,9 @@ def _infer_resttemplate_exchange_endpoints(
         if method_name not in {*direct_methods, "exchange"} or receiver is None or not args:
             continue
         receiver_name = _invocation_receiver(source, receiver)
-        if receiver_name is None or "resttemplate" not in receiver_name.lower():
+        if receiver_name is None or (
+            "resttemplate" not in receiver_name.lower() and receiver_name not in declared
+        ):
             continue
         if method_name == "exchange":
             if len(args) < 2:
@@ -1492,13 +1531,17 @@ def _infer_resttemplate_exchange_endpoints(
         )
     return inferred
 def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
-    """Infer fluent WebClient calls by linking ``.uri`` to its AST receiver."""
+    """Infer fluent WebClient calls by linking ``.uri`` to its AST receiver.
+
+    The client's base URL applies as for RestClient (BC-36).
+    """
     parsed = java_parser.parse_java(str(repo_root), rel_path)
     if parsed is None:
         return []
     source, root = parsed
     if b"WebClient" not in source:
         return []
+    base_for = _client_base_resolver(source, root, repo_root, rel_path)
     endpoints: list[MessageEndpoint] = []
     for invocation in java_parser.walk(root):
         if invocation.type != "method_invocation":
@@ -1513,6 +1556,7 @@ def _infer_webclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEn
         route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
         snippet = java_parser.node_text(source, invocation)
         host = _resolved_http_host_ast(args[0], source, repo_root, rel_path)
+        route, host = base_for(invocation, receiver, args[0], route, host)
         if host is not None:
             snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         endpoints.append(
@@ -1698,7 +1742,7 @@ def _infer_strategy1_openapi_operation_endpoints(
 
 
 def _restclient_base_argument(invocation, source: bytes):
-    """Base URL argument of ``baseUrl(x)`` or ``RestClient.create(x)``."""
+    """Base URL argument of ``baseUrl(x)``, ``RestClient.create(x)`` or ``WebClient.create(x)``."""
     receiver, name, args = java_parser.invocation_parts(invocation, source)
     if len(args) != 1:
         return None
@@ -1706,7 +1750,7 @@ def _restclient_base_argument(invocation, source: bytes):
         return args[0]
     if (
         name == "create" and receiver is not None
-        and java_parser.node_text(source, receiver).rsplit(".", 1)[-1] == "RestClient"
+        and java_parser.node_text(source, receiver).rsplit(".", 1)[-1] in {"RestClient", "WebClient"}
     ):
         return args[0]
     return None
@@ -1792,23 +1836,17 @@ def _restclient_base(argument, source: bytes, repo_root: Path, rel_path: str) ->
     return url_service_hint(raw), normalize_path(raw)
 
 
-def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
-    """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations.
+def _client_base_resolver(source: bytes, root, repo_root: Path, rel_path: str):
+    """Return a function applying a fluent client's base URL to one call.
 
-    BL-08: a call takes the base URL of its own client only: a ``baseUrl``
-    or ``RestClient.create`` in its own chain, else the one bound to the
-    variable the chain starts from. A local binding of the enclosing method
-    wins over a field. A name bound to several bases, declared without a
-    resolvable base, or not found has no base. The base host is target
-    evidence and its path prefixes a relative route; an absolute ``uri``
-    ignores the base.
+    BL-08 for RestClient, BC-36 for WebClient: a call takes the base URL of
+    its own client only: a ``baseUrl`` or ``create(url)`` in its own chain,
+    else the one bound to the variable the chain starts from. A local
+    binding of the enclosing method wins over a field. A name bound to
+    several bases, declared without a resolvable base, or not found has no
+    base. The base host is target evidence and its path prefixes a relative
+    route; an absolute ``uri`` ignores the base.
     """
-    if not _file_uses_restclient(str(repo_root), rel_path):
-        return []
-    parsed = java_parser.parse_java(str(repo_root), rel_path)
-    if parsed is None:
-        return []
-    source, root = parsed
     bindings: dict[tuple[object | None, str], set[tuple[str | None, str] | None]] = {}
     for candidate in java_parser.walk(root):
         if candidate.type != "method_invocation":
@@ -1831,6 +1869,58 @@ def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageE
         found = bindings.get((scope if local else None, name), set())
         return next(iter(found)) if len(found) == 1 else None
 
+    def apply(invocation, receiver, uri, route: str, host: str | None) -> tuple[str, str | None]:
+        # The base applies to a relative URI only: one whose leading part
+        # is known and is not a URL, or a ``UriBuilder`` lambda.
+        written = local_string(source, uri)
+        if written is None and uri.type != "lambda_expression":
+            leading = _split_java_concat(java_parser.node_text(source, uri).strip())[:1]
+            leading_raw, leading_dynamic = (
+                _resolve_rest_expression(
+                    leading[0], repo_root, rel_path,
+                    shadowed=locally_declared_names(uri, source),
+                ) if leading else ("", True)
+            )
+            written = None if leading_dynamic else leading_raw
+        relative = host is None and (
+            uri.type == "lambda_expression"
+            or (written is not None and "://" not in written)
+        )
+        if not relative:
+            return route, host
+        inline, client = _restclient_chain_root(receiver, source)
+        base = (
+            _restclient_base(inline, source, repo_root, rel_path) if inline is not None
+            else base_of(client, invocation) if client is not None
+            else None
+        )
+        if base is not None:
+            host, base_path = base
+            if route != "<dynamic>":
+                route = join_paths(base_path, route)
+        return route, host
+
+    return apply
+
+
+def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
+    """Infer Spring ``RestClient`` fluent calls from ``.uri(...)`` invocations.
+
+    BL-08: a call takes the base URL of its own client only: a ``baseUrl``
+    or ``RestClient.create`` in its own chain, else the one bound to the
+    variable the chain starts from. A local binding of the enclosing method
+    wins over a field. A name bound to several bases, declared without a
+    resolvable base, or not found has no base. The base host is target
+    evidence and its path prefixes a relative route; an absolute ``uri``
+    ignores the base.
+    """
+    if not _file_uses_restclient(str(repo_root), rel_path):
+        return []
+    parsed = java_parser.parse_java(str(repo_root), rel_path)
+    if parsed is None:
+        return []
+    source, root = parsed
+    base_for = _client_base_resolver(source, root, repo_root, rel_path)
     endpoints: list[MessageEndpoint] = []
     for invocation in java_parser.walk(root):
         if invocation.type != "method_invocation":
@@ -1845,33 +1935,7 @@ def _infer_restclient_endpoints(repo_root: Path, rel_path: str) -> list[MessageE
         route, dynamic = _resolve_rest_ast_expression(args[0], source, repo_root, rel_path)
         snippet = java_parser.node_text(source, invocation)
         host = _resolved_http_host_ast(args[0], source, repo_root, rel_path)
-        # The base applies to a relative URI only: one whose leading part
-        # is known and is not a URL, or a ``UriBuilder`` lambda.
-        written = local_string(source, args[0])
-        if written is None and args[0].type != "lambda_expression":
-            leading = _split_java_concat(java_parser.node_text(source, args[0]).strip())[:1]
-            leading_raw, leading_dynamic = (
-                _resolve_rest_expression(
-                    leading[0], repo_root, rel_path,
-                    shadowed=locally_declared_names(args[0], source),
-                ) if leading else ("", True)
-            )
-            written = None if leading_dynamic else leading_raw
-        relative = host is None and (
-            args[0].type == "lambda_expression"
-            or (written is not None and "://" not in written)
-        )
-        if relative:
-            inline, client = _restclient_chain_root(receiver, source)
-            base = (
-                _restclient_base(inline, source, repo_root, rel_path) if inline is not None
-                else base_of(client, invocation) if client is not None
-                else None
-            )
-            if base is not None:
-                host, base_path = base
-                if route != "<dynamic>":
-                    route = join_paths(base_path, route)
+        route, host = base_for(invocation, receiver, args[0], route, host)
         if host is not None:
             snippet = f"{snippet}\n// systemlens-api-domain:{host}"
         endpoints.append(
@@ -2288,11 +2352,20 @@ def _gateway_paths(route: dict[str, object]) -> list[str]:
             paths.extend(path.strip() for path in predicate[5:].split(",") if path.strip())
         elif isinstance(predicate, dict) and predicate.get("name") == "Path":
             args = predicate.get("args")
-            if isinstance(args, dict):
-                value = args.get("_genkey_0") or args.get("patterns")
-                if isinstance(value, str):
-                    paths.append(value)
-    return paths
+            if not isinstance(args, dict):
+                continue
+            # Every ``_genkey_<n>`` argument is a pattern, as is each item
+            # of ``patterns`` (BC-36).
+            for key, value in args.items():
+                if not (str(key).startswith("_genkey_") or key in {"pattern", "patterns"}):
+                    continue
+                values = value if isinstance(value, list) else [value]
+                for item in values:
+                    if isinstance(item, str):
+                        paths.extend(
+                            path.strip() for path in item.split(",") if path.strip()
+                        )
+    return list(dict.fromkeys(paths))
 def _gateway_default_filters(document: object) -> object:
     gateway = document.get("spring", {}) if isinstance(document, dict) else {}
     for key in ("cloud", "gateway"):

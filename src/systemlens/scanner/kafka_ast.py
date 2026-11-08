@@ -429,16 +429,53 @@ def _message_builder_topic_for(
         initializer = declarator.child_by_field_name("value")
         if initializer is None:
             continue
-        for invocation in java_parser.walk(initializer):
-            if invocation.type != "method_invocation":
-                continue
-            _, method_name, args = java_parser.invocation_parts(invocation, source)
-            if method_name != "setHeader" or len(args) < 2:
-                continue
-            header = java_parser.node_text(source, args[0])
-            if header == "TOPIC" or header.endswith(".TOPIC"):
-                return _kafka_topic_from_value(args[1], source, repo_root, rel_path)
+        topic = _header_topic(source, initializer, repo_root, rel_path)
+        if topic is not None:
+            return topic
     return None
+def _header_topic(source: bytes, expression: Node, repo_root: Path, rel_path: str) -> tuple[str, bool] | None:
+    """Topic of a ``setHeader(TOPIC, x)`` call inside ``expression``."""
+    for invocation in java_parser.walk(expression):
+        if invocation.type != "method_invocation":
+            continue
+        _, method_name, args = java_parser.invocation_parts(invocation, source)
+        if method_name != "setHeader" or len(args) < 2:
+            continue
+        header = java_parser.node_text(source, args[0])
+        if header == "TOPIC" or header.endswith(".TOPIC"):
+            return _kafka_topic_from_value(args[1], source, repo_root, rel_path)
+    return None
+
+
+def _single_argument_send_topic(
+    repo_root: Path, rel_path: str, source: bytes, send: Node, argument: Node,
+) -> tuple[str, bool] | None:
+    """Topic of ``kafkaTemplate.send(message)``, or ``None`` for a record.
+
+    A ``ProducerRecord`` argument is published where it is created, so this
+    send adds nothing. A ``Message`` built in place or in a local by
+    ``MessageBuilder...setHeader(TOPIC, x)`` names its topic; any other
+    message, such as a parameter, is a dynamic publication (BC-36).
+    """
+    if argument.type == "object_creation_expression":
+        if _type_simple_name(source, argument.child_by_field_name("type")) == "ProducerRecord":
+            return None
+    written = expression_type_text(repo_root, rel_path, source, argument)
+    if written is not None and written.split("<", 1)[0].rsplit(".", 1)[-1] == "ProducerRecord":
+        return None
+    if argument.type == "identifier":
+        built = _message_builder_topic_for(
+            source, send, java_parser.node_text(source, argument), repo_root, rel_path
+        )
+        if built is not None:
+            return built
+    elif argument.type == "method_invocation":
+        inline = _header_topic(source, argument, repo_root, rel_path)
+        if inline is not None:
+            return inline
+    return "<dynamic>", True
+
+
 _DEFAULT_TOPIC_PROPERTIES = ("spring.kafka.template.default-topic", "spring.kafka.template.defaultTopic")
 
 
@@ -698,7 +735,7 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
             else:
                 continue
             # ``@KafkaListener`` is repeatable: every annotation is a listener.
-            for listener_ann in java_parser.annotations_of(declaration):
+            for listener_ann in java_parser.expanded_annotations(declaration, source):
                 if java_parser.annotation_name(listener_ann, source) != "KafkaListener":
                     continue
                 for topic, dynamic in _kafka_listener_topics(listener_ann, source, repo_root, rel_path):
@@ -743,12 +780,12 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         ):
                             add(node, "produce", "spring-kafka", topic, dynamic,
                                 _producer_send_payload_type(repo_root, rel_path, source, node))
-                    elif len(args) == 1 and args[0].type == "identifier":
-                        built = _message_builder_topic_for(
-                            source, node, java_parser.node_text(source, args[0]), repo_root, rel_path
+                    elif len(args) == 1:
+                        sent = _single_argument_send_topic(
+                            repo_root, rel_path, source, node, args[0]
                         )
-                        if built is not None:
-                            topic, dynamic = built
+                        if sent is not None:
+                            topic, dynamic = sent
                             add(node, "produce", "spring-kafka", topic, dynamic,
                                 _producer_send_payload_type(repo_root, rel_path, source, node))
                 elif method_name == "send" and receiver and receiver.lower().endswith("streambridge") and has_stream_bridge and args:

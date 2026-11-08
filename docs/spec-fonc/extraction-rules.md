@@ -231,20 +231,28 @@ Spring application names are read from multi-document YAML files;
 profile-specific values do not override the base document without an explicit
 active-profile selection.
 
-A RestClient call uses the base URL of its own client only: a `baseUrl` or
-`RestClient.create` in its own call chain, else the one assigned to the
+A RestClient or WebClient call uses the base URL of its own client only: a
+`baseUrl`, `RestClient.create` or `WebClient.create` in its own call chain, else the one assigned to the
 variable or field the chain starts from. A local variable wins over a field
 of the same name. The base host is target evidence and the base path
 prefixes a relative URI. An absolute URI, or one whose leading part is
 unresolved, ignores the base. A client bound to several bases has none.
+
+A RestTemplate call is recognised by its receiver's declared type,
+`RestTemplate`, `RestOperations` or `TestRestTemplate`, whatever the
+variable's name. Besides `exchange`, it reads `getForObject`,
+`getForEntity`, `postForObject`, `postForEntity`, `postForLocation`, `put`,
+`delete`, `patchForObject`, `headForHeaders` and `optionsForAllow`.
 
 A mutable or otherwise unresolved URL remains a dynamic, unresolved port rather
 than a guessed service link. A RestTemplate `exchange` call whose HTTP method
 is computed, and a fluent `method(HttpMethod.X)` call on WebClient or
 RestClient, keep the route; the verb is the enum constant or `ANY`. A mapping
 annotation whose array value holds one literal uses that literal; several
-candidate routes remain dynamic. A text block literal is its trimmed content.
-Spring HTTP interfaces read `url`, `path` and `value`; method-level exchange
+candidate routes remain dynamic. A mapping value may also be a same-class
+constant or a concatenation of constants and literals. A text block literal is its trimmed content.
+Spring HTTP interfaces read `url`, `path` and `value`, and a method-level
+`@HttpExchange` takes its verb from `method`, else `ANY`; method-level exchange
 annotations without a type-level `@HttpExchange` declare routes with an empty
 prefix. A Spring Data REST repository without `@RepositoryRestResource` is
 served at the pluralized, uncapitalized entity name (`OrderItem` at
@@ -257,8 +265,8 @@ keeps its own `uri(...)` target and the line of its own `route` call; the
 first target URI of its evidence wins, so a later `http://` URL in a filter
 does not override `lb://`.
 
-A gateway route serves its public `Path` pattern and calls the path its
-filters forward. `StripPrefix`, `RewritePath`, `PrefixPath` and `SetPath`
+A gateway route serves each public `Path` pattern, every `_genkey_<n>`
+argument of the long form included, and calls the path its filters forward. `StripPrefix`, `RewritePath`, `PrefixPath` and `SetPath`
 apply in order, after the `default-filters`, in the shortcut form, the
 long `name`/`args` form and the Java DSL methods. A rewrite applies only
 when its result does not depend on what a `**`, `*` or `{var}` segment of
@@ -424,11 +432,14 @@ which yield one fact per listed topic, and `Pattern.compile`, which keeps
 its literal as a dynamic pattern. A literal with an embedded or nested
 placeholder, or a SpEL expression that is not a plain property reference, is
 dynamic with its text as evidence. Comments inside an argument list or an
-array are not arguments. `@KafkaListener` is repeatable, and a class-level
-listener with `@KafkaHandler` methods is a consumer whose payload type is
-known only with one handler. Each `@KafkaHandler` method receives that
-consumer and starts its flows. A `@Payload` parameter is the listener payload
-wherever it sits.
+array are not arguments.
+
+`@KafkaListener` is repeatable, written twice or inside `@KafkaListeners`;
+`@RabbitListeners`, `@JmsListeners` and `@Schedules` are unwrapped the
+same way. A class-level listener with `@KafkaHandler` methods is a
+consumer whose payload type is known only with one handler. Each
+`@KafkaHandler` method receives that consumer and starts its flows. A
+`@Payload` parameter is the listener payload wherever it sits.
 
 An uppercase `Flux` enum constant is resolved only when its normalized name
 has a matching catalog entry. Other variable topic expressions stay dynamic.
@@ -536,6 +547,11 @@ cannot be proven to cover the send, the value is unknown.
 `spring.kafka.template.default-topic` property, else a dynamic topic. Its
 first argument is a key or a partition, never the topic; its last argument
 is the payload, and the one-argument `sendDefault(value)` is a producer too.
+
+A one-argument `send(message)` publishes to the `TOPIC` header that a
+`MessageBuilder` chain sets, inline or in a local of the same method. Any
+other message, such as a parameter, is a dynamic publication. A
+`ProducerRecord` argument adds nothing: its creation is the publication.
 
 `StreamBridge.send(binding, ...)` names a binding, not a topic: it
 publishes to the binding's `spring.cloud.stream.bindings.<binding>.destination`.

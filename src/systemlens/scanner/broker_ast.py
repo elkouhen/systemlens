@@ -157,7 +157,7 @@ def _listener_endpoints(
     for declaration in java_parser.walk(root):
         if declaration.type not in {"method_declaration", "class_declaration"}:
             continue
-        for annotation in java_parser.annotations_of(declaration):
+        for annotation in java_parser.expanded_annotations(declaration, source):
             listener = _LISTENERS.get(java_parser.annotation_name(annotation, source) or "")
             if listener is None:
                 continue
