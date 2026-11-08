@@ -370,3 +370,61 @@ def test_a_value_field_resolves_only_in_its_declaring_class(tmp_path: Path) -> N
     assert produced == {
         ("<dynamic>", True), ("constant-topic", False), ("orders-topic", False),
     }
+
+
+def test_feign_joins_url_and_path_and_defaults_nest(tmp_path: Path) -> None:
+    """BC-33: Feign dropped ``path`` beside ``url``; nested defaults collapsed.
+
+    The url's path joins ``path``, and an unresolved url placeholder adds
+    nothing to a literal ``path``. ``${a:${b}}`` resolves innermost first,
+    and an empty default is an empty route prefix, never an empty topic.
+    """
+    feign = (
+        "package demo;\n"
+        "import org.springframework.cloud.openfeign.FeignClient;\n"
+        "import org.springframework.web.bind.annotation.GetMapping;\n"
+        '@FeignClient(name = "{name}", url = "{url}", path = "/api/v1")\n'
+        'public interface {type} {{ @GetMapping("/items") String items(); }}\n'
+    )
+    repo = _service(tmp_path, {
+        "src/main/java/demo/F.java": feign.format(name="inv", url="${inv.url}", type="F"),
+        "src/main/java/demo/F2.java": feign.format(
+            name="inv2", url="${missing.url}", type="F2",
+        ),
+        "src/main/java/demo/F3.java": feign.format(
+            name="inv3", url="http://inventory/${missing.base}", type="F3",
+        ),
+        "src/main/java/demo/Ctl.java": (
+            "package demo;\n"
+            "import org.springframework.web.bind.annotation.*;\n"
+            "@RestController\n"
+            '@RequestMapping("/orders")\n'
+            "public class Ctl {\n"
+            '  @GetMapping("${x.y:${b.base}}/n") public String n() { return ""; }\n'
+            '  @GetMapping("${x.y:${b.missing:/v3}}/m") public String m() { return ""; }\n'
+            '  @GetMapping("/p/${x.z:${b.base}}") public String p() { return ""; }\n'
+            '  @GetMapping("${server.servlet.context-path:}/c") public String c() { return ""; }\n'
+            '  @GetMapping("${x.y:${nothing}}/u") public String u() { return ""; }\n'
+            "}\n"
+        ),
+        "src/main/java/demo/P.java": KAFKA_IMPORTS + (
+            "public class P {\n"
+            "  private KafkaTemplate<String, String> kafkaTemplate;\n"
+            '  void a() { kafkaTemplate.send("${app.topic:}", "x"); }\n'
+            "}\n"
+        ),
+        "src/main/resources/application.yml": (
+            "inv:\n  url: http://inventory\nb:\n  base: /v2\n"
+        ),
+    })
+
+    assert _ports(repo) == {
+        ("call", "feign", "GET /api/v1/items", False),
+        ("call", "feign", "GET <dynamic>", True),
+        ("serve", "spring", "GET /orders/v2/n", False),
+        ("serve", "spring", "GET /orders/v3/m", False),
+        ("serve", "spring", "GET /orders/p/v2", False),
+        ("serve", "spring", "GET /orders/c", False),
+        ("serve", "spring", "GET <dynamic>", True),
+        ("produce", "spring-kafka", "app.topic", True),
+    }

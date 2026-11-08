@@ -34,6 +34,11 @@ lexical resolver proves its value. A property value that still contains a
 `${...}` placeholder after bounded expansion, or a placeholder embedded in
 a longer literal that cannot be resolved, is dynamic.
 
+A placeholder nested in another's default, as in `${a:${b}}`, resolves
+innermost first, until the text no longer changes. An empty default, as in
+`${server.servlet.context-path:}`, is an empty route prefix; it never names
+a topic or a channel, which stay dynamic.
+
 A key declared with different values by several profiles, and by no base
 document, is dynamic too, even when its placeholder has a default: the
 default is the value in none of those profiles. A profile is an
@@ -190,6 +195,11 @@ literal arguments may be evaluated transitively under the same rules. Spring HTT
 interfaces retain `@ClientRegistrationId` as explicit service-target evidence when
 present.
 
+A Feign client's route prefix is the path of its `url` joined with its
+`path`. A `url` that is one unresolved placeholder is taken as a base URL
+and adds nothing, so a literal `path` still gives the route; an unresolved
+part inside the url's path makes the route dynamic.
+
 A Feign client without `url` names its peer by its `name` or `value`
 attribute: a literal, a constant or a resolvable property placeholder that
 is one internal-shaped host name, such as `employee-service`. It reaches the
@@ -201,7 +211,7 @@ A mapping declared on an interface or a base class belongs to the type that
 inherits it. A concrete `@RestController` or `@Controller` serves it, with
 its own type-level `@RequestMapping` or, without one, the first inherited
 one. A `@FeignClient` interface extending an API interface calls it, after
-its `url` or `path` and the API interface's type-level mapping. The
+its route prefix and the API interface's type-level mapping. The
 inheritor's own mapping for the same method wins. The declaring type keeps
 its mappings only when no inheritor is indexed, so a route is never served
 twice. A route the inheritor does not override sits on its type

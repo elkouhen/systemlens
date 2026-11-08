@@ -12,6 +12,7 @@ from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 from collections.abc import Callable
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -32,6 +33,7 @@ from systemlens.scanner._core import (
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
     _resolve_value_annotated_variable,
+    expand_placeholders,
     resolve_spring_property,
 )
 from systemlens.scanner.java_strings import local_string, locally_declared_names
@@ -56,7 +58,6 @@ from systemlens.scanner.rest_inheritance import (
 from systemlens.scanner.rest_paths import join_paths, normalize_path, with_query_params
 
 _PROPERTY_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
-_EMBEDDED_PLACEHOLDER_RE = re.compile(r"\$\{([^${}]+)\}")
 
 # BACKLOG-10 K2 (reliquat) : `@KafkaListener(topics = someVar)` ou
 # `kafkaTemplate.send(someVar, ...)` où `someVar` n'est pas un littéral mais
@@ -205,27 +206,23 @@ def _resolve_rest_expression(
             literal = _literal_text(part)
             placeholder = _PROPERTY_PLACEHOLDER_RE.match(literal)
             if placeholder is not None:
-                resolved = resolve_spring_property(repo_root, placeholder.group(1), source_path)
+                resolved = resolve_spring_property(
+                    repo_root, placeholder.group(1), source_path, allow_empty=True,
+                )
                 if resolved is None or "${" in resolved:
                     dynamic = True
                     continue
                 resolved_parts.append(resolved)
                 continue
             if "${" in literal:
-                # A placeholder embedded in a longer literal: resolve each
-                # key; an unresolved one keeps the literal dynamic.
-                unresolved = False
-
-                def substitute(match: re.Match[str]) -> str:
-                    nonlocal unresolved
-                    value = resolve_spring_property(repo_root, match.group(1), source_path)
-                    if value is None or "${" in value:
-                        unresolved = True
-                        return "{dynamic}" if preserve_dynamic_segments else ""
-                    return value
-
-                literal = _EMBEDDED_PLACEHOLDER_RE.sub(substitute, literal)
-                if unresolved or "${" in literal:
+                # A placeholder embedded in a longer literal, or nested in
+                # another's default: resolve innermost first until stable;
+                # an unresolved one keeps the literal dynamic (BC-33).
+                literal, complete = expand_placeholders(
+                    literal, repo_root, source_path, allow_empty=True,
+                    unresolved="{dynamic}" if preserve_dynamic_segments else "",
+                )
+                if not complete:
                     dynamic = True
             resolved_parts.append(literal)
             continue
@@ -765,18 +762,51 @@ def _ast_mapping_route(
     params = _ast_request_param_names(method, source)
     return with_query_params(route, params), False
 def _ast_feign_base(annotation, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
-    """Resolve Feign's optional URL/path base without treating ``name`` as a route."""
-    value = (
-        java_parser.annotation_argument(annotation, source, key="url")
-        or java_parser.annotation_argument(annotation, source, key="path")
-    )
-    if value is None:
-        return "", False
-    if value.type != "string_literal":
+    """Feign's route prefix: the path of ``url`` joined with ``path`` (BC-33).
+
+    ``name`` is never a route. An unresolved ``url`` that is one placeholder
+    is taken as a host and adds nothing, so a literal ``path`` still gives
+    the route; an unresolved part inside the url's path is dynamic.
+    """
+    url_path, url_dynamic = "", False
+    url = java_parser.annotation_argument(annotation, source, key="url")
+    if url is not None:
+        url_path, url_dynamic = _feign_url_path(url, source, repo_root, rel_path)
+    path_value = java_parser.annotation_argument(annotation, source, key="path")
+    path, path_dynamic = "", False
+    if path_value is not None:
+        if path_value.type != "string_literal":
+            return "", True
+        path, path_dynamic = _resolve_rest_path_expression(
+            java_parser.node_text(source, path_value), repo_root, rel_path,
+            preserve_dynamic_segments=True,
+        )
+    if url_dynamic or path_dynamic:
         return "", True
-    return _resolve_rest_path_expression(
-        java_parser.node_text(source, value), repo_root, rel_path, preserve_dynamic_segments=True
+    if not url_path and not path:
+        return "", False
+    return join_paths(normalize_path(url_path), normalize_path(path)), False
+
+
+def _feign_url_path(url, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
+    """Path part of a ``@FeignClient(url=...)`` value, and whether it is unknown."""
+    if url.type != "string_literal":
+        return "", True
+    raw, dynamic = _resolve_rest_expression(
+        java_parser.node_text(source, url), repo_root, rel_path, preserve_dynamic_segments=True,
     )
+    if raw == "<dynamic>":
+        # A sole unresolved placeholder: the configured base URL.
+        return "", False
+    if "://" not in raw:
+        # Feign adds ``http://`` to a scheme-less url: it starts with a host.
+        raw = f"http://{raw.lstrip('/')}"
+    url_path = urlsplit(raw).path
+    if dynamic and "{dynamic}" in url_path:
+        return "", True
+    return url_path, False
+
+
 def _ast_feign_target(annotation, source: bytes, repo_root: Path, rel_path: str) -> str | None:
     """Service a ``@FeignClient`` names, or ``None`` (BL-02).
 

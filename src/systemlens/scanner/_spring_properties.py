@@ -284,7 +284,7 @@ def _lookup_spring_property(
 
 def resolve_spring_property(
     repo_root: Path, property_key: str, source_path: str | None = None,
-    *, _depth: int = 0,
+    *, allow_empty: bool = False, _depth: int = 0,
 ) -> str | None:
     """Cherche `property_key` (ex. `app.kafka.topics.orders`, ou
     `prop:default` — syntaxe de valeur par défaut Spring) dans les fichiers
@@ -297,24 +297,59 @@ def resolve_spring_property(
     a bounded depth. A placeholder that cannot be resolved stays in the
     returned text: callers treat a value still containing ``${`` as a
     configuration key, not as a static value.
+
+    An empty default (``${key:}``) is the empty string only with
+    ``allow_empty``: a route prefix may be empty, a topic may not (BC-33).
     """
-    key, _, default = property_key.partition(":")
+    key, separator, default = property_key.partition(":")
     value, ambiguous = _lookup_spring_property(repo_root, key.strip(), source_path)
     if ambiguous:
         # Profiles disagree: the default is not the value in any of them.
         return None
     if value is None:
-        value = default or None
+        value = default if separator and (default or allow_empty) else None
     if value is None or "${" not in value or _depth >= _MAX_PLACEHOLDER_DEPTH:
         return value
+    expanded, _complete = expand_placeholders(
+        value, repo_root, source_path, allow_empty=allow_empty, _depth=_depth + 1,
+    )
+    return expanded
 
-    def substitute(match: re.Match[str]) -> str:
-        resolved = resolve_spring_property(
-            repo_root, match.group(1), source_path, _depth=_depth + 1,
-        )
-        return match.group(0) if resolved is None or "${" in resolved else resolved
 
-    return _NESTED_PLACEHOLDER_RE.sub(substitute, value)
+def expand_placeholders(
+    text: str, repo_root: Path, source_path: str | None, *,
+    allow_empty: bool = False, unresolved: str | None = None, _depth: int = 0,
+) -> tuple[str, bool]:
+    """Substitute ``${...}`` placeholders, innermost first, until stable.
+
+    A nested default such as ``${a:${b}}`` resolves ``${b}`` first and then
+    ``${a:<value>}`` (BC-33). An unresolved placeholder is replaced by
+    ``unresolved`` when given, else kept, which also blocks its enclosing
+    placeholder. Returns the text and whether every placeholder resolved.
+    """
+    complete = True
+    for _ in range(_MAX_PLACEHOLDER_DEPTH):
+        changed = False
+
+        def substitute(match: re.Match[str]) -> str:
+            nonlocal changed, complete
+            resolved = resolve_spring_property(
+                repo_root, match.group(1), source_path,
+                allow_empty=allow_empty, _depth=_depth,
+            )
+            if resolved is None or "${" in resolved:
+                complete = False
+                if unresolved is None:
+                    return match.group(0)
+                changed = True
+                return unresolved
+            changed = True
+            return resolved
+
+        text = _NESTED_PLACEHOLDER_RE.sub(substitute, text)
+        if not changed or "${" not in text:
+            break
+    return text, complete and "${" not in text
 
 
 def resolve_strategy1_kafka_topic(
