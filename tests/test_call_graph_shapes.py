@@ -2072,6 +2072,149 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {},
         note="BL-42: Enum.valueOf(Class, String) and a class that is no enum stay untyped"),
+    Shape("T16", """
+        import java.util.ArrayList;
+        import java.util.Arrays;
+        import java.util.Collections;
+        import java.util.HashMap;
+        import java.util.List;
+        import java.util.Map;
+        import java.util.Objects;
+        import java.util.Optional;
+        import java.util.concurrent.Callable;
+        import java.util.concurrent.CompletableFuture;
+        import java.util.function.BiFunction;
+        import java.util.function.BinaryOperator;
+        import java.util.function.Function;
+        import java.util.function.Supplier;
+        import java.util.function.UnaryOperator;
+        import java.util.stream.Collectors;
+        import java.util.stream.Stream;
+        import static java.util.Objects.requireNonNull;
+        import static java.util.stream.Collectors.toSet;
+        class Circle {
+          void m01() {} //@Circle.m01
+          void m02() {} //@Circle.m02
+          void m03() {} //@Circle.m03
+          void m04() {} //@Circle.m04
+          void m05() {} //@Circle.m05
+          void m06() {} //@Circle.m06
+          void m07() {} //@Circle.m07
+          void m08() {} //@Circle.m08
+          void m09() {} //@Circle.m09
+          void m10() {} //@Circle.m10
+          void m11() {} //@Circle.m11
+          void m12() {} //@Circle.m12
+          void m13() {} //@Circle.m13
+          void m14() {} //@Circle.m14
+          void m15() {} //@Circle.m15
+          void m16() {} //@Circle.m16
+          void m17() {} //@Circle.m17
+          void m18() {} //@Circle.m18
+          void m19() {} //@Circle.m19
+          void m20() {} //@Circle.m20
+          void m21() {} //@Circle.m21
+          void m22() {} //@Circle.m22
+          void m23() {} //@Circle.m23
+          void m24() {} //@Circle.m24
+          void m25() {} //@Circle.m25
+          void m26() {} //@Circle.m26
+          void m27() {} //@Circle.m27
+          void m28() {} //@Circle.m28
+          void m29() {} //@Circle.m29
+          void m30() {} //@Circle.m30
+        }
+        class Use {
+          Map<String, Circle> byName;
+          List<Circle> circles;
+          Circle[] array;
+          CompletableFuture<Circle> future;
+          Supplier<Circle> supplier;
+          Function<String, Circle> function;
+          BiFunction<String, Integer, Circle> bi;
+          UnaryOperator<Circle> unary;
+          BinaryOperator<Circle> binary;
+          Callable<Circle> callable;
+          void run(String k, Circle c) throws Exception { //@Use.run
+            byName.getOrDefault(k, c).m01();
+            byName.computeIfAbsent(k, x -> new Circle()).m02();
+            byName.put(k, c).m03();
+            byName.remove(k).m04();
+            circles.stream().toList().get(0).m05();
+            circles.stream().collect(Collectors.toList()).get(0).m06();
+            circles.stream().collect(toSet()).iterator().next().m07();
+            circles.stream().reduce(c, (a, b) -> a).m08();
+            List.of(c, c).get(0).m09();
+            Map.of(k, c).get(k).m10();
+            Arrays.asList(c).get(0).m11();
+            Arrays.stream(array).findFirst().get().m12();
+            Collections.unmodifiableList(circles).get(0).m13();
+            List.copyOf(circles).get(0).m14();
+            new ArrayList<>(circles).get(0).m15();
+            new HashMap<>(byName).get(k).m16();
+            new ArrayList<Circle>().get(0).m17();
+            Optional.ofNullable(c).orElseThrow().m18();
+            Stream.of(c).findAny().get().m19();
+            future.join().m20();
+            CompletableFuture.completedFuture(c).get().m21();
+            Objects.requireNonNull(c).m22();
+            requireNonNull(c, "c").m23();
+            java.util.List.of(c).get(0).m24();
+            supplier.get().m25();
+            function.apply(k).m26();
+            bi.apply(k, 1).m27();
+            unary.apply(c).m28();
+            binary.apply(c, c).m29();
+            callable.call().m30();
+          }
+        }
+        """, "Use.run", {"Circle.m01": "exact", "Circle.m02": "exact", "Circle.m03": "exact", "Circle.m04": "exact", "Circle.m05": "exact", "Circle.m06": "exact", "Circle.m07": "exact", "Circle.m08": "exact", "Circle.m09": "exact", "Circle.m10": "exact", "Circle.m11": "exact", "Circle.m12": "exact", "Circle.m13": "exact", "Circle.m14": "exact", "Circle.m15": "exact", "Circle.m16": "exact", "Circle.m17": "exact", "Circle.m18": "exact", "Circle.m19": "exact", "Circle.m20": "exact", "Circle.m21": "exact", "Circle.m22": "exact", "Circle.m23": "exact", "Circle.m24": "exact", "Circle.m25": "exact", "Circle.m26": "exact", "Circle.m27": "exact", "Circle.m28": "exact", "Circle.m29": "exact", "Circle.m30": "exact"},
+        note="BL-36: Map accessors, stream results, static factories, creations, futures and functional results"),
+    Shape("T16-unproven", """
+        import java.util.ArrayList;
+        import java.util.List;
+        import java.util.Optional;
+        import java.util.stream.Collectors;
+        import java.util.stream.Stream;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          List<Circle> circles;
+          Circle[] array;
+          void run(Circle c, Square s) { //@Use.run
+            List.of(c, s).get(0).area();
+            Stream.of(c, s).findFirst().get().area();
+            Optional.ofNullable(null).get().area();
+            List.of(array).get(0).area();
+            new ArrayList<>().get(0).area();
+            new ArrayList<>(10).get(0).area();
+            new ArrayList(circles).get(0).area();
+            circles.stream().collect(Collectors.toCollection(ArrayList::new)).get(0).area();
+          }
+        }
+        """, "Use.run", {},
+        note="BL-36: arguments of different types, an array, a diamond without a typed argument, "
+             "a raw creation or another collector stay untyped"),
+    Shape("T16-shadowed", """
+        import static java.util.Objects.requireNonNull;
+        class Circle {
+          double area() { return 1; } //@Circle.area
+        }
+        class Square {
+          double area() { return 2; } //@Square.area
+        }
+        class Use {
+          Square requireNonNull(Object o, String message) { return null; } //@Use.requireNonNull
+          void run(Circle c) { //@Use.run
+            requireNonNull(c, "c").area();
+          }
+        }
+        """, "Use.run", {"Use.requireNonNull": "exact", "Square.area": "exact"},
+        note="BL-36: a declared method shadows the static import of Objects.requireNonNull"),
     Shape("T13", """
         interface Shape {
           double area(); //@Shape.area

@@ -479,6 +479,68 @@ of an `Optional`, so `stream().findFirst().get()` too, `get(key)` of a
 `Map`, and `getKey()` and `getValue()` of a written `Map.Entry<K, V>`.
 A raw or wildcard container, or a chain through `map`, gives no type.
 
+BL-36 completes the view with the JDK signatures below. Each row quotes
+the Java SE declaration the pass reads, and the result it gives.
+
+A future (`Future`, `CompletableFuture`), a `Callable` and the
+functional types `Supplier`, `Function`, `BiFunction`, `UnaryOperator`
+and `BinaryOperator` are containers too: their written type arguments
+type the value they return.
+
+| Owner | Java SE signature | Result |
+|---|---|---|
+| `Map<K, V>` | `V getOrDefault(Object key, V defaultValue)` | `V` |
+| `Map<K, V>` | `V computeIfAbsent(K key, Function<? super K, ? extends V> mappingFunction)` | `V` |
+| `Map<K, V>` | `V computeIfPresent(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)` | `V` |
+| `Map<K, V>` | `V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)` | `V` |
+| `Map<K, V>` | `V merge(K key, V value, BiFunction<? super V, ? super V, ? extends V> remappingFunction)` | `V` |
+| `Map<K, V>` | `V put(K key, V value)` | `V` |
+| `Map<K, V>` | `V putIfAbsent(K key, V value)` | `V` |
+| `Map<K, V>` | `V remove(Object key)` | `V` |
+| `Map<K, V>` | `V replace(K key, V value)` | `V` |
+| `Stream<T>` | `List<T> toList()` | `List<T>` |
+| `Stream<T>` | `<R, A> R collect(Collector<? super T, A, R> collector)`, with `Collectors.toList()`, `toSet()`, `toUnmodifiableList()` or `toUnmodifiableSet()` | a collection of `T` |
+| `Stream<T>` | `Optional<T> reduce(BinaryOperator<T> accumulator)` | `Optional<T>` |
+| `Stream<T>` | `T reduce(T identity, BinaryOperator<T> accumulator)` | `T` |
+| `CompletableFuture<T>` | `T join()`, `T getNow(T valueIfAbsent)` | `T` |
+| `Future<V>` | `V get()`, `V get(long timeout, TimeUnit unit)` | `V` |
+| `Callable<V>` | `V call()` | `V` |
+| `Supplier<T>` | `T get()` | `T` |
+| `Function<T, R>` | `R apply(T t)` | `R` |
+| `BiFunction<T, U, R>` | `R apply(T t, U u)` | `R` |
+| `UnaryOperator<T>` | `T apply(T t)`, inherited from `Function<T, T>` | `T` |
+| `BinaryOperator<T>` | `T apply(T t, T u)`, inherited from `BiFunction<T, T, T>` | `T` |
+| `List` | `static <E> List<E> of(E... elements)` and its fixed arities | `List<E>` |
+| `Set` | `static <E> Set<E> of(E... elements)` and its fixed arities | `Set<E>` |
+| `Map` | `static <K, V> Map<K, V> of(K k1, V v1, ...)` | `Map<K, V>` |
+| `Arrays` | `static <T> List<T> asList(T... a)` | `List<T>` |
+| `Arrays` | `static <T> Stream<T> stream(T[] array)` | `Stream<T>` |
+| `Collections` | `static <T> List<T> singletonList(T o)`, `static <T> Set<T> singleton(T o)` | a collection of `T` |
+| `Stream` | `static <T> Stream<T> of(T... values)`, `of(T t)` | `Stream<T>` |
+| `Optional` | `static <T> Optional<T> of(T value)`, `ofNullable(T value)` | `Optional<T>` |
+| `CompletableFuture` | `static <U> CompletableFuture<U> completedFuture(U value)` | `CompletableFuture<U>` |
+| `List`, `Set` | `static <E> List<E> copyOf(Collection<? extends E> coll)`, likewise `Set` | a collection of `E` |
+| `Map` | `static <K, V> Map<K, V> copyOf(Map<? extends K, ? extends V> map)` | `Map<K, V>` |
+| `Collections` | `static <T> List<T> unmodifiableList(List<? extends T> list)`, and the `unmodifiable*` and `synchronized*` collection and map views | the argument's view |
+| `Objects` | `static <T> T requireNonNull(T obj)`, `requireNonNull(T obj, String message)`, `requireNonNull(T obj, Supplier<String> messageSupplier)` | the argument's type |
+| `ArrayList`, `HashMap` and the other concrete containers | `ArrayList(Collection<? extends E> c)`, `HashMap(Map<? extends K, ? extends V> m)` | the written arguments, or the argument's view for a diamond |
+
+A static factory is named through its imported or qualified type
+(`List.of`, `java.util.List.of`) or a single static import
+(`requireNonNull(o)`, `collect(toList())`). A method of that name that
+an enclosing type declares or may inherit shadows the import (JLS
+6.4.1), and an anonymous class around the call leaves it unresolved.
+
+The factory types its elements from its arguments. Arguments of
+different types give nothing: `List.of(circle, square)` stays untyped,
+because the pass computes no common supertype. An untyped, `null` or
+array argument also gives nothing; a primitive one is boxed.
+
+`new ArrayList<Order>(..)` takes its written type arguments. A diamond
+takes the view of its one constructor argument when that view has the
+same kind, as `new ArrayList<>(orders)`. Any other diamond, a raw
+creation and an anonymous class give nothing.
+
 The view also starts at a call to a source method (BL-35): with
 `List<Order> list()`, `catalog.list().get(0)` is an `Order`, and so are
 `for (var o : catalog.list())` and `catalog.list().forEach(o -> ..)`.
@@ -1048,6 +1110,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | T13 | Local or `final` field created once as a named class; reassigned and inherited values keep the declared type | `covered` (BL-29) | |
 | T14 | Element of a JDK container a source method returns or a `var` holds; agreeing inherited declarations | `covered` (BL-35) | |
 | T15 | Implicit enum methods `valueOf(String)` and `values()` | `covered` (BL-42) | |
+| T16 | Element from the BL-36 JDK signatures: `Map` accessors, stream results, static factories, creations, futures, functional results; a shadowed static import | `covered` (BL-36) | |
 | F1 | Lambda and method reference as call sites | `covered` | |
 | F2 | Lambda or method reference implementing a source interface: written target types, created once, inherited `default` | `covered` (BL-30) | |
 | F3 | Anonymous subclass overriding a source method, created once or elsewhere | `covered` (BL-30) | |
@@ -1133,40 +1196,40 @@ shapes from the jars it fetches while it builds its database.
 | A11 | Source `Page<Order> findAll(Pageable)`, then `.getContent().get(0).ship()` | `missing` | BL-43 |
 | A12 | `ResponseEntity<Order> r = client.get(); r.getBody().ship()` | `missing` | BL-43 |
 | A13 | `ResponseEntity.ok(order).getBody().ship()` | `missing` | BL-43 |
-| A15 | `m.computeIfAbsent(k, x -> new Order()).ship()` | `missing` | BL-36 |
-| A16 | `m.getOrDefault(k, other).ship()` | `missing` | BL-36 |
+| A15 | `m.computeIfAbsent(k, x -> new Order()).ship()` | `covered` | BL-36 |
+| A16 | `m.getOrDefault(k, other).ship()` | `covered` | BL-36 |
 | A18 | `stream().map(Order::getLine).toList().get(0).qty()` | `missing` | BL-40 |
-| A19 | `stream().collect(Collectors.toList()).get(0).ship()` | `missing` | BL-36 |
+| A19 | `stream().collect(Collectors.toList()).get(0).ship()` | `covered` | BL-36 |
 | A24 | `Optional.ofNullable(o).map(Order::getLine).orElse(null).qty()` | `missing` | BL-40 |
-| A25 | `Optional.of(order).orElseGet(() -> other).ship()` | `missing` | BL-36 |
-| A26 | `CompletableFuture<Order> f; f.join().ship()` | `missing` | BL-36 |
+| A25 | `Optional.of(order).orElseGet(() -> other).ship()` | `covered` | BL-36 |
+| A26 | `CompletableFuture<Order> f; f.join().ship()` | `covered` | BL-36 |
 | A27 | `f.thenApply(o -> o.getName())` | `missing` | BL-37, BL-40 |
-| A28 | `List.of(a, b).get(0).ship()` | `missing` | BL-36 |
-| A29 | `Arrays.asList(a, b).get(0).ship()` | `missing` | BL-36 |
-| A30 | `Collections.unmodifiableList(orders).get(0).ship()` | `missing` | BL-36 |
-| A31 | `new ArrayList<>(orders).get(0).ship()` | `missing` | BL-36 |
+| A28 | `List.of(a, b).get(0).ship()` | `covered` | BL-36 |
+| A29 | `Arrays.asList(a, b).get(0).ship()` | `covered` | BL-36 |
+| A30 | `Collections.unmodifiableList(orders).get(0).ship()` | `covered` | BL-36 |
+| A31 | `new ArrayList<>(orders).get(0).ship()` | `covered` | BL-36 |
 | A32 | `ctx.getBean(OrderService.class).place()` | `missing` | BL-44 |
-| A33 | `Objects.requireNonNull(order).ship()` | `missing` | BL-36 |
+| A33 | `Objects.requireNonNull(order).ship()` | `covered` | BL-36 |
 | A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
 | A38 | `var list = repo.findAll(); list.get(0).ship()` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `missing` | BL-41 |
 | A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `missing` | BL-40 |
 | A42 | `client.get().getBody().ship()`, source return `ResponseEntity<Order>` | `missing` | BL-43; BL-35 typed the `var` and the source return |
 | A43 | `Map<String, List<Order>> n; n.get(k).get(0).ship()` | `missing` | BL-41 |
-| A44 | `var opt = Optional.of(order); opt.get().ship()` | `missing` | BL-36 (`Optional.of`); BL-35 typed the `var` |
-| A45 | `Stream.of(a, b).findFirst().get().ship()` | `missing` | BL-36 |
+| A44 | `var opt = Optional.of(order); opt.get().ship()` | `covered` | BL-36 (`Optional.of`); BL-35 typed the `var` |
+| A45 | `Stream.of(a, b).findFirst().get().ship()` | `covered` | BL-36 |
 | B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B14 | `Status.valueOf(s).label()` | `covered` | BL-42 |
 | B15 | `Status.values()[0].label()` | `covered` | BL-42 |
 | B23 | Call in a record compact constructor, indexed as the canonical constructor | `covered` | BL-39 |
-| B26 | `Supplier<Order> s; s.get().ship()` | `missing` | BL-36 |
-| B27 | `Function<String, Order> f; f.apply(k).ship()` | `missing` | BL-36 |
-| B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `missing` | BL-36 |
+| B26 | `Supplier<Order> s; s.get().ship()` | `covered` | BL-36 |
+| B27 | `Function<String, Order> f; f.apply(k).ship()` | `covered` | BL-36 |
+| B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `covered` | BL-36 |
 | B29 | `Predicate<Order> p = o -> o.ok()` | `missing` | BL-37 |
 | B30 | `Consumer<Order> c = o -> o.ship()` | `missing` | BL-37 |
 | B39 | `Shape s = service.shape(); s.area()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B44 | `for (var o : array)` over `Order[]` | `covered` | BL-42 |
-| B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `missing` | BL-36 |
+| B46 | `Function<Order, Line> g = Order::getLine; g.apply(o).qty()` | `covered` | BL-36 |
 | C01 | Source `List<Order> list()`, then `.get(0).ship()` | `covered` | BL-35 |
 | C02 | Source `Optional<Order> maybe()`, then `.get().ship()` | `covered` | BL-35 |
 | C03 | Source `Map<String, Order> index()`, then `.get(k).ship()` | `covered` | BL-35 |
@@ -1181,7 +1244,7 @@ shapes from the jars it fetches while it builds its database.
 | C12 | `catalog.list().stream().filter(..).findFirst().get().ship()` | `covered` | BL-35 |
 | C14 | `var l = catalog.list(); l.get(0).ship()` | `covered` | BL-35 |
 | D01 | `taker.take(catalog.list().get(0))` with `take(Order)` and `take(Line)` | `covered` | BL-35 |
-| D04 | `new ArrayList<Order>(orders).get(0).ship()` | `missing` | BL-36 |
+| D04 | `new ArrayList<Order>(orders).get(0).ship()` | `covered` | BL-36 |
 | D05 | `catalog.list().forEach(taker::take)`, overloaded `take` | `missing` | BL-37; BL-35 typed `list()` |
 | D06 | `orders.forEach(taker::take)`, overloaded `take` | `missing` | BL-37 |
 | E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |

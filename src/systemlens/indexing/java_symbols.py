@@ -208,6 +208,15 @@ _GENERIC_CONTAINERS: dict[str, tuple[str, int]] = {
     "java.util.Iterator": ("iterator", 1),
     "java.util.ListIterator": ("iterator", 1),
     "java.util.Map.Entry": ("entry", 2),
+    # BL-36: a future's value and the result of a JDK functional type.
+    "java.util.concurrent.Future": ("future", 1),
+    "java.util.concurrent.CompletableFuture": ("future", 1),
+    "java.util.concurrent.Callable": ("callable", 1),
+    "java.util.function.Supplier": ("supplier", 1),
+    "java.util.function.Function": ("function", 2),
+    "java.util.function.BiFunction": ("bifunction", 3),
+    "java.util.function.UnaryOperator": ("unaryoperator", 1),
+    "java.util.function.BinaryOperator": ("binaryoperator", 1),
 }
 _ELEMENT_CALLBACKS = (
     "filter", "map", "flatMap", "forEach", "forEachOrdered", "peek", "anyMatch", "allMatch",
@@ -256,7 +265,13 @@ _GENERIC_CALLS: dict[tuple[str, str, int], tuple[str, tuple[int, ...]]] = {
     ("map", "values", 0): ("iterable", (1,)),
     ("iterable", "iterator", 0): ("iterator", (0,)),
     ("stream", "iterator", 0): ("iterator", (0,)),
+    # BL-36, quoted with their Java SE signatures in indexing.md.
+    ("stream", "toList", 0): ("iterable", (0,)),
+    ("stream", "reduce", 1): ("optional", (0,)),
 }
+# ``Collectors`` methods that make ``stream.collect(..)`` a collection of
+# the stream's element (BL-36).
+_COLLECTION_COLLECTORS = {"toList", "toSet", "toUnmodifiableList", "toUnmodifiableSet"}
 # Calls that return one type argument of their JDK container (BL-27):
 # (receiver kind, method name, argument count) -> type argument index.
 _ELEMENT_ACCESSORS: dict[tuple[str, str, int], int] = {
@@ -272,6 +287,56 @@ _ELEMENT_ACCESSORS: dict[tuple[str, str, int], int] = {
     ("iterator", "next", 0): 0,
     ("entry", "getKey", 0): 0,
     ("entry", "getValue", 0): 1,
+    # BL-36, quoted with their Java SE signatures in indexing.md.
+    ("map", "getOrDefault", 2): 1,
+    ("map", "computeIfAbsent", 2): 1,
+    ("map", "computeIfPresent", 2): 1,
+    ("map", "compute", 2): 1,
+    ("map", "merge", 3): 1,
+    ("map", "put", 2): 1,
+    ("map", "putIfAbsent", 2): 1,
+    ("map", "remove", 1): 1,
+    ("map", "replace", 2): 1,
+    ("stream", "reduce", 2): 0,
+    ("future", "join", 0): 0,
+    ("future", "get", 0): 0,
+    ("future", "get", 2): 0,
+    ("future", "getNow", 1): 0,
+    ("callable", "call", 0): 0,
+    ("supplier", "get", 0): 0,
+    ("function", "apply", 1): 1,
+    ("bifunction", "apply", 2): 2,
+    ("unaryoperator", "apply", 1): 0,
+    ("binaryoperator", "apply", 2): 0,
+}
+# Static JDK factories (BL-36): (owner, name) -> (result kind, rule). The
+# rule reads the arguments: ``elements``, one known type shared by every
+# argument; ``pairs``, one key type and one value type; ``copy``, the view
+# of the one argument, of the result kind; ``array``, the element of an
+# array argument; ``argument``, the first argument's own view.
+_JDK_FACTORIES: dict[tuple[str, str], tuple[str, str]] = {
+    ("java.util.List", "of"): ("iterable", "elements"),
+    ("java.util.Set", "of"): ("iterable", "elements"),
+    ("java.util.Arrays", "asList"): ("iterable", "elements"),
+    ("java.util.Collections", "singletonList"): ("iterable", "elements"),
+    ("java.util.Collections", "singleton"): ("iterable", "elements"),
+    ("java.util.stream.Stream", "of"): ("stream", "elements"),
+    ("java.util.Optional", "of"): ("optional", "elements"),
+    ("java.util.Optional", "ofNullable"): ("optional", "elements"),
+    ("java.util.concurrent.CompletableFuture", "completedFuture"): ("future", "elements"),
+    ("java.util.Map", "of"): ("map", "pairs"),
+    ("java.util.List", "copyOf"): ("iterable", "copy"),
+    ("java.util.Set", "copyOf"): ("iterable", "copy"),
+    ("java.util.Map", "copyOf"): ("map", "copy"),
+    **{("java.util.Collections", name): ("iterable", "copy") for name in (
+        "unmodifiableCollection", "unmodifiableList", "unmodifiableSet", "unmodifiableSortedSet",
+        "unmodifiableNavigableSet", "synchronizedCollection", "synchronizedList", "synchronizedSet",
+    )},
+    **{("java.util.Collections", name): ("map", "copy") for name in (
+        "unmodifiableMap", "unmodifiableSortedMap", "unmodifiableNavigableMap", "synchronizedMap",
+    )},
+    ("java.util.Arrays", "stream"): ("stream", "array"),
+    ("java.util.Objects", "requireNonNull"): ("", "argument"),
 }
 _ACCESSOR_CALLS = {(name, count) for _kind, name, count in _ELEMENT_ACCESSORS}
 # The type arguments of a source generic type, by type parameter name (BL-26).
@@ -2291,12 +2356,23 @@ class JavaSymbols:
         source = self.units[info.method.path].source
         if node.type == "parenthesized_expression" and node.named_children:
             return self._generic_view(info, node.named_children[0], invocation, depth + 1)
+        if node.type == "object_creation_expression":
+            return self._created_view(info, node, depth + 1)
         if node.type == "method_invocation":
             receiver, name, arguments = parser.invocation_parts(node, source)
+            jdk_owner = self._jdk_static_owner(info, receiver, node)
+            if jdk_owner is not None:
+                # ``List.of(a, b)``, ``Optional.of(o)`` (BL-36).
+                return self._factory_view(info, node, jdk_owner, name, arguments, depth + 1)
             inner = self._generic_view(info, receiver, node, depth + 1)
             if inner is None:
                 # ``catalog.list()``: a source method's declared return.
                 return self._returned_view(info, node, depth + 1)
+            if inner[0] == "stream" and name == "collect" and len(arguments) == 1 and (
+                self._collects_to_collection(info, arguments[0])
+            ):
+                # ``stream.collect(Collectors.toList())`` (BL-36).
+                return "iterable", inner[1]
             rule = _GENERIC_CALLS.get((inner[0], name, len(arguments)))
             if rule is None:
                 return None
@@ -2343,6 +2419,136 @@ class JavaSymbols:
         return kind, tuple(
             self._type_argument_value(path, argument, owner, env) for argument in written_arguments
         )
+
+    def _jdk_static_owner(self, info: _Method, receiver: Node | None, invocation: Node) -> str | None:
+        """The external type a static call names: ``List`` in ``List.of(..)``
+        or ``java.util.List``, or the owner of a single static import for an
+        unqualified call (BL-36).
+
+        A capitalized name or a qualified name that is no variable, resolved
+        where it is written to a type outside the sources. An unqualified
+        call needs one single static import of its name, no enclosing
+        anonymous class, and no enclosing type that declares or may inherit
+        the name, which would shadow the import (JLS 6.4.1).
+        """
+        path = info.method.path
+        source = self.units[path].source
+        unit = self.units[path]
+        if receiver is None:
+            name_node = invocation.child_by_field_name("name")
+            name = parser.node_text(source, name_node) if name_node is not None else ""
+            owners = unit.static_imports.get(name, [])
+            if len(owners) != 1:
+                return None
+            node = invocation.parent
+            while node is not None and node != info.node:
+                if _is_anonymous_body(node):
+                    return None
+                node = node.parent
+            scope = info.owner
+            while scope and scope != unit.package:
+                if scope in self.types and (
+                    self._declared_arities(scope, name, path, info.module)
+                    or self._may_inherit_unknown(scope, self._receiver_module(scope, info), name)
+                ):
+                    return None
+                scope = scope.rpartition(".")[0]
+            text = owners[0]
+        elif receiver.type == "identifier":
+            text = parser.node_text(source, receiver)
+            if not text[:1].isupper() or self.variable_type(info, text, invocation) is not None:
+                return None
+        elif receiver.type in {"field_access", "scoped_identifier"}:
+            text = re.sub(r"\s+", "", parser.node_text(source, receiver))
+            if not re.fullmatch(r"[a-z_$][\w$]*(?:\.[\w$]+)+", text) or self.variable_type(
+                info, text.split(".", 1)[0], invocation,
+            ) is not None:
+                return None
+        else:
+            return None
+        resolved = self.resolve(path, text, info.owner, at=receiver)
+        return resolved if resolved is not None and resolved not in self.types else None
+
+    def _factory_view(
+        self, info: _Method, invocation: Node, owner: str, name: str, arguments: list[Node], depth: int,
+    ) -> tuple[str, tuple[str | None, ...]] | None:
+        """The view a static JDK factory returns (BL-36, ``_JDK_FACTORIES``).
+
+        Arguments of different types give nothing: the pass computes no
+        common supertype, so ``List.of(circle, square)`` stays untyped. An
+        array argument also gives nothing to ``elements``, whose overloads
+        then differ (``List.of(E)`` against ``Arrays.asList(T...)``).
+        """
+        factory = _JDK_FACTORIES.get((owner, name))
+        if factory is None or not arguments:
+            return None
+        kind, rule = factory
+        if rule == "argument":
+            return self._generic_view(info, arguments[0], invocation, depth + 1) if len(arguments) <= 2 else None
+        if rule == "copy":
+            view = self._generic_view(info, arguments[0], invocation, depth + 1) if len(arguments) == 1 else None
+            return view if view is not None and view[0] == kind else None
+        if rule == "array":
+            array = self.expression_type(info, arguments[0], invocation, depth + 1) if len(arguments) == 1 else None
+            if array is None or not array.endswith("[]") or array[:-2] in _PRIMITIVES:
+                return None
+            return kind, (array[:-2],)
+        groups = [arguments] if rule == "elements" else [arguments[0::2], arguments[1::2]]
+        if rule == "pairs" and len(arguments) % 2:
+            return None
+        values: list[str | None] = []
+        for group in groups:
+            types = {self.expression_type(info, argument, invocation, depth + 1) for argument in group}
+            found = types.pop() if len(types) == 1 else None
+            if found is None or found.endswith("[]") or found == "void":
+                return None
+            values.append(_BOXED.get(found, found))
+        return kind, tuple(values)
+
+    def _collects_to_collection(self, info: _Method, argument: Node) -> bool:
+        """Whether ``argument`` is ``Collectors.toList()`` or a kin that
+        collects the stream's elements unchanged (BL-36)."""
+        if argument.type != "method_invocation":
+            return False
+        receiver, name, arguments = parser.invocation_parts(argument, self.units[info.method.path].source)
+        return not arguments and name in _COLLECTION_COLLECTORS and (
+            self._jdk_static_owner(info, receiver, argument) == "java.util.stream.Collectors"
+        )
+
+    def _created_view(self, info: _Method, creation: Node, depth: int) -> tuple[str, tuple[str | None, ...]] | None:
+        """The view of ``new ArrayList<Order>(..)`` or of a diamond (BL-36).
+
+        Written type arguments give the view. A diamond takes the view of
+        its one constructor argument when it is of the same kind, as
+        ``new ArrayList<>(orders)``; any other diamond, a raw type and an
+        anonymous class give nothing.
+        """
+        path = info.method.path
+        source = self.units[path].source
+        type_node = creation.child_by_field_name("type")
+        if (
+            type_node is None or type_node.type != "generic_type"
+            or any(child.type == "class_body" for child in creation.children)
+        ):
+            return None
+        name_node = type_node.named_children[0]
+        container = self.resolve(
+            path, parser.node_text(source, name_node), info.owner, allow_ambiguous=True, at=name_node,
+        )
+        if container not in _GENERIC_CONTAINERS:
+            return None
+        kind, arity = _GENERIC_CONTAINERS[container]
+        written = parser.child_by_type(type_node, "type_arguments")
+        written_arguments = written.named_children if written is not None else []
+        if len(written_arguments) == arity:
+            return kind, tuple(
+                self._type_argument_value(path, argument, info.owner, None) for argument in written_arguments
+            )
+        arguments = parser.argument_nodes(creation)
+        if written_arguments or len(arguments) != 1:
+            return None
+        view = self._generic_view(info, arguments[0], creation, depth + 1)
+        return view if view is not None and view[0] == kind and len(view[1]) == arity else None
 
     def _var_value(self, path: str, type_node: Node, name: str) -> Node | None:
         """The initializer of the ``var`` local ``name`` that ``type_node``
@@ -2669,6 +2875,11 @@ class JavaSymbols:
         if (name, len(arguments)) in _OBJECT_RETURNS:
             # ``java.lang.Object`` fixes these return types for every receiver.
             return _OBJECT_RETURNS[(name, len(arguments))]
+        if name == "requireNonNull" and 1 <= len(arguments) <= 2 and (
+            self._jdk_static_owner(info, parent_receiver, receiver) == "java.util.Objects"
+        ):
+            # ``static <T> T requireNonNull(T obj)`` (BL-36).
+            return self.expression_type(info, arguments[0], receiver, depth + 1)
         if (name, len(arguments)) in _ACCESSOR_CALLS:
             # ``circles.get(0)``, ``maybe.get()``: the element type a JDK
             # container's written type arguments give (BL-27).
