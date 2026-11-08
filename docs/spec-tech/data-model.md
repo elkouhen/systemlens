@@ -400,13 +400,22 @@ the entry method or a reachable method. Steps retain relative evidence paths and
 line ranges.
 
 Flow identity uses the module, relative path, qualified method, and trigger
-semantics rather than line numbers, so ordinary line movement does not replace the
-logical flow. If overloaded or generated declarations still produce the same
-identity, indexing keeps the first historical ID and adds a stable route
-discriminator to later IDs before persistence. The materializer runs during
-indexing, while `systemlens flows calculate` rebuilds the same endpoint and data
-paths from the stored integration-method and call-edge snapshots with the
-independent enrichment topology; neither export nor query runs it.
+semantics rather than line numbers, so ordinary line movement does not replace
+the logical flow. If overloaded or generated declarations still produce the
+same identity, indexing keeps the first historical ID and adds a stable route
+discriminator to later IDs before persistence.
+
+A flow that ends on a data operation adds the operation's owner method,
+technology, operation, resource, and key expression, never its line. Twins,
+the same call twice in one method, are numbered in source order.
+Deduplication keys that data step by its persisted operation ID, so two
+operations on one line remain two flows. This coordinate replaced the
+operation's line in BC-25, which changed those flow IDs once.
+
+The materializer runs during indexing, while `systemlens flows calculate`
+rebuilds the same endpoint and data paths from the stored integration-method
+and call-edge snapshots with the independent enrichment topology; neither
+export nor query runs it.
 
 The same-method pass scans the endpoint and data-operation inventory plus eligible
 Java AST nodes. The directed method-graph pass visits reachable methods and edges

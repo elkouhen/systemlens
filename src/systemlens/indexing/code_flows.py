@@ -66,6 +66,18 @@ def _step_anchor(step: CodeFlowStep) -> str:
     return step.endpoint_id or f"{step.kind}:{step.path}:{step.start_line}"
 
 
+def _data_step_anchor(step: CodeFlowStep) -> str:
+    """The data operation a flow ends on, by its persisted operation ID.
+
+    Two operations on one line, such as ``orders.findById(x);
+    items.findById(y);``, are two flows (BC-25). A step without an
+    operation ID keeps its source coordinate.
+    """
+    if step.operation_id is not None:
+        return f"data:{step.operation_id}"
+    return f"data:{step.path}:{step.start_line}:{step.operation}"
+
+
 @dataclass(frozen=True)
 class CallGraph:
     """The source-backed internal call graph used for flow reconstruction."""
@@ -229,8 +241,7 @@ def _deduplicate_code_flows(
                 endpoint_steps[-1].name if endpoint_steps else None
             ),
             output_endpoint.message_type if output_endpoint else None,
-            (data_step.path, data_step.start_line, data_step.operation)
-            if data_step is not None else None,
+            _data_step_anchor(data_step) if data_step is not None else None,
             flow.status,
         )
 
@@ -1339,8 +1350,7 @@ def materialize_call_graph_flows(
         key = (
             _step_anchor(endpoint_steps[0]) if endpoint_steps else flow.id,
             _step_anchor(endpoint_steps[-1]) if len(endpoint_steps) > 1 else
-            f"data:{data_step.path}:{data_step.start_line}:{data_step.operation}"
-            if data_step is not None else "",
+            _data_step_anchor(data_step) if data_step is not None else "",
             flow.status,
         )
         route_signature = tuple(
@@ -1508,8 +1518,25 @@ def materialize_call_graph_flows(
             operations_by_method[candidates[0].id].append(
                 replace(operation, path=candidates[0].path)
             )
+    # The data-flow ID names an operation without its line (BC-25). Twins,
+    # the same call on the same resource and key in one method, are told
+    # apart by their order in that method, which survives line movement.
+    operation_coordinate: dict[str, str] = {}
     for owned in operations_by_method.values():
         owned.sort(key=lambda item: (item.line, item.technology, item.operation, item.id))
+        twins: dict[str, int] = defaultdict(int)
+        for operation in owned:
+            coordinate = (
+                f"{operation.path}|{operation.owner_method}|"
+                f"{operation.technology}|{operation.operation}|"
+                f"{operation.resource_identity or operation.resource or ''}|"
+                f"{operation.key_expression or ''}"
+            )
+            rank = twins[coordinate]
+            twins[coordinate] += 1
+            operation_coordinate[operation.id] = (
+                coordinate if rank == 0 else f"{coordinate}|#{rank}"
+            )
 
     def report_reverse_chain(
         output_method: IntegrationMethod,
@@ -1816,7 +1843,6 @@ def materialize_call_graph_flows(
             while search:
                 current, route, route_on_this = search.popleft()
                 for operation in operations_by_method.get(current.id, ()):
-                    operation_path = operation.path
                     steps = [_endpoint_step(trigger, 1)]
                     for order, (hop, edge, _inferred) in enumerate(route, start=2):
                         steps.append(CodeFlowStep(
@@ -1843,11 +1869,12 @@ def materialize_call_graph_flows(
                         for _hop, edge, inferred in route
                     )
                     record_flow(CodeFlow(
+                        # The operation's line, and so its ID, stay out of
+                        # the flow ID, which survives line movement (BC-25).
                         id=compute_code_flow_id(
                             entry.module, entry.path, entry.qualified_method,
                             steps[0].kind,
-                            f"{trigger.id}|{operation_path}|{operation.line}|"
-                            f"{operation.operation}",
+                            f"{trigger.id}|{operation_coordinate[operation.id]}",
                         ),
                         module=entry.module, method=entry.qualified_method,
                         path=entry.path, start_line=entry.start_line,

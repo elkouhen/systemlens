@@ -122,3 +122,111 @@ def test_a_seeded_flow_keeps_its_route_count() -> None:
     flows = materialize_call_graph_flows([], [], [], initial_flows=[_flow("f", 3)])
 
     assert [flow.alternative_count for flow in flows] == [3]
+
+
+def _entities() -> dict[str, str]:
+    files = {}
+    for entity in ("Order", "Item"):
+        files[f"{PACKAGE}/{entity}.java"] = (
+            "package example.app;\nimport jakarta.persistence.*;\n"
+            f"@Entity\npublic class {entity} {{ @Id Long id; }}\n"
+        )
+        files[f"{PACKAGE}/{entity}Repo.java"] = (
+            "package example.app;\n"
+            "import org.springframework.data.jpa.repository.JpaRepository;\n"
+            f"public interface {entity}Repo extends JpaRepository<{entity}, Long> {{}}\n"
+        )
+    return files
+
+
+def _read_service(body: str) -> dict[str, str]:
+    return {
+        **_entities(),
+        f"{PACKAGE}/ReadController.java": """package example.app;
+import org.springframework.web.bind.annotation.*;
+@RestController
+public class ReadController {
+    private final ReadService service;
+    public ReadController(ReadService service) { this.service = service; }
+    @GetMapping("/read")
+    public void read(Long x, Long y) {
+        service.read(x, y);
+    }
+}
+""",
+        f"{PACKAGE}/ReadService.java": f"""package example.app;
+import org.springframework.stereotype.Service;
+@Service
+public class ReadService {{
+    private final OrderRepo orders;
+    private final ItemRepo items;
+    public ReadService(OrderRepo orders, ItemRepo items) {{ this.orders = orders; this.items = items; }}
+    public void read(Long x, Long y) {{
+{body}
+    }}
+}}
+""",
+    }
+
+
+def _data_flows(flows: list[CodeFlow]) -> dict[str, tuple[str, int]]:
+    return {
+        flow.steps[-1].name: (flow.id, flow.steps[-1].start_line)
+        for flow in flows if flow.steps[-1].kind == "data_read"
+    }
+
+
+def test_two_operations_on_one_line_are_two_flows(tmp_path: Path) -> None:
+    """BC-25: data steps are keyed by operation, not by source line.
+
+    ``orders.findById(x); items.findById(y);`` share a line and an
+    operation name, so the join kept one flow and lost the ``Item`` read.
+    """
+    repo = _write(tmp_path / "repo", _read_service(
+        "        orders.findById(x); items.findById(y);"
+    ))
+
+    flows = _data_flows(_index(repo))
+
+    assert sorted(flows) == ["Item", "Order"]
+    assert flows["Item"][0] != flows["Order"][0]
+
+
+def test_a_data_flow_id_survives_line_movement(tmp_path: Path) -> None:
+    """BC-25: ``compute_code_flow_id`` promises IDs that survive line movement.
+
+    The data-flow coordinate embedded the operation's line, so moving a
+    repository call by one line gave the flow a new ID.
+    """
+    before = _data_flows(_index(_write(tmp_path / "a", _read_service(
+        "        orders.findById(x);"
+    ))))
+    after = _data_flows(_index(_write(tmp_path / "b", _read_service(
+        "\n        orders.findById(x);"
+    ))))
+
+    assert after["Order"][1] == before["Order"][1] + 1
+    assert after["Order"][0] == before["Order"][0]
+
+
+def test_twin_operations_keep_distinct_ids_across_line_movement(tmp_path: Path) -> None:
+    """BC-25: twins, one call twice in a method, are numbered by their order.
+
+    Without the line, both twins had one coordinate. The collision suffix
+    went to whichever came second in operation-ID order, which follows
+    the lines, so moving a line could swap the two IDs.
+    """
+    def ids(repo: Path, body: str) -> list[tuple[int, str]]:
+        flows = _index(_write(repo, _read_service(body)))
+        return sorted(
+            (flow.steps[-1].start_line, flow.id)
+            for flow in flows if flow.steps[-1].kind == "data_read"
+        )
+
+    before = ids(tmp_path / "a", "        orders.findById(x);\n        orders.findById(x);")
+    after = ids(tmp_path / "b", "\n        orders.findById(x);\n        orders.findById(x);")
+
+    assert [line + 1 for line, _id in before] == [line for line, _id in after]
+    assert [flow_id for _line, flow_id in before] == [flow_id for _line, flow_id in after]
+    assert len({flow_id for _line, flow_id in before}) == 2
+    assert not any("-" in flow_id for _line, flow_id in before)
