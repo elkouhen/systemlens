@@ -2181,7 +2181,9 @@ only to an array of a related element, to `Object`, `Cloneable` and
 
 The excluded types also leave the completeness check of rule 1. The call
 is then `exact` only under rules 1 to 4: every remaining implementor has
-a known body and one body applies. A typed engine filters on its own.
+a known body and one body applies. When every implementor would be
+excluded, the filter does not apply: the call keeps its candidates
+rather than losing its edge. A typed engine filters on its own.
 
 Consequences: probe shapes s3 and s4 dispatch `exact` to `TextHandler`,
 with the witness of ADR-70, as CodeQL does; the `BinaryHandler` flow

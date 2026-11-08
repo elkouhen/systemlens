@@ -1320,6 +1320,124 @@ SHAPES: list[Shape] = [
         }
         """, "Use.run", {"Use.first": "exact", "Use.pick": "exact", "Use.any": "exact"},
         note="BL-26: no inference from a raw argument, two types (no least upper bound) or varargs"),
+    Shape("G7", """
+        interface Handler<T> {
+          void handle(T message); //@Handler.handle
+        }
+        class Text implements Handler<String> {
+          public void handle(String message) {} //@Text.handle
+        }
+        class Bytes implements Handler<byte[]> {
+          public void handle(byte[] message) {} //@Bytes.handle
+        }
+        abstract class Base<T> implements Handler<T> {}
+        class Ints extends Base<Integer> {
+          public void handle(Integer message) {} //@Ints.handle
+        }
+        class Use {
+          Handler<String> field;
+          Handler<String> make() { return null; } //@Use.make
+          void run(Handler<String> param, Object raw) { //@Use.run
+            field.handle("a");
+            this.field.handle("b");
+            param.handle("c");
+            ((Handler<String>) raw).handle("d");
+            make().handle("e");
+          }
+        }
+        """, "Use.run", {"Text.handle": "exact", "Handler.handle": "possible", "Use.make": "exact"},
+        note="BL-45: an implementor whose clause argument contradicts the receiver's written "
+             "one is excluded, through a generic superclass too; the witness stays"),
+    Shape("G7-related", """
+        interface Handler<T> {
+          void handle(T message); //@Handler.handle
+        }
+        class Text implements Handler<String> {
+          public void handle(String message) {} //@Text.handle
+        }
+        class Bytes implements Handler<byte[]> {
+          public void handle(byte[] message) {} //@Bytes.handle
+        }
+        class Chars implements Handler<CharSequence> {
+          public void handle(CharSequence message) {} //@Chars.handle
+        }
+        class Objects implements Handler<Object> {
+          public void handle(Object message) {} //@Objects.handle
+        }
+        class Raw implements Handler {
+          public void handle(Object message) {} //@Raw.handle
+        }
+        class Generic<T> implements Handler<T> {
+          public void handle(T message) {} //@Generic.handle
+        }
+        class Lib implements Handler<org.acme.Payload> {
+          public void handle(org.acme.Payload message) {} //@Lib.handle
+        }
+        class Use {
+          Handler<String> field;
+          void run() { //@Use.run
+            field.handle("a");
+          }
+        }
+        """, "Use.run", {
+            "Text.handle": "possible", "Chars.handle": "possible", "Objects.handle": "possible",
+            "Raw.handle": "possible", "Generic.handle": "possible", "Lib.handle": "possible",
+        }, absent=("Bytes.handle",),
+        note="BL-45: a supertype argument, Object, a raw clause, a type variable and a library "
+             "type keep the implementor"),
+    Shape("G7-open", """
+        interface Handler<T> {
+          void handle(T message); //@Handler.handle
+        }
+        class Text implements Handler<String> {
+          public void handle(String message) {} //@Text.handle
+        }
+        class Bytes implements Handler<byte[]> {
+          public void handle(byte[] message) {} //@Bytes.handle
+        }
+        class Use<U> {
+          Handler<?> any;
+          Handler<? extends String> bounded;
+          Handler raw;
+          Handler<U> variable;
+          Handler<Integer> none;
+          void run() { //@Use.run
+            any.handle(null);
+            bounded.handle(null);
+            raw.handle("x");
+            variable.handle(null);
+            none.handle(1);
+          }
+        }
+        """, "Use.run", {"Text.handle": "possible", "Bytes.handle": "possible", "Handler.handle": "possible"},
+        note="BL-45: a wildcard, a raw type or a type variable on the receiver keeps every "
+             "implementor; a filter that would exclude them all does not apply"),
+    Shape("G7-source", """
+        interface Sink<T> {
+          void put(T item); //@Sink.put
+        }
+        class Order {}
+        class Big extends Order {}
+        class Line {}
+        class Orders implements Sink<Order> {
+          public void put(Order item) {} //@Orders.put
+        }
+        class Bigs implements Sink<Big> {
+          public void put(Big item) {} //@Bigs.put
+        }
+        class Lines implements Sink<Line> {
+          public void put(Line item) {} //@Lines.put
+        }
+        class Use {
+          Sink<Order> sink;
+          void run() { //@Use.run
+            sink.put(new Order());
+          }
+        }
+        """, "Use.run", {"Orders.put": "possible", "Bigs.put": "possible"}, absent=("Lines.put",),
+        partial=True,
+        note="BL-45: source arguments related by subtyping keep the implementor; an "
+             "unrelated one is excluded"),
     # 2.4 Receiver typing
     Shape("T1", """
         abstract class Shape {
@@ -1738,11 +1856,10 @@ SHAPES: list[Shape] = [
             handler.handle("x");
           }
         }
-        """, "Use.run", {
-            "Handler.handle": "possible",
-            "TextHandler.handle": "possible", "OrderHandler.handle": "possible",
-        },
-        note="review S8: the contract's signature is generic, so it does not bind to OrderHandler alone"),
+        """, "Use.run", {"Handler.handle": "possible", "TextHandler.handle": "exact"},
+        absent=("OrderHandler.handle",),
+        note="review S8: the contract's signature is generic, so it does not bind to OrderHandler "
+             "alone; Handler<Order> contradicts the receiver's Handler<String> (BL-45)"),
     Shape("T9", """
         import java.util.List;
         import java.util.Map;

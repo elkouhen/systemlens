@@ -9,7 +9,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field as dataclass_field, replace
 from pathlib import Path
 import re
-from typing import NamedTuple, Sequence
+from typing import Callable, NamedTuple, Sequence
 
 from tree_sitter import Node
 
@@ -166,6 +166,24 @@ _KNOWN_EXTERNAL_SUPERTYPES: dict[str, tuple[str, ...]] = {
     ),
 }
 _LOMBOK_GETTERS = {"Data", "Getter", "Value"}
+# Final JDK classes and every supertype they have: a type argument naming
+# one is related only to these (BL-45, ADR-81 amendment).
+_NUMBER_SUPERTYPES = frozenset({
+    "java.lang.Object", "java.lang.Number", "java.io.Serializable", "java.lang.Comparable",
+    "java.lang.constant.Constable", "java.lang.constant.ConstantDesc",
+})
+_FINAL_JDK_SUPERTYPES: dict[str, frozenset[str]] = {
+    "java.lang.String": frozenset({
+        "java.lang.Object", "java.io.Serializable", "java.lang.Comparable", "java.lang.CharSequence",
+        "java.lang.constant.Constable", "java.lang.constant.ConstantDesc",
+    }),
+    **{f"java.lang.{name}": _NUMBER_SUPERTYPES for name in ("Integer", "Long", "Short", "Byte", "Double", "Float")},
+    **{f"java.lang.{name}": frozenset({
+        "java.lang.Object", "java.io.Serializable", "java.lang.Comparable", "java.lang.constant.Constable",
+    }) for name in ("Boolean", "Character")},
+}
+# The supertypes of every array type (JLS 4.10.3).
+_ARRAY_SUPERTYPES = frozenset({"java.lang.Object", "java.lang.Cloneable", "java.io.Serializable"})
 # Functional JDK interfaces: a lambda or method reference can implement them
 # anywhere, so dispatch on them is never exact.
 _FUNCTIONAL_JDK = {"java.lang.Runnable", "java.util.concurrent.Callable"}
@@ -607,6 +625,8 @@ class JavaSymbols:
         self._functional_values: list[tuple[str, Node]] = []
         self._implicit: tuple[dict[str, set[tuple[str, int]]], set[str]] | None = None
         self._context_methods: dict[tuple[str, int, int], _Method] | None = None
+        # Strict type arguments an implementor gives an ancestor (BL-45).
+        self._implemented: dict[tuple[str, str, str], _Env | None] = {}
         self._by_name_arity: dict[tuple[str, int], list[_Method]] | None = None
         # External classes and the source classes that extend them directly
         # (BL-31, ADR-74).
@@ -937,6 +957,7 @@ class JavaSymbols:
 
     def _incomplete_implementors(
         self, receiver_type: str, caller: _Method, name: str, arity: int, targets: list[IntegrationMethod],
+        excluded: Callable[[str, str], bool] | None = None,
     ) -> bool:
         """Whether some runtime type of the receiver has a body no target is.
 
@@ -945,7 +966,8 @@ class JavaSymbols:
         no member of its own for the call. Otherwise its body is generated
         (record, Lombok), inherited from an external class or ``Object``, or
         unresolved, and no target is exact (S10, ADR-81 rule 1). A
-        ``@FeignClient`` proxy is such a body too (Q8, rule 3).
+        ``@FeignClient`` proxy is such a body too (Q8, rule 3). A subtype
+        ``excluded`` holds cannot be the runtime type (BL-45).
         """
         receiver_module = self._receiver_module(receiver_type, caller)
         if self._proxied(receiver_type, receiver_module):
@@ -962,7 +984,7 @@ class JavaSymbols:
         }
         visible = self.visible_modules(caller.module) | {receiver_module}
         for owner, module, path, node in self._concrete_subtypes(receiver_type, receiver_module):
-            if module not in visible:
+            if module not in visible or excluded is not None and excluded(owner, module):
                 continue
             if (owner, module) not in bodies and self._generated_member(path, node, name, arity):
                 return True
@@ -1395,13 +1417,15 @@ class JavaSymbols:
         ))
 
     def _parameterized(
-        self, path: str, type_node: Node, owner: str, env: _Env | None,
+        self, path: str, type_node: Node, owner: str, env: _Env | None, *, strict: bool = False,
     ) -> tuple[str, _Env] | None:
         """A written source type and its type arguments by parameter name.
 
         A raw type gives each parameter its bound (its erasure); a diamond
         or a count mismatch gives nothing. ``None`` when ``type_node`` names
-        no unique source type.
+        no unique source type. ``strict`` keeps only the arguments the code
+        writes as concrete types (:meth:`_strict_argument`): a raw type then
+        gives no argument (BL-45).
         """
         source = self.units[path].source
         name_node, arguments = type_node, None
@@ -1417,17 +1441,38 @@ class JavaSymbols:
         location, declaration = locations[0]
         parameters = self._declared_type_parameters(declaration)
         if arguments is None:
+            if strict:
+                return resolved, {name: None for name, _parameter in parameters}
             return resolved, self._type_bounds(location, declaration, resolved)
         written = arguments.named_children
         if len(written) != len(parameters):
             return resolved, {}
         return resolved, {
-            name: self._type_argument_value(path, argument, owner, env)
+            name: (
+                self._strict_argument(path, argument, owner, env) if strict
+                else self._type_argument_value(path, argument, owner, env)
+            )
             for (name, _parameter), argument in zip(parameters, written, strict=True)
         }
 
+    def _strict_argument(self, path: str, argument: Node, owner: str, env: _Env | None) -> str | None:
+        """A type argument written as a concrete type, or an array of one;
+        a type variable takes its value in ``env`` only. A wildcard and a
+        nested parameterized type give nothing (BL-45)."""
+        element: Node | None = argument
+        while element is not None and element.type == "array_type":
+            element = element.child_by_field_name("element")
+        if element is None or element.type in {"wildcard", "generic_type"}:
+            return None
+        text = parser.node_text(self.units[path].source, argument).strip()
+        if element.type == "type_identifier" and self._type_variable(
+            parser.node_text(self.units[path].source, element).strip(), element,
+        ) is not None:
+            return (env or {}).get(text) if element is argument else None
+        return self.resolve(path, text, owner, allow_ambiguous=True, at=argument)
+
     def _supertype_env(
-        self, owner: str, module: str, env: _Env, target: str, depth: int = 0,
+        self, owner: str, module: str, env: _Env, target: str, depth: int = 0, *, strict: bool = False,
     ) -> _Env | None:
         """The type arguments ``owner`` gives its ancestor ``target``.
 
@@ -1446,7 +1491,7 @@ class JavaSymbols:
                     continue
                 for type_node in clause.named_children:
                     for candidate in type_node.named_children if type_node.type == "type_list" else [type_node]:
-                        parameterized = self._parameterized(path, candidate, owner, env)
+                        parameterized = self._parameterized(path, candidate, owner, env, strict=strict)
                         if parameterized is None:
                             continue
                         base, base_env = parameterized
@@ -1455,7 +1500,9 @@ class JavaSymbols:
                             ancestor != target for ancestor, _ in self.ancestors(base, base_module)
                         ):
                             continue
-                        result = self._supertype_env(base, base_module, base_env, target, depth + 1)
+                        result = self._supertype_env(
+                            base, base_module, base_env, target, depth + 1, strict=strict,
+                        )
                         if result is not None:
                             found.append(result)
         return found[0] if found and all(result == found[0] for result in found) else None
@@ -2109,6 +2156,141 @@ class JavaSymbols:
                 if base == supertype or supertype in _KNOWN_EXTERNAL_SUPERTYPES.get(base or "", ()):
                     return True
         return False
+
+    def _contradicted_implementors(
+        self, info: _Method, receiver: Node, invocation: Node, receiver_type: str,
+    ) -> Callable[[str, str], bool] | None:
+        """Whether an implementor ``(type, module)`` is excluded by the type
+        arguments of the receiver (BL-45, ADR-81 amendment): ``None`` when
+        the receiver's written type gives no concrete argument.
+
+        An implementor is excluded when its ``implements`` or ``extends``
+        clauses give one of the receiver type's parameters a concrete
+        argument provably incompatible with the receiver's own.
+        """
+        written = self._receiver_arguments(info, receiver, invocation)
+        if written is None or written[0] != receiver_type:
+            return None
+        arguments = {name: value for name, value in written[1].items() if value is not None}
+        if not arguments:
+            return None
+        path = info.method.path
+
+        def contradicted(owner: str, module: str) -> bool:
+            implemented = self._implementor_arguments(owner, module, receiver_type)
+            return implemented is not None and any(
+                (other := implemented.get(name)) is not None and self._unrelated_arguments(value, other, path)
+                for name, value in arguments.items()
+            )
+
+        return contradicted
+
+    def _receiver_arguments(self, info: _Method, receiver: Node, invocation: Node) -> tuple[str, _Env] | None:
+        """The type arguments a receiver's declaration writes, strictly
+        (:meth:`_strict_argument`): a local, a parameter or a field of the
+        caller's class, a cast, a creation, or a source method's declared
+        return type. An inherited field and a ``var`` give nothing."""
+        path = info.method.path
+        source = self.units[path].source
+        node = receiver
+        while node.type == "parenthesized_expression" and node.named_children:
+            node = node.named_children[0]
+        if node.type in {"cast_expression", "object_creation_expression"}:
+            type_node = node.child_by_field_name("type")
+            return self._parameterized(path, type_node, info.owner, None, strict=True) if type_node else None
+        field: Node | None = None
+        if node.type == "identifier":
+            field = node
+        elif node.type == "field_access" and (
+            (target := node.child_by_field_name("object")) is not None and target.type == "this"
+        ):
+            field = node.child_by_field_name("field")
+        if field is not None:
+            written = self._written_variable(
+                info, parser.node_text(source, field), invocation, field_only=node.type == "field_access",
+            )
+            if written is None or written[3] is not None:
+                return None
+            return self._parameterized(written[0], written[1], written[2], None, strict=True)
+        if node.type != "method_invocation":
+            return None
+        found = self._return_declarations(info, node, 0)
+        if found is None:
+            return None
+        results: list[tuple[str, _Env] | None] = []
+        for declaration in found[1]:
+            type_node = declaration.node.child_by_field_name("type")
+            results.append(self._parameterized(
+                declaration.method.path, type_node, declaration.owner, None, strict=True,
+            ) if type_node is not None else None)
+        return results[0] if results and all(result == results[0] for result in results) else None
+
+    def _implementor_arguments(self, owner: str, module: str, target: str) -> _Env | None:
+        """The type arguments the clauses of ``owner`` write for its source
+        ancestor ``target``, strictly; a type variable of ``owner`` gives
+        nothing. ``None`` when ``owner`` is ``target`` or no subtype of it."""
+        key = (owner, module, target)
+        if key not in self._implemented:
+            found: _Env | None = None
+            locations = self._module_locations(owner, module)
+            if owner != target and len(locations) == 1:
+                own = {name: None for name, _parameter in self._declared_type_parameters(locations[0][1])}
+                found = self._supertype_env(owner, module, dict(own), target, strict=True)
+            self._implemented[key] = found
+        return self._implemented[key]
+
+    def _unrelated_arguments(self, first: str, second: str, path: str) -> bool:
+        """Whether two concrete type arguments are provably incompatible:
+        different and not related by subtyping, as far as the sources and
+        the JDK's final classes prove it (BL-45). An array relates only to
+        an array of a related element and to the array supertypes."""
+        if first == second or "java.lang.Object" in {first, second}:
+            return False
+        first_array, second_array = first.endswith("[]"), second.endswith("[]")
+        if first_array and second_array:
+            elements = first[:-2], second[:-2]
+            if any(element in _PRIMITIVES for element in elements):
+                return elements[0] != elements[1]
+            return self._unrelated_arguments(*elements, path)
+        if first_array or second_array:
+            other = second if first_array else first
+            return other not in _ARRAY_SUPERTYPES and self._placed_type(other, path)
+        if not (self._placed_type(first, path) and self._placed_type(second, path)):
+            return False
+        return not self._may_subtype(first, second, path) and not self._may_subtype(second, first, path)
+
+    def _placed_type(self, type_name: str, path: str) -> bool:
+        """A unique source type or a JDK type: one whose supertypes the
+        subtyping check of :meth:`_unrelated_arguments` can judge."""
+        if type_name.endswith("[]"):
+            element = type_name[:-2]
+            return element in _PRIMITIVES or self._placed_type(element, path)
+        return len(self._type_candidates(type_name, path)) == 1 or (
+            type_name not in self.types and type_name.startswith("java.")
+        )
+
+    def _may_subtype(self, subtype: str, supertype: str, path: str) -> bool:
+        """Whether ``subtype`` is, or may be, a subtype of ``supertype``.
+
+        A source type is one when its source ancestors or the external
+        types they name reach ``supertype``, and may be one when it has an
+        external ancestor whose hierarchy the sources do not hold. A JDK
+        type is never a subtype of a source type; a final JDK class has the
+        supertypes ``_FINAL_JDK_SUPERTYPES`` lists, and any other JDK pair
+        may be related.
+        """
+        if subtype in self.types:
+            if supertype in self.types:
+                return self._subtype_of(subtype, self._module_of(subtype, path), supertype)
+            module = self._module_of(subtype, path)
+            return self._subtype_of(subtype, module, supertype) or any(
+                self.external_bases.get(ancestor) for ancestor in self.ancestors(subtype, module)
+            )
+        if supertype in self.types:
+            return False
+        if subtype in _FINAL_JDK_SUPERTYPES:
+            return supertype in _FINAL_JDK_SUPERTYPES[subtype]
+        return supertype not in _FINAL_JDK_SUPERTYPES
 
     def _implicit_targets(
         self, info: _Method, value: Node, value_owner: str, receiver_type: str, name: str, arity: int,
@@ -4383,6 +4565,7 @@ class JavaSymbols:
                 pruned = False
                 external = False
                 declaration: _Method | None = None
+                contradicted: Callable[[str, str], bool] | None = None
                 # ``super.m()`` binds statically: no runtime type matters.
                 virtual = not (receiver is not None and (
                     receiver.type == "super" or any(child.type == "super" for child in invocation.children)
@@ -4411,6 +4594,20 @@ class JavaSymbols:
                         )
                         if narrowed is not None:
                             dispatch_type, targets, pruned = narrowed
+                        # An implementor whose type argument contradicts the
+                        # receiver's cannot be its runtime type (BL-45). When
+                        # it would exclude every target, the call keeps them.
+                        contradicted = self._contradicted_implementors(info, receiver, invocation, receiver_type)
+                        kept = [
+                            target for target in targets
+                            if contradicted is None or target.id not in self.methods or not contradicted(
+                                self.methods[target.id].owner, self.methods[target.id].module,
+                            )
+                        ]
+                        if kept:
+                            targets = kept
+                        else:
+                            contradicted = None
                     if (
                         not targets and closed_world and argument_types is not None
                         and invocation.type != "method_reference" and receiver_type in self.types
@@ -4495,7 +4692,9 @@ class JavaSymbols:
                 )
                 incomplete = implicit_exact is None and virtual and runtime_type in self.types and not (
                     statically_bound
-                ) and self._incomplete_implementors(runtime_type, info, name, arguments_count, targets)
+                ) and self._incomplete_implementors(
+                    runtime_type, info, name, arguments_count, targets, contradicted,
+                )
                 if (
                     closed_world and implicit_exact is None and virtual and not statically_bound
                     and runtime_type in self.types

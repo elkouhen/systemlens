@@ -4,7 +4,7 @@ Two fixture files hold every shape the ``source`` engine and the CodeQL
 query were measured on: ``FIXTURE`` the alignment shapes (rows A1 to A10
 and B1 to B6 of the engine-parity table in ``docs/spec-tech/indexing.md``),
 ``REVIEW_FIXTURE`` the shapes of the 2026-11-08 review (two-digit rows such
-as A01 or C14, and E02). They tag lines as
+as A01 or C14, and E02, E03). They tag lines as
 ``tests/test_call_graph_shapes.py`` does, with a trailing ``//@Tag``
 comment: each caller's declaration line, each target's declaration line,
 and each call line.
@@ -386,9 +386,9 @@ class Implementors {
 """
 
 # The shapes of the 2026-11-08 review of internal flows (BACKLOG.md,
-# Appendix A.1), under the review's case numbers, and the generic return
-# of Appendix B.4 (E02). The file shares package ``p`` with ``FIXTURE`` and
-# reuses its ``Shape``, ``Circle`` and ``Box`` types. Its Spring and
+# Appendix A.1), under the review's case numbers, the generic return of
+# Appendix B.4 (E02), and the dispatch shape of BL-45 (E03). The file
+# shares package ``p`` with ``FIXTURE`` and reuses its ``Shape``, ``Circle`` and ``Box`` types. Its Spring and
 # ModelMapper imports let CodeQL type the library shapes from the jars it
 # fetches; the ``source`` engine reads only the sources.
 REVIEW_FIXTURE = """\
@@ -798,6 +798,27 @@ class WrapperCases {
     wrapper.wrap().get().ship(); //@e02
   }
 }
+
+// E03: implementors whose type argument contradicts the receiver's (BL-45).
+interface Codec<T> {
+  void encode(T value); //@Codec.encode
+}
+
+class TextCodec implements Codec<String> {
+  public void encode(String value) {} //@TextCodec.encode
+}
+
+class BinaryCodec implements Codec<byte[]> {
+  public void encode(byte[] value) {} //@BinaryCodec.encode
+}
+
+class CodecCases {
+  Codec<String> codec;
+
+  void e03() { //@E03
+    codec.encode("x"); //@e03
+  }
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE}
@@ -1036,6 +1057,8 @@ CASES: list[Case] = [
           deviation=[("d07", "Taker.takeOrder", "possible"), ("d07", "Taker.takeLine", "possible")]),
     _case("E02", "E02", None,
           ("e02", "OrderBoxes.wrap", "exact"), ("e02", "Box.get", "exact"), ("e02", "Order.ship", "exact")),
+    _case("E03", "E03", None,
+          ("e03", "TextCodec.encode", "exact"), ("e03", "Codec.encode", "possible")),
 ]
 
 

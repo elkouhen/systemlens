@@ -835,6 +835,26 @@ indexed body for the call, such as a record accessor, the declared
 type's dispatch stands. The check walks the variable's block once per
 narrowed call site. Method references are not narrowed.
 
+A receiver of a source generic type whose declaration writes a concrete
+type argument excludes the implementors that contradict it (ADR-81
+amendment, BL-45). The receiver's arguments are read strictly from a
+local, a parameter, a field of the caller's class, a cast, a creation or
+a source method's declared return type. An implementor's are read from
+its `implements` and `extends` clauses, substituted through its source
+supertypes and cached per implementor and ancestor.
+
+A raw clause, a wildcard, a nested parameterized type, a type variable
+and a library type give no argument and keep the implementor. Two
+concrete arguments contradict when they differ and neither may be a
+subtype of the other. `_may_subtype` proves subtyping from the source
+ancestors, treats an external ancestor as unknown, and knows the
+supertypes of `String` and the boxed primitives. An array relates only
+to an array of a related element and to the array supertypes.
+
+The excluded types also leave the ADR-81 completeness check, so the one
+remaining body can be `exact`. When every target would be excluded, the
+filter does not apply and the call keeps them.
+
 A lambda, a method reference or an anonymous class is a body no indexed
 method stands for (ADR-62). Two rules keep it from making a named body
 `exact` (ADR-72, BL-30). First, a call stays `possible` when its runtime
@@ -1238,6 +1258,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | G4 | Receiver typed by a bounded type variable `<T extends Shape>` | `covered` (BL-26) | |
 | G5 | Type-variable return or field substituted from a written type argument; raw, wildcard and nested arguments | `covered` (BL-26) | |
 | G6 | Generic method type argument, written or inferred from the arguments | `covered` (BL-26) | |
+| G7 | Implementor excluded when its clause's type argument contradicts the receiver's written one; related, raw, wildcard and type-variable arguments keep it | `covered` (BL-45) | |
 | T1 | Cast, record accessor, Lombok getter, array element | `covered` | |
 | T2 | Pattern variable of `instanceof Circle c` | `covered` (BL-23) | |
 | T3 | Pattern variable of a `switch` pattern | `covered` (BL-23) | |
@@ -1309,7 +1330,8 @@ Rows A1 to B6 are the alignment shapes of BL-21 to BL-32. Two-digit rows
 (A01 to D06) are the cases of the 2026-11-08 review of internal flows,
 under the review's numbering. A missing number is a shape on which the
 engines already agree, or D03, which is invalid Java. E02 is the generic
-return of the review's Appendix B.4. CodeQL types the A-family library
+return of the review's Appendix B.4, and E03 the dispatch BL-45 filters
+by type argument. CodeQL types the A-family library
 shapes from the jars it fetches while it builds its database.
 
 | # | Shape | Status | Item |
@@ -1395,6 +1417,7 @@ shapes from the jars it fetches while it builds its database.
 | D06 | `orders.forEach(taker::take)`, overloaded `take` | `covered` | BL-37 |
 | D07 | `taker.take(Collections.max(orders, cmp))`: the pass does not type the argument | `covered` | BL-38; D07 keeps both overloads `possible` where CodeQL selects one (ADR-87) |
 | E02 | `wrapper.wrap().get().ship()`, `Box<T> wrap()` declared on an interface and on the abstract class between it and the receiver type | `covered` | BL-35 |
+| E03 | `Codec<String> codec; codec.encode(..)` with `TextCodec implements Codec<String>` and `BinaryCodec implements Codec<byte[]>` | `covered` | BL-45 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with
@@ -1419,8 +1442,9 @@ engine, then `flows calculate` on the persisted index, and checks the
 flows of each entry in both results.
 
 A shape whose gap an open item owns is a strict expected failure naming
-it: the dispatch a generic type argument decides (BL-45), and the
-ternary and call-context dispatch (BL-46).
+it: the ternary and call-context dispatch (BL-46). Shapes s3 and s4
+dispatch `exact` to `TextHandler`, the one implementor whose type
+argument matches the receiver's (BL-45).
 
 Controls pass today: a controller-service-client chain, a job calling its
 own inherited template method, a template method called on a sibling

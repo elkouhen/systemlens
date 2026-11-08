@@ -121,9 +121,9 @@ CASES = [
     _case("dead-end", f"{_ORDERS}PingController.ping", None),
     # s3, s4: MessageHandler<String> excludes BinaryHandler, a
     # MessageHandler<byte[]>; CodeQL dispatches exactly to TextHandler.
-    _case("s3-generic-cast", f"{_ORDERS}HandlerController.registry", "BL-45",
+    _case("s3-generic-cast", f"{_ORDERS}HandlerController.registry", None,
           _flow("medium", "TextHandler.handle", *_TO_PUBLISHER)),
-    _case("s4-generic-field", f"{_ORDERS}HandlerController.field", "BL-45",
+    _case("s4-generic-field", f"{_ORDERS}HandlerController.field", None,
           _flow("medium", "TextHandler.handle", *_TO_PUBLISHER)),
     # s19: the private helper's only call passes a CsvExporter.
     _case("s19-call-context", f"{_ORDERS}ExportController.helper", "BL-46",
