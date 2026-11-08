@@ -253,9 +253,14 @@ def _deduplicate_code_flows(
                 flow.id,
             ),
         )
+        # The join already counted the routes behind each incoming flow:
+        # a recount of the one flow it kept per group would give 1 (BC-24).
         selected.append(replace(
             representative,
-            alternative_count=len({route_signature(flow) for flow in parallel}),
+            alternative_count=max(
+                len({route_signature(flow) for flow in parallel}),
+                *(flow.alternative_count for flow in parallel),
+            ),
         ))
     return sorted(
         selected,
@@ -1355,7 +1360,12 @@ def materialize_call_graph_flows(
         ).digest()
         current = flow_groups.get(key)
         if current is None:
-            flow_groups[key] = (replace(flow, alternative_count=1), {route_digest})
+            # A seeded flow (a resumed checkpoint or the flows kept after the
+            # reachability pass) keeps the routes it already counted.
+            flow_groups[key] = (
+                replace(flow, alternative_count=max(flow.alternative_count, 1)),
+                {route_digest},
+            )
             return
         representative, signatures = current
         if route_digest in signatures:
@@ -1371,7 +1381,12 @@ def materialize_call_graph_flows(
                 item.id,
             ),
         )
-        flow_groups[key] = (replace(candidate, alternative_count=len(signatures)), signatures)
+        flow_groups[key] = (
+            replace(candidate, alternative_count=max(
+                representative.alternative_count, flow.alternative_count, len(signatures),
+            )),
+            signatures,
+        )
 
     def current_flows() -> list[CodeFlow]:
         return [representative for representative, _signatures in flow_groups.values()]
