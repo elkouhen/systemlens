@@ -1,9 +1,10 @@
 # Backlog: Copilot review of source indexing
 
 Status: written on 2026-11-08 and validated the same day by the product
-owner, who asked for it to be processed. Lot 1 (BC-01 to BC-05) is
-`delivered`; the other items are `open`. Lot order: 1 to 6. A decision record an item depends on is written and
-accepted under the product owner's mandate, to be confirmed by them.
+owner, who asked for it to be processed. Lots 1 and 2 (BC-01 to BC-16)
+are `delivered`; the other items are `open`. Lot order: 1 to 6. A
+decision record an item depends on is written and accepted under the
+product owner's mandate, to be confirmed by them.
 Each item first re-checks its finding against current `main`, since
 BL-42 to BL-53 landed after the review. Findings were checked
 against `main` between `262b404` and `2831eb1` (BL-38, BL-40, BL-41
@@ -40,17 +41,17 @@ differences on both, unless its acceptance names the change.
 | [BC-03](#bc-03) | Decode parameter text leniently | G3 | high | `delivered` |
 | [BC-04](#bc-04) | Skip unreadable files in the inventory | G7 | med | `delivered` |
 | [BC-05](#bc-05) | Report source-generation failures as indexing errors | G2 | med | `delivered` |
-| [BC-06](#bc-06) | Give source enums and records their implicit supertypes | S2 | med | `open` |
-| [BC-07](#bc-07) | Read a call's return type across the receiver's ancestors | S5 | med | `open` |
-| [BC-08](#bc-08) | Keep varargs out of fixed-arity overload selection | S6 | med | `open` |
-| [BC-09](#bc-09) | Keep default methods reachable through lambdas | S7 | med | `open` |
-| [BC-10](#bc-10) | Type `this` inside an anonymous class body | S8 | low | `open` |
-| [BC-11](#bc-11) | Fix local declarator scoping | S9, S10 | low-med | `open` |
-| [BC-12](#bc-12) | Recognise every lambda argument position | S15 | med | `open` |
-| [BC-13](#bc-13) | Do not prefer a static import over a possibly inherited method | S16 | low-med | `open` |
-| [BC-14](#bc-14) | Scope enum-constant bodies and interface fields | S17 | low | `open` |
-| [BC-15](#bc-15) | Fix varargs overrides and Lombok boolean accessors | S18 | low | `open` |
-| [BC-16](#bc-16) | Resolve dotted type names and erase generics by depth | S19 | low | `open` |
+| [BC-06](#bc-06) | Give source enums and records their implicit supertypes | S2 | med | `delivered` |
+| [BC-07](#bc-07) | Read a call's return type across the receiver's ancestors | S5 | med | `delivered` |
+| [BC-08](#bc-08) | Keep varargs out of fixed-arity overload selection | S6 | med | `delivered` |
+| [BC-09](#bc-09) | Keep default methods reachable through lambdas | S7 | med | `delivered` |
+| [BC-10](#bc-10) | Type `this` inside an anonymous class body | S8 | low | `delivered` |
+| [BC-11](#bc-11) | Fix local declarator scoping | S9, S10 | low-med | `delivered` |
+| [BC-12](#bc-12) | Recognise every lambda argument position | S15 | med | `delivered` |
+| [BC-13](#bc-13) | Do not prefer a static import over a possibly inherited method | S16 | low-med | `delivered` |
+| [BC-14](#bc-14) | Scope enum-constant bodies and interface fields | S17 | low | `delivered` |
+| [BC-15](#bc-15) | Fix varargs overrides and Lombok boolean accessors | S18 | low | `delivered` |
+| [BC-16](#bc-16) | Resolve dotted type names and erase generics by depth | S19 | low | `delivered` |
 | [BC-17](#bc-17) | Type `this.a.b` receivers | S1 | med | `open` |
 | [BC-18](#bc-18) | Index enum-constant arguments as static initialisation | S3 | med | `open` |
 | [BC-19](#bc-19) | Resolve constructor references `Foo::new` | S4 | low-med | `open` |
@@ -213,6 +214,11 @@ The probe in Appendix B shows the wrong edge.
   the call loses every target.
 - **Fix:** add `Enum`, `Comparable`, `Serializable` and `Constable` for
   an enum argument, and `Record` for a record argument.
+- **Status:** `delivered`.
+- **Delivery:** `efe12ea`. Reproduced on `7f06bed`. `_applicable` and
+  `_subtype_of` give an enum `Enum`, `Comparable`, `Serializable` and
+  `Constable`, and a record `Record`. Shape `S5-implicit-supertypes`,
+  parity case E06.
 
 <a id="bc-07"></a>
 ### BC-07. Read a call's return type across the receiver's ancestors
@@ -224,6 +230,13 @@ The probe in Appendix B shows the wrong edge.
   `child.a(1).get()` goes exact to `Cache.get`.
 - **Fix:** gather owner and ancestor declarations, then apply
   `_select_overload`.
+- **Status:** `delivered`.
+- **Delivery:** `43f8d9d`. Reproduced on `7f06bed`.
+  `_returning_declarations` reads the receiver's and its ancestors'
+  declarations, applies `_select_overload`, then drops those an override
+  hides, as a covariant return does. Shape `S1-return-across-ancestors`,
+  parity case E07. T14-unproven now types `Mid`'s `List<Circle>
+  items()`, which hides `Api`'s, as CodeQL does.
 
 <a id="bc-08"></a>
 ### BC-08. Keep varargs out of fixed-arity overload selection
@@ -234,6 +247,13 @@ The probe in Appendix B shows the wrong edge.
   only "when no fixed arity applies".
 - **Fix:** keep varargs methods out of the phase 1 and 2 competition,
   and try them only when those phases find nothing.
+- **Status:** `delivered`.
+- **Delivery:** `32124e8`. Reproduced on `7f06bed`. `_select_overload`
+  runs the three phases: a `T...` method competes in phases 1 and 2 only
+  at its own arity, as `T[]`, and phase 3 expands it. A typed call also
+  considers the varargs overloads, and a `T...` contract is overridden
+  only by `T[]`. Shapes `S9-varargs-last` and `S9-varargs-last-fixed`,
+  parity case E08.
 
 <a id="bc-09"></a>
 ### BC-09. Keep default methods reachable through lambdas
@@ -244,6 +264,12 @@ The probe in Appendix B shows the wrong edge.
   lambda's inherited `H.before`.
 - **Fix:** also keep a default whose interface is a lambda or
   method-reference target.
+- **Status:** `delivered`.
+- **Delivery:** `7bdd816`. Reproduced on `7f06bed`. A default stays a
+  target when a lambda or method reference implements its interface or a
+  subinterface. Shape `F2-inherited-default`, parity case E09, where
+  `reg` receives the lambda and a named instance: with only the lambda,
+  CodeQL narrows by call context to `H.before`.
 
 <a id="bc-10"></a>
 ### BC-10. Type `this` inside an anonymous class body
@@ -252,6 +278,11 @@ The probe in Appendix B shows the wrong edge.
   `new Thread(){ run(){ register(this); } }`, with `register(Runnable)`
   and `register(Main)`, the call goes exact to `register(Main)`.
 - **Fix:** type `this` as the anonymous supertype, or as unknown.
+- **Status:** `delivered`.
+- **Delivery:** `965b20c`. Reproduced on `7f06bed`. In an anonymous
+  class body, an argument `this` is typed by the creation's supertype;
+  in a lambda it stays the enclosing class. Shape `T5-anonymous-this`,
+  parity case E10.
 
 <a id="bc-11"></a>
 ### BC-11. Fix local declarator scoping
@@ -266,6 +297,11 @@ The probe in Appendix B shows the wrong edge.
 - **Fix:** add `[]` for each `dimensions` node. Compare each
   declarator's end byte. Scope a resource to the try body and the later
   resources.
+- **Status:** `delivered`.
+- **Delivery:** `188b721`. Reproduced on `7f06bed`. A declarator counts
+  its own `[]`, as a parameter, local or field, and is in scope from its
+  own start; a resource only in the later resources and the try body.
+  Shapes `T1-c-style-array` and `T5-declarator-scope`, parity case E11.
 
 <a id="bc-12"></a>
 ### BC-12. Recognise every lambda argument position
@@ -277,6 +313,14 @@ The probe in Appendix B shows the wrong edge.
   named implementor. That contradicts ADR-72.
 - **Fix:** handle `explicit_constructor_invocation`, `enum_constant`,
   `spread_parameter`, `array_initializer` and switch/`yield` parents.
+- **Status:** `delivered`.
+- **Delivery:** `db24c13`. Reproduced on `7f06bed`.
+  `_functional_targets` climbs a switch arm or `yield` to its switch
+  expression and reads an array initializer's element type;
+  `_parameter_type_nodes` reads `this(..)`, `super(..)` and
+  enum-constant constructors and a varargs element. Shape
+  `F2-more-contexts`, parity case E12, where the constructor also
+  receives a named instance.
 
 <a id="bc-13"></a>
 ### BC-13. Do not prefer a static import over a possibly inherited method
@@ -287,6 +331,13 @@ The probe in Appendix B shows the wrong edge.
   win in Java, and the spec says the call stays unresolved.
 - **Fix:** stop `_static_import_owner` on `_may_inherit_unknown`, as
   `_lexical_owner` does.
+- **Status:** `delivered`.
+- **Delivery:** `6087d6c`. Reproduced on `7f06bed`.
+  `_static_import_owner` stops on `_may_inherit_unknown`. Shapes
+  `S2-import-shadowed`, `S2-import-shadowed-jdk` and
+  `S2-import-known-supertype`. No parity case: CodeQL resolves the
+  import when it lacks the external jar, and it knows `AbstractList`'s
+  members, where the pass now loses that edge on purpose (invariant 4).
 
 <a id="bc-14"></a>
 ### BC-14. Scope enum-constant bodies and interface fields
@@ -297,6 +348,12 @@ The probe in Appendix B shows the wrong edge.
   context, so their edges are lost.
 - **Fix:** treat a constant's `class_body` as an anonymous scope. Give
   `interface_body` fields a static-initializer context.
+- **Status:** `delivered`.
+- **Delivery:** `52ccc84`. Reproduced on `7f06bed`. A constant's
+  `class_body` is a class scope, like an anonymous body. An interface
+  constant with an initializer is static code: the interface gets a
+  `<clinit>` node, as CodeQL reports it. Shapes `H9-constant-field` and
+  `S8-interface-field`, parity cases E13-constant and E13-interface.
 
 <a id="bc-15"></a>
 ### BC-15. Fix varargs overrides and Lombok boolean accessors
@@ -309,6 +366,14 @@ The probe in Appendix B shows the wrong edge.
 - **Fix:** write a spread parameter as `T[]`. Map an `isX` boolean field
   to `isX()`. Accept `@Getter` on an enum, and treat `@Accessors` as an
   open shape.
+- **Status:** `delivered`.
+- **Delivery:** `fb3d3ce`. Reproduced on `7f06bed`. A spread parameter
+  is written `T[]`. Lombok names follow `getX`, `isX` for a primitive
+  `boolean`, a `boolean isX` keeping its name, and `setX`; `@Getter`
+  applies to an enum, and `@Accessors` (from `lombok.experimental`) is
+  an open shape. Shapes `H2-varargs-overload`, `H2-lombok-boolean`,
+  `H2-lombok-enum` and `H2-lombok-accessors`, parity case E14. CodeQL
+  does not expand Lombok, so it arbitrates only E14.
 
 <a id="bc-16"></a>
 ### BC-16. Resolve dotted type names and erase generics by depth
@@ -319,6 +384,25 @@ The probe in Appendix B shows the wrong edge.
   to `Outer.z`.
 - **Fix:** resolve the first segment through wildcard imports and the
   JDK nested-type table. Erase type arguments by bracket depth.
+- **Status:** `delivered`.
+- **Delivery:** `55be89f`. Reproduced on `7f06bed`. Type arguments are
+  erased by bracket depth, and `Map.Entry` resolves through `import
+  java.util.*` from a JDK nested-type table. Shape
+  `S1-dotted-generic-type`, parity case E15. This commit moves
+  `CODE_FLOW_SIGNATURE` to `code-flow-v59-java-semantics`.
+
+Lot 2 validation, on fresh scratch copies at `55be89f`: every finding
+still reproduced at `7f06bed`, and none needed a decision record. Each
+new parity case passes against CodeQL.
+
+Train-ticket keeps 447 flow pairs and 1712 edges, the lab 25 flows and
+105 edges, and `analyze compare-engines --engines source,codeql`
+reports zero differences on both. Their persisted methods, edges and
+flows equal the `7f06bed` baseline: no edge or confidence changed, since
+neither project holds the Lot 2 shapes.
+
+Ruff, mypy, the default suite, the slow parity, internal-flow and
+code-flow tests, and `scripts/check_companion_contracts.py` pass.
 
 ## Lot 3: lost edges
 
