@@ -13,7 +13,7 @@ functional or technical contract.
 | Optional or repository-specific behaviour | [ADR-5](#adr-5-strategy1-conventions-are-opt-in), [ADR-12](#adr-12-kubernetes-discovery-is-explicit-and-snapshot-based) |
 | Product namespace and module vocabulary | [ADR-6](#adr-6-systemlens-is-the-public-product-and-state-namespace), [ADR-24](#adr-24-use-module-terminology-for-structural-project-grouping) |
 | Indexed contracts and implementation boundaries | [ADR-25](#adr-25-separate-indexed-dto-materialization-from-graph-rendering), [ADR-26](#adr-26-organize-implementation-modules-by-architectural-ownership) |
-| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch), [ADR-78](#adr-78-hold-a-codeql-reachability-flow-to-the-joins-rules) |
+| Potential code flows and call-graph resolution | [ADR-27](#adr-27-persist-potential-code-flows-separately-from-topology-and-runtime-truth), [ADR-27b](#adr-27b-preserve-stronger-enrichment-facts-and-label-topology-reconciliation), [ADR-29](#adr-29-ask-codeql-directly-for-input-to-output-reachability), [ADR-30](#adr-30-resolve-fallback-dispatch-by-qualified-symbols-and-union-partial-evidence), [ADR-38](#adr-38-persist-the-source-backed-codeql-call-graph), [ADR-43](#adr-43-preserve-receiver-context-in-inherited-dispatch), [ADR-88](#adr-88-own-an-inherited-route-by-the-inherited-method), [ADR-78](#adr-78-hold-a-codeql-reachability-flow-to-the-joins-rules) |
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
@@ -2410,3 +2410,37 @@ deviation of ADR-87. The reason is not persisted: the call-edge
 diagnostic recomputes it from the sources, as it already does for
 interface implementations. The CodeQL gap filler, an open-world pass,
 is unchanged.
+
+## ADR-88: Own an inherited route by the inherited method
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+implement the internal-flow backlog; to be confirmed by the product
+owner. Backlog item BL-48.
+
+**Context:** a mapping declared on a base controller or an interface,
+and not overridden, belongs to the controller that inherits it (BL-04).
+The endpoint sits on the inheritor's type declaration, outside every
+method, so no method owns it. `POST /products/crud`, served by
+`ProductController` through `AbstractCrudController.create`, has its call
+edges and no flow. Generic CRUD base controllers and OpenAPI delegate
+interfaces lose every flow this way.
+
+**Decision:**
+1. The inherited method owns the route: it is the entry method of the
+   route's flows. The endpoint stays on the inheritor's declaration, so
+   the topology is unchanged. Its snippet names the declaring method's
+   file and line, which the integration-method pass reads.
+2. The inheritor is the entry class. Dispatch from the inherited body is
+   restricted to the inheritor and its ancestors, as for an entry method
+   declared by a subtype (ADR-43, as amended by BL-47: only while the
+   route stays on `this`).
+3. Two inheritors of one method give that method two routes. Each route
+   restricts dispatch to its own inheritor.
+4. An inheritor's own mapping on an override keeps today's rule: the
+   override owns the route. A Feign client inheriting an API interface
+   is unchanged; its call endpoints stay on the client's declaration.
+
+**Consequences:** the probe's inherited CRUD route yields its flow with
+both engines and after `flows calculate`. A sibling controller's
+override of a template hook never enters another controller's flow. The
+same method can appear as the entry of several flows, one per inheritor.

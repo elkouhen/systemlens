@@ -24,6 +24,8 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-12](#pdr-12-a-spring-data-rest-default-path-is-an-unverified-route) | A Spring Data REST default path is an unverified route | Yes, product owner |
 | [PDR-13](#pdr-13-init-chooses-the-engine-and-the-strategy-separately) | `init` chooses the engine and the strategy separately | Yes, product owner |
 | [PDR-14](#pdr-14-a-two-finger-scroll-pans-and-a-pinch-zooms) | A two-finger scroll pans and a pinch zooms | Yes, product owner |
+| [PDR-15](#pdr-15-a-flow-ends-on-an-effect-and-rabbit-and-jms-publications-are-effects) | A flow ends on an effect; Rabbit and JMS publications are effects | Yes, product owner |
+| [PDR-16](#pdr-16-rabbit-jms-events-and-startup-code-start-flows) | Rabbit, JMS, events and startup code start flows | Yes, product owner; to be confirmed |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -293,6 +295,7 @@ them changes. The JSON contract and persisted facts are unchanged.
 **Status:** Proposed on 2026-11-03 for task K8 of the
 call-graph coverage plan (backlog item BL-22). Not validated; the
 product owner dropped the item from the backlog on 2026-11-07.
+Points 1 and 4 are replaced by PDR-16 (BL-49).
 
 **Problem:** Some calls happen through Spring, not through Java
 dispatch. A `publishEvent(event)` reaches the `@EventListener` methods
@@ -395,3 +398,100 @@ from a trackpad, so that wheel pans. `Ctrl` + wheel zooms with any mouse.
 
 **Consequences:** the zoom controls and the minimap are unchanged. A
 pinch zooms at the same rate per wheel delta as a notch.
+
+## PDR-15: A flow ends on an effect, and Rabbit and JMS publications are effects
+
+**Status:** Decided by the product owner on 2026-11-08 (BL-50).
+
+**Problem:** a route whose calls reach no integration point, such as
+`GET /ping → PingService.compute → MathHelper.square`, has persisted call
+edges and no flow. The call-chain diagnostic reports it as `aucune suite
+d'appel`. Calls to a broker SystemLens does not model end nowhere too, so
+the flows that publish through them are dropped.
+
+**Decision:**
+1. A flow goes from a trigger to an effect. An entry-only call tree is not
+   persisted as a flow, whatever its depth. Its dead end stays visible in
+   the call-chain diagnostic.
+2. Two message publications become effects, with a `message_publish`
+   step and an endpoint of role `produce`:
+   - `RabbitTemplate` and its interface `AmqpTemplate`, `send` and
+     `convertAndSend`, system `rabbitmq`;
+   - `JmsTemplate`, `send` and `convertAndSend`, system `jms`.
+3. The channel is named as a Kafka topic is: a literal, a constant or a
+   resolvable property; anything else is dynamic. A Rabbit publication on
+   the default exchange is named by its routing key, which is the queue
+   name. A publication to a named exchange is named
+   `exchange/routing-key` and pairs with no queue, since SystemLens does
+   not read exchange bindings. A JMS publication is named by its
+   destination name. A call that names no channel is dynamic.
+4. `ApplicationEventPublisher.publishEvent` is not an effect: PDR-16 makes
+   it a hop into the listeners.
+
+**Out of scope:** Redis, Elasticsearch, R2DBC, S3 and SQS calls remain
+outside the effect list. A flow that ends on one of them is not persisted.
+
+**Why:** a flow answers "what does this trigger change outside the
+method". A tree without an effect answers nothing a call graph does not
+already show, and listing it would multiply flows on every helper route.
+Missing effects are an extractor gap, fixed one technology at a time.
+
+**Consequences:** routes that publish through Rabbit or JMS gain their
+flows. The `GET /ping` probe keeps no flow; a regression test asserts it.
+
+## PDR-16: Rabbit, JMS, events and startup code start flows
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+implement the internal-flow backlog; to be confirmed by the product
+owner (BL-49). It replaces points 1 and 4 of the proposed PDR-11.
+
+**Problem:** a flow starts only at a REST route, a Kafka consumption or a
+`@Scheduled` method. On the flow probe, `@RabbitListener`,
+`@JmsListener`, `@EventListener` and `CommandLineRunner.run` have call
+edges to a publisher and no flow.
+
+**Decision:**
+1. `@RabbitListener` and `@JmsListener` methods are consume endpoints,
+   like `@KafkaListener`, with a `message_entry` step. The channel is the
+   `queues` value of a Rabbit listener or the `destination` value of a
+   JMS listener, resolved as a Kafka topic is. A class-level
+   `@RabbitListener` gives its endpoint to each `@RabbitHandler` method.
+2. A Rabbit or JMS consumer pairs with a publication of the same system
+   and the same concrete channel name (PDR-15) in another module. The
+   pair is a topology relation, `publishes_to`, as for Kafka. Dynamic
+   names never pair.
+3. `@EventListener` and `@TransactionalEventListener` methods are
+   in-process event consumers. They are internal hops, not topology
+   endpoints. `publishEvent(x)` on an `ApplicationEventPublisher` or an
+   `ApplicationContext` gets a `possible` call edge to every listener
+   whose event type is the static type of `x` or one of its ancestors.
+   The event type is the `classes` or `value` attribute, else the single
+   parameter. An untyped `x` gives no edge. The publisher's flow
+   continues through the listener to its effects instead of ending.
+4. An event listener is also a transient trigger, with an `event_entry`
+   step named `@EventListener(Type)`. Its flows exist even when the
+   publisher is unknown, such as a framework event.
+5. `CommandLineRunner.run`, `ApplicationRunner.run` and `@PostConstruct`
+   methods are transient triggers, with a `startup_entry` step named
+   `CommandLineRunner.run`, `ApplicationRunner.run` or `@PostConstruct`.
+   Like `@Scheduled`, a transient trigger starts flows and adds no
+   topology endpoint.
+
+**Out of scope:** `main`, `@SqsListener`, Spring Cloud Stream functional
+beans, `RouterFunction` handlers, `@MessageMapping`, gRPC services, Spring
+Batch and Quartz jobs start no flow.
+
+**Known limit:** the HTML architecture graph draws Kafka topics only. A
+Rabbit or JMS relation is in the persisted topology and the CLI; the
+export shows its steps in the flows, not as a channel node.
+
+**Why:** these are the entries a Spring reader expects, and each maps to
+an existing shape: a broker consumer to a Kafka consumer, a startup hook
+or a listener to a schedule. An event stays in-process, so a topology
+node would show a channel that does not exist. The edge stays `possible`
+because Spring dispatches through a runtime registry and listener
+conditions.
+
+**Consequences:** the probe's Rabbit, JMS, event and runner entries yield
+their flows. Projects with runners or `@PostConstruct` seeders gain flows,
+mostly to data writes.
