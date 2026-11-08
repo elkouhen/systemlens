@@ -1862,6 +1862,11 @@ Delivery notes of 2026-11-07, within the decision:
   canonical constructor, `Record.<init>` with the component types as
   parameters, spanning its declaration. The note of 2026-11-07 left it
   out, so the calls in its body had no caller for any engine.
+- An enum constant is static initializer code (BC-18, 2026-11-08): it is
+  a static field its creation initializes (JLS 8.9.1). `<clinit>` calls
+  the constructor its arguments select, and the calls in its arguments,
+  as CodeQL reports them. A constant with a body creates an anonymous
+  class and reaches no constructor, as the anonymous creation above.
 - Instance initializer code is attributed to every constructor that does
   not start with `this(...)`, as Java runs it (JLS 12.5): a delegating
   constructor reaches it through its `this(...)` edge. The engines agree:

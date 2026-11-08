@@ -1118,6 +1118,35 @@ class Chain16 {
     this.client.api.call(); //@e16
   }
 }
+
+// E17: enum constants are static initializer code (BC-18). C has a body:
+// it creates an anonymous class, which reaches no constructor.
+class Seed17 {
+  static int helper() { return 1; } //@Seed17.helper
+
+  static String text() { return ""; } //@Seed17.text
+}
+
+class Part17 {
+  Part17() {} //@Part17.init
+}
+
+enum Kind17 { //@E17
+  A(Seed17.helper()), //@e17.a
+  B(new Part17()), //@e17.b
+  C(Seed17.text()) { void f() {} }, //@e17.c
+  D; //@e17.d
+
+  Kind17() {} //@Kind17.init
+
+  Kind17(int i) {} //@Kind17.initInt
+
+  Kind17(Part17 p) {} //@Kind17.initPart
+
+  Kind17(String s) {} //@Kind17.initText
+
+  void f() {}
+}
 """
 
 _SOURCES = {_PATH: FIXTURE, _REVIEW_PATH: REVIEW_FIXTURE, _COPILOT_PATH: COPILOT_FIXTURE}
@@ -1398,6 +1427,10 @@ CASES: list[Case] = [
           ("e15.entry", "Order.ship", "exact"), ("e15.inner", "Outer15.Inner15.z", "exact")),
     _case("E16", "E16", None,
           ("e16", "Api16.call", "exact")),
+    _case("E17", "E17", None,
+          ("e17.a", "Seed17.helper", "exact"), ("e17.a", "Kind17.initInt", "exact"),
+          ("e17.b", "Part17.init", "exact"), ("e17.b", "Kind17.initPart", "exact"),
+          ("e17.c", "Seed17.text", "exact"), ("e17.d", "Kind17.init", "exact")),
 ]
 
 
@@ -1435,7 +1468,17 @@ def _label(project: _Project, path: str, line: int) -> str:
 
 
 def _caller_of(project: _Project, call: MethodCall) -> IntegrationMethod | None:
-    """The smallest indexed method holding the call line (ADR-62 join)."""
+    """The indexed caller, as the join locates it: by name and line, else the
+    smallest indexed method holding the call line (ADR-62 join). A
+    ``<clinit>`` stands on its type's header, above the enum constants whose
+    calls it makes (BC-18)."""
+    named = [
+        method for method in project.methods
+        if method.path == call.caller_path and method.start_line == call.caller_line
+        and method.qualified_method == call.caller.replace("$", ".")
+    ]
+    if len(named) == 1:
+        return named[0]
     holding = [
         method for method in project.methods
         if method.path == call.caller_path and method.start_line <= call.call_line <= method.end_line

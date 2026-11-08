@@ -152,3 +152,29 @@ def test_a_compact_constructor_is_a_node_with_the_record_components(tmp_path: Pa
         ("example.Money.<init>", "example.Ledger.open", 5, "exact"),
         ("example.Ledger.charge", "example.Money.<init>", 13, "exact"),
     }
+
+
+ENUMS = """\
+package example;
+enum Plain { A, B; void g() {} }
+enum Built { A, B; Built() {} }
+enum Bodied { A { void f() {} }; Bodied() {} void f() {} }
+enum Argued { A(Limits.limit()) { void f() {} }; Argued(int i) {} void f() {} }
+class Limits { static int limit() { return 1; } }
+"""
+
+
+def test_an_enum_constant_is_static_initializer_code(tmp_path: Path) -> None:
+    """BC-18: a constant runs its enum's constructor in ``<clinit>``.
+
+    The enum gets ``<clinit>`` when a constant reaches a constructor node
+    or its arguments call something. A constant with a body creates an
+    anonymous class, which reaches no constructor (ADR-62).
+    """
+    path = "src/main/java/example/Enums.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(ENUMS, encoding="utf-8")
+
+    methods = materialize_integration_methods(tmp_path, [], [path], [_module(tmp_path)])
+    clinits = {method.qualified_method for method in methods if method.qualified_method.endswith("<clinit>")}
+    assert clinits == {"example.Built.<clinit>", "example.Argued.<clinit>"}

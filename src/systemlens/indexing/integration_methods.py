@@ -96,11 +96,12 @@ def initializer_members(type_node: Node, source: bytes, *, static: bool) -> list
     """Field initializers and initializer blocks of one kind, in order.
 
     Instance members run in every constructor that does not delegate to
-    ``this(...)``; static members run once, in ``<clinit>``.
+    ``this(...)``; static members run once, in ``<clinit>``. An enum
+    constant is a static field its creation initializes (JLS 8.9.1, BC-18).
     """
     members: list[Node] = []
     for member in type_members(type_node):
-        if member.type == "static_initializer":
+        if member.type in {"static_initializer", "enum_constant"}:
             member_static = True
         elif member.type == "block":
             member_static = False
@@ -131,11 +132,25 @@ def initializer_members(type_node: Node, source: bytes, *, static: bool) -> list
     return members
 
 
-def _contains_call(nodes: Sequence[Node]) -> bool:
-    return any(
-        descendant.type in _CALL_NODES
-        for node in nodes for descendant in java_parser.walk(node)
-    )
+def _contains_call(nodes: Sequence[Node], *, constructed: bool = False) -> bool:
+    """Whether initializer code calls something.
+
+    An enum constant calls only through its arguments, and through its
+    enum's constructor when ``constructed`` (a constructor node exists)
+    and it has no body: a body makes it an anonymous class creation,
+    which reaches no constructor (ADR-62, BC-18).
+    """
+    for node in nodes:
+        scope: Node | None = node
+        if node.type == "enum_constant":
+            if constructed and node.child_by_field_name("body") is None:
+                return True
+            scope = node.child_by_field_name("arguments")
+        if scope is not None and any(
+            descendant.type in _CALL_NODES for descendant in java_parser.walk(scope)
+        ):
+            return True
+    return False
 
 
 def delegates_to_this(constructor: Node) -> bool:
@@ -162,7 +177,8 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
     included (BL-39). A class or enum without one gets
     an implicit ``<init>`` node when its instance initializer code makes a
     call; a type gets ``<clinit>`` when its static initializer code does,
-    an interface's field initializers included (BC-14).
+    an interface's field initializers and an enum's constants included
+    (BC-14, BC-18).
     Code that calls nothing would be a node without an edge.
     """
     found: list[InitializerDeclaration] = []
@@ -182,13 +198,15 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
             continue
         header = (node.start_point.row + 1, body.start_point.row + 1)
         members = type_members(node)
+        constructed = any(member.type in CONSTRUCTOR_DECLARATIONS for member in members)
         if (
             node.type not in {"record_declaration", "interface_declaration"}
-            and not any(member.type in CONSTRUCTOR_DECLARATIONS for member in members)
+            and not constructed
             and _contains_call(initializer_members(node, source, static=False))
         ):
             found.append(InitializerDeclaration(CONSTRUCTOR, node, node, *header))
-        if _contains_call(initializer_members(node, source, static=True)):
+            constructed = True
+        if _contains_call(initializer_members(node, source, static=True), constructed=constructed):
             found.append(InitializerDeclaration(STATIC_INITIALIZER, node, node, *header))
     return found
 

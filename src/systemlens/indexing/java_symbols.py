@@ -629,7 +629,8 @@ _PATTERN_SCOPES = {
     "if_statement", "while_statement", "ternary_expression", "binary_expression", "switch_rule",
     "switch_block_statement_group", "block", "constructor_body",
 }
-_CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation"}
+# An enum constant creates its enum's instance in ``<clinit>`` (BC-18).
+_CONSTRUCTOR_SITES = {"object_creation_expression", "explicit_constructor_invocation", "enum_constant"}
 # Nodes a switch arm's value cannot cross to reach its switch expression.
 _FUNCTIONAL_BOUNDARIES = {"lambda_expression", "method_declaration", "class_body", "constructor_declaration"}
 _INITIALIZER_MEMBERS = {"field_declaration", "block", "static_initializer", "constant_declaration"}
@@ -652,6 +653,10 @@ def _call_context(node: Node) -> Node | None:
             and current.parent.type in {"class_body", "enum_body_declarations", "interface_body"}
             and not _is_anonymous_body(current.parent)
         ):
+            return current
+        elif current.type == "enum_constant":
+            # Its arguments are static initializer code (BC-18); its body
+            # is a class whose members are their own contexts.
             return current
         current = current.parent
     return None
@@ -4972,7 +4977,8 @@ class JavaSymbols:
             (node, context)
             for context in contexts
             for node in parser.walk(context)
-            if node.type in _CALL_SITES | _CONSTRUCTOR_SITES and _call_context(node) == context
+            if node.type in _CALL_SITES | _CONSTRUCTOR_SITES
+            and (node == context if node.type == "enum_constant" else _call_context(node) == context)
         ]
 
     def _listened_event_types(self, info: _Method) -> list[str]:
@@ -5082,7 +5088,7 @@ class JavaSymbols:
         for invocation, _context in self._call_sites(info):
             line = invocation.start_point.row + 1
             receiver: Node | None
-            if invocation.type == "object_creation_expression":
+            if invocation.type in {"object_creation_expression", "enum_constant"}:
                 name, on_this = CONSTRUCTOR, False
             elif invocation.type == "explicit_constructor_invocation":
                 name = CONSTRUCTOR
@@ -5109,16 +5115,23 @@ class JavaSymbols:
     def _constructor_targets(
         self, info: _Method, invocation: Node,
     ) -> tuple[list[IntegrationMethod], str]:
-        """The constructors ``new T(...)``, ``this(...)`` or ``super(...)`` runs.
+        """The constructors ``new T(...)``, ``this(...)``, ``super(...)`` or an
+        enum constant runs.
 
         The constructor the arguments select is ``exact``; overloads the
         arguments cannot separate are all ``possible``. An anonymous class
-        creation, a qualified ``outer.new`` or ``outer.super(...)``, and an
-        external type reach nothing (ADR-62, ADR-75).
+        creation, an enum constant with a body, a qualified ``outer.new``
+        or ``outer.super(...)``, and an external type reach nothing
+        (ADR-62, ADR-75, BC-18).
         """
         path = info.method.path
         source = self.units[path].source
-        if invocation.type == "object_creation_expression":
+        owner: str | None
+        if invocation.type == "enum_constant":
+            if invocation.child_by_field_name("body") is not None:
+                return [], ""
+            owner, modules = info.owner, {info.module}
+        elif invocation.type == "object_creation_expression":
             type_node = invocation.child_by_field_name("type")
             if (
                 type_node is None or parser.child_by_type(invocation, "class_body") is not None

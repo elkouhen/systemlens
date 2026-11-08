@@ -1114,7 +1114,10 @@ parameters (BL-39). A record with no written constructor gets no node. A
 class or enum without one gets an implicit `Owner.<init>` when its field initializers or
 instance initializer blocks make a call; a type gets `Owner.<clinit>` when
 its static code does. An interface's field initializers are static code
-(BC-14). Both implicit nodes span the type's header, from the
+(BC-14), and so are an enum's constants (BC-18): each one creates its
+enum's instance, so `<clinit>` exists when a constant reaches a
+constructor node or its arguments make a call. Both implicit nodes span
+the type's header, from the
 first annotation to the opening brace, where the typed engines locate
 them. These nodes own no port, so they never start or end a flow.
 
@@ -1125,7 +1128,12 @@ initializer code belongs to each constructor that does not start with
 `<clinit>`. `new T(...)` resolves `T` like a declared type and selects the
 constructor by arity and argument types (`exact` when one is left, every
 candidate `possible` otherwise). `this(...)` targets the caller's type and
-`super(...)` its source superclass. A constructor binds statically: it is
+`super(...)` its source superclass. An enum constant without a body
+selects its enum's constructor the same way, from `<clinit>`; one with a
+body creates an anonymous class and reaches none (ADR-62). A lambda in a
+constant's arguments belongs to `<clinit>` too, but the CodeQL join
+cannot attribute its body below the header, so only the `source` engine
+keeps those calls. A constructor binds statically: it is
 neither inherited nor a dispatch target of a subtype. The join creates no
 placeholder for an engine's constructor or initializer that has no node,
 such as a default constructor.
@@ -1365,7 +1373,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
-| S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer, an interface's included | `covered` (ADR-75, BL-39, BC-14) | |
+| S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer, an interface's included; an enum constant's arguments and constructor | `covered` (ADR-75, BL-39, BC-14, BC-18) | |
 | S9 | Varargs call with any arity from the fixed parameter count up, tried only when no fixed arity applies | `covered` (BC-08) | |
 | S10 | Same-arity overloads the arguments cannot separate: each one a `possible` target; a typed argument still selects one; a method reference stays unresolved | `covered` (ADR-87) | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
@@ -1570,6 +1578,7 @@ Rows E06 on are the shapes of the Copilot backlog's BC items
 | E14 | `log.log("x")` on `Log14.log(String...)` with a subclass `IntLog14.log(int...)` | `covered` | BC-15 |
 | E15 | `Map.Entry<String, Order>` under `import java.util.*`; `Outer15<String>.Inner15<Order> i; i.z()` | `covered` | BC-16 |
 | E16 | `this.client.api.call()` with `Client16.api` a field of type `Api16` | `covered` | BC-17 |
+| E17 | Enum constants `A(Seed17.helper())`, `B(new Part17())`, `C(..) { .. }` with a body and `D` without arguments | `covered` | BC-18 |
 
 Items BL-21 to BL-32 changed the edges of unchanged sources. The
 code-flow signature moved to `code-flow-v51-call-graph-alignment` with

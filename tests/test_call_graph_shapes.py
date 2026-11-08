@@ -750,6 +750,31 @@ SHAPES: list[Shape] = [
         }
         """, "Defaults.clinit", {"Impl.compute": "exact", "Impl.init": "exact"},
         note="BC-14: an interface field initializer is static code of the interface's <clinit>"),
+    Shape("S8-enum-constant", """
+        class Helper {
+          static int helper() { return 1; } //@Helper.helper
+          static String text() { return ""; } //@Helper.text
+        }
+        class X {
+          X() {} //@X.init
+        }
+        enum Kind { //@Kind.clinit
+          A(Helper.helper()),
+          B(new X()),
+          C(Helper.text()) { void f() {} },
+          D;
+          Kind() {} //@Kind.init
+          Kind(int i) {} //@Kind.initInt
+          Kind(X x) {} //@Kind.initX
+          Kind(String s) {} //@Kind.initString
+          void f() {}
+        }
+        """, "Kind.clinit",
+        {"Helper.helper": "exact", "Helper.text": "exact", "X.init": "exact", "Kind.init": "exact",
+         "Kind.initInt": "exact", "Kind.initX": "exact"},
+        absent=("Kind.initString",),
+        note="BC-18: enum constants are static code of the enum's <clinit>; a constant with a body "
+             "creates an anonymous class, which reaches no constructor (ADR-62)"),
     Shape("S9", """
         class Service {
           void log(String fmt, Object... args) {} //@Service.log
