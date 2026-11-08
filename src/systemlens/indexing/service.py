@@ -15,7 +15,7 @@ from systemlens.indexing.file_inventory import (
     dependent_rescan_paths as _dependent_rescan_paths,
     is_in_excluded_module as _is_in_excluded_module,
     list_repo_files as _list_repo_files,
-    sha256_file as _sha256_file,
+    hash_file_or_none as _hash_file_or_none,
 )
 from systemlens.conventions.strategy1.indexing import requires_full_reindex
 from systemlens.indexing.materializers import materialize_asyncapi_contracts, materialize_openapi_contracts
@@ -228,12 +228,14 @@ def _index_repo(
     timer.begin("files", "→ Indexation : inventaire des fichiers du dépôt...")
     _trace("files.begin")
     excluded_module_paths = discover_excluded_module_paths(repo_root)
+    unreadable_files: dict[str, str] = {}
     current_hashes = _list_repo_files(
         repo_root,
         config,
         excluded_module_paths=excluded_module_paths,
         include_strategy1_generated_sources=strategy1_enabled,
         include_generated_sources=generate_sources,
+        unreadable=unreadable_files,
     )
     # Extractors, method inventory, symbol pass and flow materialization all
     # read the same Java trees: keep one parse per file for this pass.
@@ -256,7 +258,15 @@ def _index_repo(
     for rel_path in extra_files or []:
         candidate = repo_root / rel_path
         if candidate.is_file() and not _is_in_excluded_module(candidate, excluded_module_paths):
-            current_hashes[rel_path] = _sha256_file(candidate)
+            digest = _hash_file_or_none(candidate)
+            if digest is None:
+                unreadable_files[rel_path] = "illisible"
+            else:
+                current_hashes[rel_path] = digest
+    for rel_path, reason in sorted(unreadable_files.items()):
+        _report_progress(
+            progress, f"→ Indexation : fichier ignoré, {rel_path} : {reason}"
+        )
     previous_hashes = store.get_file_hashes()
     _trace("files.end", current=len(current_hashes), previous=len(previous_hashes))
     timer.end("files", "inventaire des fichiers")

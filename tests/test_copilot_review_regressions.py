@@ -4,6 +4,7 @@ Each test reproduces an item of ``backlog-copilot.md`` on a minimal fixture
 and names the rule it protects.
 """
 
+import os
 import sqlite3
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from typer.testing import CliRunner
 from systemlens.delivery.cli import app
 from systemlens.domain.graph import url_service_hint
 from systemlens.domain.redaction import redact_url_secrets
+from systemlens.indexing.file_inventory import list_repo_files
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
 from systemlens.scanner import clear_analysis_caches
@@ -198,3 +200,45 @@ def test_a_latin1_comment_in_a_parameter_list_keeps_its_integration_methods(
         methods = {method.qualified_method for method in store.all_integration_methods()}
 
     assert {"demo.Latin.get", "demo.Latin.<init>"} <= methods
+
+
+@pytest.mark.skipif(
+    not hasattr(os, "geteuid") or os.geteuid() == 0,
+    reason="needs POSIX permissions and a non-root user",
+)
+def test_an_unreadable_file_is_reported_and_the_index_completes(tmp_path: Path) -> None:
+    """BC-04: ``sha256_file`` was unguarded in the inventory.
+
+    A ``chmod 000`` file aborted the index with ``PermissionError``. It is
+    now left out and reported, like a symbolic link that resolves outside
+    the repository root.
+    """
+    repo = tmp_path / "repo"
+    _write(repo / "svc/pom.xml", POM.format(name="svc", deps=""))
+    _write(repo / "svc/src/main/java/demo/Ctl.java", CONTROLLER)
+    locked = repo / "svc/notes.txt"
+    _write(locked, "x")
+    outside = tmp_path / "outside.txt"
+    _write(outside, "x")
+    (repo / "svc/link.txt").symlink_to(outside)
+    (repo / "svc/inside.txt").symlink_to(repo / "svc/pom.xml")
+    locked.chmod(0)
+    messages: list[str] = []
+    try:
+        unreadable: dict[str, str] = {}
+        files = list_repo_files(repo, Config(), unreadable=unreadable)
+        clear_analysis_caches()
+        with Store(repo) as store:
+            index_repo(repo, Config(), store, full=True, progress=messages.append)
+            serves = [
+                endpoint.topic for endpoint in store.all_endpoints()
+                if endpoint.role == "serve"
+            ]
+    finally:
+        locked.chmod(0o644)
+
+    assert set(unreadable) == {"svc/notes.txt", "svc/link.txt"}
+    assert "svc/inside.txt" in files and "svc/notes.txt" not in files
+    assert serves == ["GET /ping"]
+    assert any("svc/notes.txt" in message for message in messages)
+    assert any("svc/link.txt" in message for message in messages)

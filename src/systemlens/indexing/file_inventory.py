@@ -150,8 +150,15 @@ def list_repo_files(
     excluded_module_paths: tuple[Path, ...] = (),
     include_strategy1_generated_sources: bool = False,
     include_generated_sources: bool = False,
+    unreadable: dict[str, str] | None = None,
 ) -> dict[str, str]:
-    """Build the eligible relative-path to content-hash inventory."""
+    """Build the eligible relative-path to content-hash inventory.
+
+    A file that cannot be read (permissions, removed during the walk) or a
+    symbolic link that resolves outside ``repo_root`` is left out of the
+    inventory instead of aborting the index. When ``unreadable`` is given,
+    it receives each such relative path with the reason.
+    """
     repo_root = repo_root.resolve()
     hashes: dict[str, str] = {}
     nested_roots = _nested_build_roots(repo_root)
@@ -175,8 +182,35 @@ def list_repo_files(
             continue
         if config.include and not _matches_any(rel_path, config.include):
             continue
-        hashes[rel_path] = sha256_file(path)
+        reason = _unreadable_reason(path, repo_root)
+        if reason is None:
+            try:
+                hashes[rel_path] = sha256_file(path)
+                continue
+            except OSError as exc:
+                reason = f"illisible ({exc.strerror or type(exc).__name__})"
+        if unreadable is not None:
+            unreadable[rel_path] = reason
     return hashes
+
+
+def _unreadable_reason(path: Path, repo_root: Path) -> str | None:
+    """Why ``path`` stays out of the inventory before hashing, or ``None``."""
+    if not path.is_symlink():
+        return None
+    try:
+        path.resolve(strict=True).relative_to(repo_root)
+    except (OSError, RuntimeError, ValueError):
+        return "lien symbolique hors du dépôt"
+    return None
+
+
+def hash_file_or_none(path: Path) -> str | None:
+    """Content hash of ``path``, or ``None`` when it cannot be read."""
+    try:
+        return sha256_file(path)
+    except OSError:
+        return None
 
 
 def analysis_inputs_signature(repo_root: Path) -> str:

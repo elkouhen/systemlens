@@ -126,6 +126,13 @@ processing order, hashing provides the change decision, and pattern checks are
 applied once per file. Incrementality limits AST extraction to changed files,
 but it does not avoid this complete inventory pass.
 
+A file the inventory cannot read, because of its permissions or because it
+disappeared after the walk, stays out of the inventory. So does a symbolic
+link that resolves outside the indexed root. The index continues, and its
+progress output names each skipped file with the reason
+(`fichier ignoré, <path> : <reason>`). A previously indexed file that
+becomes unreadable is purged like a removed file.
+
 A changed build descriptor or Spring property file rescans the files of the
 module that owns it. A Spring Cloud Config file
 (`configurations/<application>.yml`, `.yaml` or `.properties`) configures
