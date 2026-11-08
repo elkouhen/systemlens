@@ -28,38 +28,42 @@ Extract the relevant lines from the log:
 
 ```bash
 rg -n -i \
-  'ports détectés|CodeQL|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  'IN, |indisponible|préparation de l.analyse|flux interprocédura|flux de code|jointure' \
   indexing.log
 ```
 
-The final counters answer most first questions:
+The final counters answer most first questions. `<engine>` stands for
+the engine's label: `Source (tree-sitter)`, `CodeQL` or `Joern`.
 
 | Log message | Interpretation |
 | --- | --- |
-| `ports détectés (X IN, Y OUT)` | The endpoint extractor found the inputs and outputs required for a flow. `OUT=0` means no input-to-output flow can be materialized. |
-| `CodeQL : préparation de l'analyse interprocédurale`  | An interprocedural engine is active. |
-| `indisponible ; flux interprocéduraux ignorés` | Only same-method AST flows are available. |
-| `N appel(s) extrait(s)` | Number of Java calls returned by the method-call engine. |
-| `N jointure(s)` | Number of calls attached to indexed integration methods. A high call count with zero joins usually indicates a source-location or method-name resolution problem. |
-| `N flux interprocédural(aux)` | Flows that cross method boundaries and reach an indexed output endpoint. |
-| `limite atteinte (N transitions)` | The bounded method-call exploration stopped before considering every transition. |
-| `N parcours de code potentiel(s) matérialisé(s)` | Total persisted flows after local and interprocedural materialization. |
+| `<module> : X IN, Y OUT, N flux de code` | The endpoint extractor found the inputs and outputs of each module. `OUT=0` means no input-to-output flow can start or end there. |
+| `statistiques globales : X IN, Y OUT, N flux de code` | The same counters for the whole repository. |
+| `<engine> : préparation de l'analyse interprocédurale` | The selected engine builds the call graph. |
+| `<engine> indisponible ; moteur source (tree-sitter) utilisé` | The selected engine is not installed; the `source` engine builds the call graph instead. |
+| `<engine> : N appel(s), J jointure(s), T transition(s), F flux interprocédural(aux)` | Calls the engine returned (always 0 for `source`, whose edges come from the symbol pass), edges attached to indexed methods, transitions the traversal explored, and flows that cross method boundaries. Many calls with zero joins usually indicate a source-location or method-name resolution problem. |
+| `jointure terminée · T transition(s), 0 reachability(s), F flux dédupliqué(s)` | The end of the traversal. The reachability count is always 0 during an index: ADR-84 removed the CodeQL reachability pass. |
+| `Indexation : N flux de code et M annotation(s) d'accès aux données collectée(s)` | Total persisted flows after the same-method and interprocedural passes. |
 
-The direct CodeQL reachability query is not limited by the configured hop
-count: it starts at indexed outputs and computes the
-transitive caller relation until indexed inputs are reached. The configuration
-values remain for forward fallback materialization, including CodeQL. Direct
-CodeQL pairs and fallback pairs are combined; a nonempty direct result does
-not suppress other fallback paths. Their
-default values are:
+Every engine builds its flows the same way: a breadth-first traversal of
+the joined call graph from each indexed entry, bounded by
+`engine_max_hops` calls. The index log does not report a traversal that
+stops at that bound. To see it, rebuild one module with
+`systemlens index --module <module> --show-call-chains`. The command walks
+back from each output of the module to its callers and prints each route
+it stops, as `Chaîne arrêtée en direct`, with the reason in brackets:
+`[limite de profondeur]` at the bound, `[aucun appelant indexé]` when no
+indexed method calls the route's first method, `[cycle détecté]`.
+
+The default value is:
 
 ```yaml
 analysis:
   engine_max_hops: 12
 ```
 
-This value affects only the fallback path exploration. For a very branching
-codebase, increasing it can confirm whether depth truncation is the cause:
+For a very branching codebase, increasing it can confirm whether depth
+truncation is the cause:
 
 ```yaml
 analysis:
@@ -161,8 +165,8 @@ Interpret the result as follows:
   Java methods but not microservice boundaries.
 
 An internal flow currently means a source-evidenced path from an indexed HTTP
-or Kafka input to a distinct indexed HTTP, Kafka or data output in the same
-service. A business-only chain such as `Controller -> Service -> Repository`,
+or Kafka input, or a `@Scheduled` method, to a distinct indexed HTTP, Kafka
+or data output in the same service. A business-only chain such as `Controller -> Service -> Repository`,
 without indexed integration endpoints, is not represented as an internal code
 flow.
 
@@ -212,17 +216,19 @@ that are built dynamically.
 
 ### Calls are extracted but no flows are joined
 
-If CodeQL reports calls but `joined` is zero, the engine saw Java calls
-that could not be matched to the persisted integration methods. Common causes
+If the engine reports calls but zero joins, it saw Java calls that could
+not be matched to the persisted integration methods. Common causes
 are generated or relocated source paths, unresolved external types, overloaded
 methods without a unique source location, and module boundaries that cannot be
 proven from source-only analysis.
 
 ### The method-call engine is unavailable
 
-Without CodeQL, SystemLens retains same-method flows but cannot
-reliably follow `Controller -> Service -> Adapter` chains. Check the doctor
-output and the engine availability line in `indexing.log`.
+When the selected engine is not installed, the index uses the `source`
+engine, which follows `Controller -> Service -> Adapter` chains from the
+declared types alone. Check the doctor output and the engine availability
+line in `indexing.log`. With `call_graph_engine: none`, only same-method
+flows remain.
 
 ### The flow is ambiguous or dynamic
 
@@ -233,9 +239,9 @@ in `indexing-issues.json` where applicable.
 
 ### The flow is too deep or too branched
 
-For CodeQL or a fallback materialization, look for the `limit reached` message.
-Increase the fallback values temporarily, reindex, and compare the resulting
-counters.
+Rebuild the module with `--show-call-chains` and look for routes ending
+with `[limite de profondeur]`. Increase `engine_max_hops` temporarily,
+reindex, and compare the resulting counters.
 
 ### The flow exists but is not visible in the UI
 
@@ -250,7 +256,7 @@ source code and secrets are not required:
 
 ```bash
 rg -n -i \
-  'ports détectés|CodeQL|indisponible|flux interprocéduraux|parcours de code|limite|appel\(s\)|jointure' \
+  'IN, |indisponible|préparation de l.analyse|flux interprocédura|flux de code|jointure' \
   indexing.log
 
 systemlens flows --json

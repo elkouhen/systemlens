@@ -154,6 +154,13 @@ Maven/Gradle descriptors or build outputs, except Java files below
 `target/generated-sources`), create a database from that projection, query
 it, and decode the result as CSV.
 
+The database build reaches the network. With `--build-mode=none`, CodeQL
+guesses library dependencies from the `import` lines of the projection,
+downloads their jars from Maven Central, and types library signatures
+from them. SystemLens does not configure or restrict this download.
+An offline run may lose the edges that need a library type; the engine
+parity cases of the A family depend on those jars.
+
 The database is cached in `.systemlens/codeql/java-database` with
 `java-database.fingerprint` beside it (ADR-84). The fingerprint hashes every
 projected file's path and content and the CodeQL executable's path, size and
@@ -793,8 +800,9 @@ Route traversal has the existing bounded `O(I × (V + E))` worst case for `I`
 indexed input methods, `V` source methods and `E` resolved call edges.
 
 The source projection prevents `build-mode=none` from invoking Maven or Gradle
-for dependency discovery; unresolved external types are accepted as the
-documented accuracy trade-off for offline indexing.
+for dependency discovery. CodeQL still downloads the jars it guesses from
+`import` lines, as described above; an external type it cannot resolve is
+accepted as the documented accuracy trade-off.
 The projection receives the eligible relative-path inventory from the indexer,
 so excluded test sources and build outputs cannot enter the temporary CodeQL
 database or its persisted method projection. The projection treats `target`

@@ -324,6 +324,16 @@ engines' declarations (ADR-85); the CLI lists no engine by hand.
   library class or `Object` can also receive stays `possible`, as with
   `source`. It
   accepts `--engine-database` and refreshes one module.
+
+  CodeQL needs network access to type library calls. In its `none` build
+  mode it reads no build file: it guesses library dependencies and their
+  versions from the `import` lines, and downloads their jars from Maven
+  Central while it builds its database.
+
+  Measured with CodeQL 2.27.3, Spring Data, Spring Web and ModelMapper
+  imports fetch their jars, along with some unrelated artifacts. An
+  offline run may lose the call edges that need a library type, such as
+  a chain through `JpaRepository.findById`; this loss was not measured.
 - `joern` builds a code property graph of the projected Java sources with
   `joern-parse` (`javasrc2cpg`, no build) and reads its call graph. It needs
   Joern and a JDK on `PATH`, and on macOS `greadlink` (coreutils, installed

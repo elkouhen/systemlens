@@ -400,11 +400,13 @@ wherever it sits.
 
 An uppercase `Flux` enum constant is resolved only when its normalized name
 has a matching catalog entry. Other variable topic expressions stay dynamic.
-When the publishing method is annotated with `@Scheduled(cron = "...")`, the
-flow starts with an explicit `Déclencheur Cron` step, followed by the Kafka
-publication owned by that method. The cron expression is retained as source
-evidence; methods scheduled by a fixed delay/rate without a cron expression
-remain outside this trigger classification.
+When the publishing method is annotated with `@Scheduled`, the flow starts
+with an explicit `Déclencheur Cron` step, followed by the Kafka publication
+owned by that method. Every schedule starts a flow. The step is named after
+the first of the `cron`, `fixedRate` and `fixedDelay` arguments, as
+`@Scheduled(cron=0 * * * * *)`, `@Scheduled(fixedRate=5000)` or
+`@Scheduled(fixedDelay=5000)`, and `@Scheduled` without any of them. The
+schedule is retained as source evidence.
 
 The architecture graph remains conservative when message payload typing is
 missing or contradictory: a producer/consumer service edge requires the same

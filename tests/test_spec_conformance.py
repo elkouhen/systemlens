@@ -276,3 +276,42 @@ def test_documentation_site_links_name_existing_specification_headings() -> None
             if anchor not in headings:
                 broken.append((page.name, target, anchor))
     assert not broken, f"links to missing specification headings: {broken}"
+
+
+SCHEDULED_LABEL = re.compile(r"^@Scheduled(?:\((\w+)=[^)]*\))?$")
+
+
+def test_documented_scheduled_triggers_start_flows_with_their_label(tmp_path: Path) -> None:
+    """extraction-rules.md names the ``@Scheduled`` arguments that label a
+    trigger; each one, and a schedule without any, must start a flow."""
+    from systemlens.domain.module_inventory import DiscoveredModule
+    from systemlens.indexing.integration_methods import scheduled_trigger_endpoints
+
+    prose = FENCED_BLOCK.sub("", (SPEC_FONC / "extraction-rules.md").read_text(encoding="utf-8"))
+    keys = {
+        span: match.group(1) for span in INLINE_CODE.findall(prose)
+        if (match := SCHEDULED_LABEL.match(span)) and match.group(1)
+    }
+    labels = set(keys)
+    assert set(keys.values()) == {"cron", "fixedRate", "fixedDelay"}, f"documented labels: {sorted(labels)}"
+
+    path = "app/src/main/java/example/Jobs.java"
+    declarations = []
+    for index, label in enumerate(sorted(labels)):
+        key, value = label[len("@Scheduled("):-1].split("=", 1)
+        written = f'"{value}"' if key == "cron" else value
+        declarations.append(f"    @Scheduled({key} = {written})\n    void run{index}() {{}}")
+    methods = "\n".join(declarations)
+    source = tmp_path / path
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        "package example;\nclass Jobs {\n" + methods
+        + "\n    @Scheduled(initialDelay = 10)\n    void bare() {}\n}\n",
+        encoding="utf-8",
+    )
+    module = DiscoveredModule(
+        name="app", path=tmp_path / "app", build_system="maven", version=None,
+        kind="application", starts_application=True, configuration_example="",
+    )
+    triggers = scheduled_trigger_endpoints(tmp_path, [path], [], [module])
+    assert sorted(trigger.topic for trigger in triggers) == sorted({*labels, "@Scheduled"})
