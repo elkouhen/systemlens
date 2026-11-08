@@ -332,43 +332,6 @@ def _module_for_path(repo_root: Path, rel_path: str) -> str | None:
     return module_for_path(repo_root, rel_path)
 
 
-# BACKLOG-10 K2/K11 : règles d'inventaire d'endpoints (`metadata.category:
-# endpoint-inventory`) — le rôle/système/méthode HTTP viennent des métadonnées
-# de la règle (fixes par construction, une règle = une méthode), le
-# topic/chemin vient d'une extraction best-effort sur le snippet
-# (l'analyse ne dépend d'aucun moteur de règles externe, voir ADR-26).
-_QUOTED_STRING_RE = re.compile(r"f?([\"'])(.*?)\1")
-def _find_first_literal(snippet: str) -> tuple[str | None, bool]:
-    """Cherche le premier texte entre guillemets dans le snippet (annotation
-    ou appel), en parcourant ses lignes dans l'ordre — une chaîne fluent
-    `WebClient` peut répartir `.get()` et `.uri(...)` sur deux lignes
-    (BACKLOG-10 K13) ; le snippet est de toute façon borné exactement par
-    `start_line`/`end_line` du nœud AST, jamais de code hors de
-    l'appel. Renvoie (littéral, concaténé) ; concaténé=True si
-    immédiatement suivi de `+` sur la même ligne (avant la virgule/
-    parenthèse fermante), ou si aucun littéral n'est trouvé."""
-    for line in snippet.splitlines():
-        match = _QUOTED_STRING_RE.search(line)
-        if match is not None:
-            literal = match.group(2)
-            remainder = line[match.end() :].lstrip()
-            return literal, remainder.startswith("+")
-    return None, True
-
-
-# BACKLOG Q24 : l'inventaire d'endpoints est borné à la
-# méthode annotée (`pattern: @GetMapping(...) $RET $METHOD(...) { ... }`) —
-# elle ne voit jamais le `@RequestMapping` porté par la classe englobante,
-# alors que Spring MVC le préfixe silencieusement au chemin de la méthode.
-# Conséquence observée sur des repos réels (spring-petclinic-microservices,
-# microservices-kafka-mq) : soit le chemin sort sous-qualifié (méthode avec
-# valeur explicite, préfixe de classe ignoré), soit il sort `<dynamic>`
-# (méthode sans valeur explicite : `@GetMapping` seul hérite du chemin de
-# classe côté Spring, mais aucun littéral n'est disponible) — dans les
-# deux cas, la corrélation caller/callee de `graph.paths_match` échoue sur
-# des appels réels. Best-effort ligne par ligne (ADR-26, pas d'AST) : la
-# classe/interface la plus proche au-dessus de la méthode, avec ses lignes
-# d'annotation contiguës.
 def _build_endpoint(
     repo_root: Path,
     rel_path: str,

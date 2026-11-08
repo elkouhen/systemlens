@@ -1203,7 +1203,9 @@ for dependency discovery. CodeQL still downloads the jars it guesses from
 accepted as the documented accuracy trade-off.
 The projection receives the eligible relative-path inventory from the indexer,
 so excluded test sources and build outputs cannot enter the temporary CodeQL
-database or its persisted method projection. The projection treats `target`
+database or its persisted method projection. An empty inventory projects
+no file; only an absent one, as for a test that builds a database directly,
+projects every Java file. The projection treats `target`
 and `out` as build directories only outside a `src` directory, like the
 inventory, so a Java package with one of these names enters the database.
 
@@ -1217,6 +1219,8 @@ analysis. Other non-Java build output remains excluded. The repository is not
 compiled or tested; Maven generation uses the local cache and can therefore
 fail when the required plugin or dependency is unavailable.
 
+Generation runs once, in place, before the inventory; the CodeQL database
+only projects its output and has no generation path of its own (BC-38).
 `indexing/source_generation.py` prefers a project's `mvnw` over `mvn` and
 reports each outermost Gradle project that no generation root covers.
 Every failure, including `OSError` from `Popen` and the timeout, is raised

@@ -6,7 +6,6 @@ call-graph engine, so generation lives outside any engine.
 
 import errno
 import os
-import shutil
 import signal
 import subprocess
 import time
@@ -109,17 +108,6 @@ def run_with_progress(
         if process.stdout is not None:
             process.stdout.close()
     return subprocess.CompletedProcess(command, returncode, "".join(output), "")
-
-
-def prepare_generation_workspace(repo_root: Path, destination: Path) -> None:
-    """Copy the project to a disposable workspace before source generation."""
-    shutil.copytree(
-        repo_root,
-        destination,
-        ignore=shutil.ignore_patterns(
-            ".git", ".systemlens", ".venv", "node_modules", "target", "build", "out"
-        ),
-    )
 
 
 _GENERATION_SKIPPED_PARTS = frozenset({".git", ".systemlens", "target", "build", "out"})

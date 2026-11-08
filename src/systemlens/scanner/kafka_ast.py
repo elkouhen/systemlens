@@ -16,7 +16,6 @@ from tree_sitter import Node
 from systemlens.discovery.java import parser as java_parser
 from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.scanner._core import (
-    _find_first_literal,
     _split_java_type_arguments,
     _invocation_receiver,
     _java_qualified_name,
@@ -36,13 +35,6 @@ from systemlens.scanner.kafka_payload_types import (
 )
 from systemlens.domain.topic_expressions import spring_topic_reference
 
-_BARE_TOPIC_VAR_RE = re.compile(
-    r"(?:topics\s*=\s*|\.send\(\s*|ProducerRecord\(\s*)([A-Za-z_]\w*)\s*[,)]"
-)
-# BACKLOG Q25 : `KStream.to("topic")`/`.to("topic", Produced.with(...))` —
-# le topic suit directement `.to(`, contrairement au premier littéral
-# quelconque du snippet (qui peut appartenir à un `.peek(...)` chaîné avant).
-_KAFKA_STREAMS_TO_RE = re.compile(r'\.to\(\s*"([^"]*)"\s*(\+)?')
 _KAFKA_TEMPLATE_DECLARATION_RE = re.compile(
     r"\bKafkaTemplate(?:\s*<[^;{}]+>)?\s+([A-Za-z_]\w*)\b"
 )
@@ -59,24 +51,6 @@ def _kafka_template_receivers(source_text: str) -> set[str]:
     return set(_KAFKA_TEMPLATE_DECLARATION_RE.findall(source_text))
 
 
-def _resolve_topic_expression(
-    expr: str, repo_root: Path, source_path: str
-) -> tuple[str, bool]:
-    expr = expr.strip()
-    if len(expr) >= 2 and expr[0] == expr[-1] == '"':
-        literal = expr[1:-1]
-        reference = spring_topic_reference(literal)
-        if reference is not None:
-            resolved = resolve_spring_property(repo_root, reference.property_key, source_path)
-            if resolved is not None:
-                return resolved, False
-            return reference.display_name, True
-        return literal, False
-    if re.fullmatch(r"[A-Za-z_]\w*", expr):
-        resolved = _resolve_value_annotated_variable(repo_root, source_path, expr)
-        if resolved is not None:
-            return resolved, False
-    return "<dynamic>", True
 def _kafka_topic_from_value(value_node, source: bytes, repo_root: Path, rel_path: str) -> tuple[str, bool]:
     """Résout un nœud expression (topic) en (topic, dynamique).
 
@@ -836,45 +810,3 @@ def infer_kafka_endpoints(repo_root: Path, files: list[str] | None = None) -> li
                         add(node, "produce", "kafka-clients", topic, dynamic,
                             _producer_record_payload_type(repo_root, rel_path, source, node))
     return list(endpoints.values())
-def _extract_kafka_topic(
-    snippet: str, repo_root: Path, source_path: str | None = None
-) -> tuple[str, bool]:
-    """Renvoie (topic, dynamique). Un littéral `${propriete.imbriquee}`
-    (placeholder Spring, ex. `@KafkaListener(topics = "${app.kafka.topics.
-    orders}")`) n'est pas un nom de topic mais une clé de configuration :
-    tentative de résolution via `resolve_spring_property` avant de retomber
-    sur dynamique si la clé est introuvable — jamais résolu au hasard. Une
-    variable (pas de littéral du tout, ex. `topics = ordersTopic`) est
-    tentée contre les champs `@Value("${...}")` du même fichier source
-    (`_resolve_value_annotated_variable`) avant d'abandonner en dynamique.
-
-    BACKLOG Q25 : `KStream.to("topic")` (Kafka Streams) est souvent chaîné
-    après un `.peek(...)` dont le lambda peut lui-même contenir un littéral
-    (message de log) — le premier littéral du snippet n'est alors pas le
-    topic. Un `.to("...")` capté explicitement prime sur la recherche
-    générique du premier littéral."""
-    streams_to_match = _KAFKA_STREAMS_TO_RE.search(snippet)
-    if streams_to_match is not None:
-        return streams_to_match.group(1), streams_to_match.group(2) is not None
-
-    literal, dynamic = _find_first_literal(snippet)
-    if literal is None:
-        if source_path is not None:
-            first_line = snippet.splitlines()[0] if snippet else ""
-            var_match = _BARE_TOPIC_VAR_RE.search(first_line)
-            if var_match is not None:
-                resolved = _resolve_value_annotated_variable(
-                    repo_root, source_path, var_match.group(1)
-                )
-                if resolved is not None:
-                    return resolved, False
-        return "<dynamic>", True
-
-    reference = spring_topic_reference(literal)
-    if reference is not None:
-        resolved = resolve_spring_property(repo_root, reference.property_key, source_path)
-        if resolved is not None:
-            return resolved, False
-        return reference.display_name, True
-
-    return literal, dynamic

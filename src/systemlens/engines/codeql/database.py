@@ -23,8 +23,6 @@ from systemlens.indexing.source_projection import (
     projection_fingerprint,
 )
 from systemlens.indexing.source_generation import (
-    generate_sources as _generate_sources,
-    prepare_generation_workspace as _prepare_generation_workspace,
     remaining_timeout as _remaining_timeout,
     run_with_progress as _run_with_progress,
 )
@@ -150,7 +148,6 @@ def automatic_codeql_database(
     repo_root: Path, timeout_seconds: int = 600, threads: int = 1,
     ram_mb: int | None = None, verbosity: str | None = None,
     progress: Callable[[str], None] | None = None,
-    generate_sources: bool = False,
     include_target_java_sources: bool = False,
     allowed_paths: Sequence[str] | None = None,
     deadline: float | None = None,
@@ -174,22 +171,12 @@ def automatic_codeql_database(
     with tempfile.TemporaryDirectory(prefix="systemlens-codeql-db-") as directory:
         database = Path(directory) / "database"
         source_root = Path(directory) / "source"
-        generation_root = Path(directory) / "generated-project"
-        codeql_input = repo_root
-        if generate_sources:
-            _prepare_generation_workspace(repo_root, generation_root)
-            _generate_sources(
-                generation_root,
-                timeout=_remaining_timeout(timeout_seconds, deadline),
-                progress=progress,
-            )
-            codeql_input = generation_root
+        # Source generation, when requested, already ran in place before the
+        # inventory; the projection only includes its output (BC-38).
         _prepare_source_only_root(
-            codeql_input,
+            repo_root,
             source_root,
-            include_target_java_sources=(
-                include_target_java_sources or generate_sources
-            ),
+            include_target_java_sources=include_target_java_sources,
             allowed_paths=allowed_paths,
         )
         cache = repo_root / CODEQL_CACHE_DIRECTORY

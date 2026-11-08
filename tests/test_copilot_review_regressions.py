@@ -747,3 +747,41 @@ def test_an_openapi_contract_is_parsed_once_for_all_its_operations(
         "getOrder": ("GET /orders/{id}",),
     }
     assert len(reads) == 1
+
+
+def test_a_single_quoted_openapi_path_keeps_its_line(tmp_path: Path) -> None:
+    """BC-38: ``'/a':`` fell back to line 1 as the endpoint evidence."""
+    from systemlens.scanner.rest_mvc import _infer_openapi_endpoints
+
+    contract = "svc/src/main/resources/openapi.yaml"
+    _write(tmp_path / contract, (
+        "openapi: 3.0.3\n"
+        "paths:\n"
+        "  '/a':\n"
+        "    'get':\n"
+        "      operationId: getA\n"
+        '  "/b":\n'
+        "    post:\n"
+        "      operationId: postB\n"
+    ))
+
+    lines = {
+        endpoint.topic: endpoint.start_line
+        for endpoint in _infer_openapi_endpoints(tmp_path, contract, force_contract=True)
+    }
+
+    assert lines == {"GET /a": 4, "POST /b": 7}
+
+
+def test_an_empty_allowed_path_list_projects_no_source(tmp_path: Path) -> None:
+    """BC-38: an empty ``allowed_paths`` meant "no restriction".
+
+    ``None`` projects every Java file; an empty list, as for an index
+    without Java files, projects none.
+    """
+    from systemlens.indexing.source_projection import project_java_sources
+
+    _write(tmp_path / "repo/svc/src/main/java/demo/A.java", "class A {}")
+
+    assert project_java_sources(tmp_path / "repo", tmp_path / "all") == 1
+    assert project_java_sources(tmp_path / "repo", tmp_path / "none", allowed_paths=[]) == 0

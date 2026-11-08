@@ -25,15 +25,18 @@ def project_java_sources(
     needed to resolve calls whose signatures use generated DTOs, while the rest
     of ``target`` remains an untrusted build artifact and is excluded unless
     source generation was explicitly requested for this index.
+
+    ``allowed_paths`` of ``None`` means every Java file; an empty sequence
+    means none, since an index without Java files projects nothing (BC-38).
     """
     excluded_directories = {".git", ".systemlens"}
-    allowed = set(allowed_paths or ())
+    allowed = set(allowed_paths) if allowed_paths is not None else None
     copied = 0
     for source in repo_root.rglob("*.java"):
         if not source.is_file():
             continue
         relative = source.relative_to(repo_root)
-        if allowed and relative.as_posix() not in allowed:
+        if allowed is not None and relative.as_posix() not in allowed:
             continue
         parts = relative.parts
         # Build directories are rooted at a module, never below ``src``: a

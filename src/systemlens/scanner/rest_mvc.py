@@ -25,7 +25,6 @@ from systemlens.domain.models import MessageEndpoint, compute_endpoint_id
 from systemlens.discovery.build.modules import discover_rest_controllers, maven_module_dependencies
 from systemlens.scanner._core import (
     _build_endpoint,
-    _find_first_literal,
     _invocation_receiver,
     _module_for_path,
     _read_snippet,
@@ -59,57 +58,9 @@ from systemlens.scanner.rest_paths import join_paths, normalize_path, with_query
 
 _PROPERTY_PLACEHOLDER_RE = re.compile(r"^\$\{([^}]+)\}$")
 
-# BACKLOG-10 K2 (reliquat) : `@KafkaListener(topics = someVar)` ou
-# `kafkaTemplate.send(someVar, ...)` où `someVar` n'est pas un littéral mais
-# une variable alimentée ailleurs dans la classe par `@Value("${...}")` —
-# retrouver le nom de variable en jeu (pas son contenu, absent du snippet)
-# avant de la résoudre contre les champs `@Value` du fichier source.
-_MAPPING_ANNOTATION_BLOCK_RE = re.compile(r"@\w+Mapping\s*(?:\((.*?)\))?", re.DOTALL)
-_REQUEST_PARAM_RE = re.compile(
-    r"@RequestParam\s*(?:\((.*?)\))?\s+[\w<>\[\], ?]+\s+(\w+)", re.DOTALL
-)
-_NON_PATH_MAPPING_ATTRS = {"method", "produces", "consumes", "headers", "params", "name"}
-_NAMED_STRING_ARG_RE = re.compile(r'(\w+)\s*=\s*"([^"]*)"')
 _OPENAPI_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
-_REST_TEMPLATE_CALL_RE = re.compile(
-    r"\.(getForObject|getForEntity|postForObject|postForEntity|put|delete)\(\s*(.+?)\s*(?:,|\))",
-    re.DOTALL,
-)
-_REST_TEMPLATE_EXCHANGE_RE = re.compile(
-    r"\.exchange\(\s*(.+?)\s*,\s*(?:HttpMethod\.)?([A-Z]+)\s*,",
-    re.DOTALL,
-)
-_URI_CALL_RE = re.compile(r"\.uri\s*\(")
-def _mapping_args_have_only_non_path_attrs(args: str) -> bool:
-    """`True` si les arguments d'une annotation `@XMapping(...)` ne portent
-    aucun chemin explicite (vide, ou uniquement `method=`/`produces=`/...) —
-    dans ce cas le chemin effectif de la méthode est vide (hérite du préfixe
-    de classe), pas inconnu."""
-    args = args.strip()
-    if not args:
-        return True
-    for part in args.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        if "=" not in part:
-            return False  # argument positionnel : c'est le chemin lui-même
-        key = part.split("=", 1)[0].strip()
-        if key not in _NON_PATH_MAPPING_ATTRS:
-            return False
-    return True
-def _next_declaration_line(lines: list[str], start_idx: int) -> int | None:
-    for idx in range(start_idx, len(lines)):
-        stripped = lines[idx].strip()
-        if not stripped or stripped.startswith("@"):
-            continue
-        return idx
-    return None
-def _named_string_arg(args: str, key: str) -> str | None:
-    for match in _NAMED_STRING_ARG_RE.finditer(args):
-        if match.group(1) == key:
-            return match.group(2)
-    return None
+
+
 def _split_java_concat(expr: str) -> list[str]:
     parts: list[str] = []
     current: list[str] = []
@@ -378,105 +329,6 @@ def _infer_http_interface_endpoints(repo_root: Path, rel_path: str) -> list[Mess
     return endpoints
 
 
-@lru_cache(maxsize=1024)
-def _class_base_path(repo_root_str: str, source_path: str, start_line: int) -> tuple[str, bool]:
-    """Chemin `@RequestMapping` de la classe/interface qui englobe la
-    méthode trouvée à `start_line` — renvoie (préfixe, dynamique) ;
-    (`""`, `False`) si aucune classe englobante ou aucun `@RequestMapping`
-    de classe (rien à préfixer, pas une valeur inconnue)."""
-    parsed = java_parser.parse_java(repo_root_str, source_path)
-    if parsed is None:
-        return "", False
-    source, root = parsed
-    method = next(
-        (
-            node for node in java_parser.walk(root)
-            if node.type == "method_declaration"
-            and any(
-                ann.start_point.row + 1 <= start_line <= node.end_point.row + 1
-                for ann in java_parser.annotations_of(node)
-            )
-        ),
-        None,
-    )
-    if method is None:
-        return "", False
-    owner = java_parser.enclosing(
-        method, "class_declaration", "interface_declaration", "record_declaration", "enum_declaration"
-    )
-    if owner is None:
-        return "", False
-    mapping = next(
-        (ann for ann in java_parser.annotations_of(owner)
-         if java_parser.annotation_name(ann, source) == "RequestMapping"),
-        None,
-    )
-    if mapping is not None:
-        return _ast_mapping_value(mapping, source, Path(repo_root_str), source_path)
-    feign = next(
-        (ann for ann in java_parser.annotations_of(owner)
-         if java_parser.annotation_name(ann, source) == "FeignClient"),
-        None,
-    )
-    if feign is not None:
-        return _ast_feign_base(feign, source, Path(repo_root_str), source_path)
-    return "", False
-def _extract_rest_path(
-    snippet: str,
-    repo_root: Path | None = None,
-    source_path: str | None = None,
-    start_line: int | None = None,
-) -> tuple[str, bool]:
-    """Renvoie (chemin, dynamique) — jamais résolu silencieusement (même
-    esprit que `topic_dynamic` en K2). Fusionne le préfixe `@RequestMapping`
-    de la classe englobante (Q24) quand `repo_root`/`source_path`/
-    `start_line` sont fournis."""
-    prefix, prefix_dynamic = "", False
-    if repo_root is not None and source_path is not None and start_line is not None:
-        prefix, prefix_dynamic = _class_base_path(str(repo_root), source_path, start_line)
-
-    lines = snippet.splitlines()
-    decl_idx = _next_declaration_line(lines, 0)
-    annotation_block = "\n".join(lines[:decl_idx]) if decl_idx is not None else snippet
-    match = _MAPPING_ANNOTATION_BLOCK_RE.search(annotation_block)
-    mapping_args = (match.group(1) or "") if match is not None else None
-
-    if mapping_args is not None:
-        literal, method_dynamic = _find_first_literal(mapping_args)
-        if literal is None:
-            if not _mapping_args_have_only_non_path_attrs(mapping_args or ""):
-                return "<dynamic>", True
-            literal, method_dynamic = "", False
-    else:
-        literal, method_dynamic = _find_first_literal(snippet)
-        if literal is None:
-            return "<dynamic>", True
-
-    if prefix_dynamic:
-        return "<dynamic>", True
-
-    method_path = normalize_path(literal) if literal else "/"
-    route = method_path if not prefix else join_paths(normalize_path(prefix), method_path)
-    query_params = _extract_request_param_names(snippet)
-    if query_params:
-        route = with_query_params(route, query_params)
-    return route, method_dynamic
-def _extract_request_param_names(snippet: str) -> list[str]:
-    names: list[str] = []
-    seen: set[str] = set()
-    for match in _REQUEST_PARAM_RE.finditer(snippet):
-        args = match.group(1) or ""
-        name = (
-            _named_string_arg(args, "name")
-            or _named_string_arg(args, "value")
-            or _find_first_literal(args)[0]
-            or match.group(2)
-        )
-        if name in seen:
-            continue
-        seen.add(name)
-        names.append(name)
-    return names
 def _infer_generic_request_mapping_endpoints(repo_root: Path, rel_path: str) -> list[MessageEndpoint]:
     """Infère les annotations de routes Spring et Feign depuis l'AST Java.
 
@@ -1234,12 +1086,13 @@ def _infer_openapi_endpoints(
         if not isinstance(raw_route, str) or not isinstance(operations, dict):
             continue
         route = normalize_path(raw_route)
+        # A key may be bare, double- or single-quoted (BC-38).
+        route_keys = tuple(f"{quote}{raw_route}{quote}:" for quote in ("", '"', "'"))
         route_line = next(
             (
                 index + 1
                 for index, line in enumerate(lines)
-                if line.lstrip().startswith(f"{raw_route}:")
-                or line.lstrip().startswith(f'"{raw_route}":')
+                if line.lstrip().startswith(route_keys)
             ),
             1,
         )
@@ -1247,11 +1100,12 @@ def _infer_openapi_endpoints(
             method = str(raw_method).lower()
             if method not in _OPENAPI_HTTP_METHODS:
                 continue
+            method_keys = {f"{quote}{method}{quote}:" for quote in ("", '"', "'")}
             method_line = next(
                 (
                     index + 1
                     for index in range(route_line, len(lines))
-                    if lines[index].strip() in (f"{method}:", f'"{method}":')
+                    if lines[index].strip() in method_keys
                 ),
                 route_line,
             )
@@ -1424,53 +1278,6 @@ def _file_uses_restclient(repo_root_str: str, rel_path: str) -> bool:
     except OSError:
         return False
     return "org.springframework.web.client.RestClient" in text or "RestClient " in text
-def _uri_argument(snippet: str) -> str | None:
-    """Extrait l'argument de `.uri(...)` en tenant compte des appels imbriqués."""
-    match = _URI_CALL_RE.search(snippet)
-    if match is None:
-        return None
-    start = match.end()
-    depth = 1
-    quote: str | None = None
-    escaped = False
-    for index in range(start, len(snippet)):
-        char = snippet[index]
-        if quote is not None:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
-                quote = None
-            continue
-        if char in ('"', "'"):
-            quote = char
-        elif char == "(":
-            depth += 1
-        elif char == ")":
-            depth -= 1
-            if depth == 0:
-                return snippet[start:index]
-    return None
-def _extract_restclient_path(
-    snippet: str, repo_root: Path, source_path: str
-) -> tuple[str, bool] | None:
-    expr = _uri_argument(snippet)
-    if expr is None:
-        return None
-    return _resolve_rest_path_expression(
-        expr, repo_root, source_path, preserve_dynamic_segments=True
-    )
-def _extract_resttemplate_path(
-    snippet: str, repo_root: Path, source_path: str
-) -> tuple[str, bool] | None:
-    match = _REST_TEMPLATE_CALL_RE.search(snippet)
-    if match is not None:
-        return _resolve_rest_path_expression(match.group(2), repo_root, source_path)
-    exchange_match = _REST_TEMPLATE_EXCHANGE_RE.search(snippet)
-    if exchange_match is not None:
-        return _resolve_rest_path_expression(exchange_match.group(1), repo_root, source_path)
-    return None
 def _infer_resttemplate_exchange_endpoints(
     repo_root: Path, rel_path: str
 ) -> list[MessageEndpoint]:

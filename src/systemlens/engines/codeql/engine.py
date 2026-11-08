@@ -146,7 +146,7 @@ class CodeQLEngine:
         if request.include_generated_sources:
             # Source generation already ran before the inventory; reuse its
             # files instead of running the build tool twice.
-            options.update(generate_sources=False, include_target_java_sources=True)
+            options.update(include_target_java_sources=True)
         try:
             with database.automatic_codeql_database(request.repo_root, **options) as opened:
                 if opened is None:
