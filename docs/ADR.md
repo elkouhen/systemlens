@@ -17,7 +17,7 @@ functional or technical contract.
 | Graph rendering and integration evidence | [ADR-28](#adr-28-render-selected-call-graph-arcs-with-orthogonal-port-routes), [ADR-31](#adr-31-resolve-declarative-http-clients-and-bounded-url-helpers-conservatively), [ADR-77](#adr-77-match-rest-routes-by-spring-mvc-specificity), [ADR-32](#adr-32-require-topic-and-payload-type-for-an-asserted-kafka-service-arc), [ADR-33](#adr-33-keep-topics-in-selected-call-graph-views), [ADR-35](#adr-35-use-shared-kafka-topics-before-payload-type-resolution), [ADR-76](#adr-76-type-kafka-payloads-with-one-shared-scanner-rule), [ADR-79](#adr-79-treat-generic-payload-carriers-as-unknown-kafka-types), [ADR-50](#adr-50-present-data-access-as-call-flow-annotations), [ADR-51](#adr-51-scope-data-access-annotations-to-selected-call-graphs), [ADR-52](#adr-52-classify-async-writes-by-message-consumption), [ADR-53](#adr-53-list-only-uncovered-call-roots-in-html), [ADR-54](#adr-54-attach-imported-data-access-to-indexed-call-flows), [ADR-59](#adr-59-pair-async-writes-and-sync-reads-along-call-graph-branches) |
 | Runtime observations | [ADR-60](#adr-60-compare-static-topology-with-aggregated-elastic-apm-metrics) |
 | HTML widget readability | [ADR-63](#adr-63-reserve-widget-footprints-and-set-a-10-pixel-type-floor), [ADR-68](#adr-68-dock-the-node-inspector-beside-the-graph) |
-| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class), [ADR-87](#adr-87-keep-every-overload-of-a-call-the-arguments-cannot-separate); proposed: [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
+| Call-graph engines | [ADR-61](#adr-61-make-the-call-graph-engine-a-pluggable-choice), [ADR-62](#adr-62-attribute-anonymous-class-bodies-to-the-creating-method), [ADR-66](#adr-66-make-the-source-engine-the-default), [ADR-67](#adr-67-split-codeql-and-the-call-graph-stage-into-dedicated-modules), [ADR-70](#adr-70-give-the-source-engine-codeqls-interface-witness-and-dispatch-gaps), [ADR-71](#adr-71-scope-external-interface-dispatch-to-the-callers-visible-modules), [ADR-72](#adr-72-keep-dispatch-possible-when-an-implicit-implementation-exists), [ADR-74](#adr-74-dispatch-calls-on-external-classes-to-source-overrides), [ADR-75](#adr-75-make-constructors-and-initializers-part-of-the-call-graph), [ADR-86](#adr-86-dispatch-a-variable-created-once-on-its-created-class), [ADR-87](#adr-87-keep-every-overload-of-a-call-the-arguments-cannot-separate), [ADR-89](#adr-89-narrow-a-receiver-by-returned-creations-ternaries-and-call-context); proposed: [ADR-73](#adr-73-scope-every-dispatch-to-the-callers-visible-modules), [ADR-83](#adr-83-check-a-supplied-codeql-database-against-the-indexed-sources), [ADR-84](#adr-84-reuse-the-automatic-codeql-database-and-drop-reachability-from-the-index) |
 | Index timeout and partial snapshots | [ADR-34](#adr-34-commit-a-partial-snapshot-after-a-codeql-timeout) |
 | Progressive CodeQL persistence | [ADR-37](#adr-37-publish-codeql-flow-checkpoints-during-indexing) |
 | Offline source generation | [ADR-36](#adr-36-run-maven-source-generation-offline) |
@@ -2084,7 +2084,9 @@ test is replaced by a regression test for deep modules.
 **Status:** Accepted on 2026-11-07 by the product owner, as written
 (rules 1 to 4). Proposed on 2026-11-04 for lot 3 of the call-graph
 review (backlog item BL-01, `BACKLOG.md` in Git at `b8277bc`).
-Amends ADR-66 and ADR-70.
+Amends ADR-66 and ADR-70. Amended on 2026-11-08 by BL-45: the
+implementor set excludes types whose type argument contradicts the
+receiver's.
 
 **Context:** In a closed world, the `source` engine marks a call `exact`
 when one source body implements the called method. The review found
@@ -2141,6 +2143,51 @@ regression fixtures give the same rows with the three engines. Joern
 reads a record's interfaces from its generic signature, by simple name,
 and checks the declaring type rather than a narrowed one; both widen the
 check, never narrow it.
+
+Amendment of 2026-11-08 (BL-45). Status: Accepted on 2026-11-08 under
+the product owner's mandate to implement the internal-flow backlog; to be
+confirmed by the product owner.
+
+Context: the dispatch index is keyed by erased type. A field
+`MessageHandler<String> handler` dispatches to every implementor of
+`MessageHandler`, `BinaryHandler implements MessageHandler<byte[]>`
+included. That candidate opens a false route and keeps the true one
+`possible`, where CodeQL dispatches `exact` to `TextHandler`.
+
+Decision: in the closed world of the `source` engine, the implementor set
+of a call on a source generic type is filtered by type argument.
+
+1. The receiver's argument is the one its declaration writes: the type
+   of a local, a parameter or a field the caller's class declares, a
+   cast, a creation, or the declared return type of a source method.
+2. The implementor's argument is the one its `implements` or `extends`
+   clauses write for the receiver's type, substituted through its
+   source supertypes.
+3. An implementor is excluded when both arguments are concrete source or
+   JDK types and are provably incompatible: not the same type, and not
+   related by subtyping.
+4. A type variable, a wildcard, a nested parameterized type or a raw
+   type on either side keeps the implementor, as does a library type.
+
+Generic types are invariant, so any two different arguments already
+exclude each other. Rule 3 is narrower on purpose: unchecked casts and
+raw uses can pollute the heap.
+
+Subtyping is proven from the sources: a source type and its source
+ancestors, the external types they name, and the supertypes of a few
+final JDK types (`String`, the boxed primitives). An array is related
+only to an array of a related element, to `Object`, `Cloneable` and
+`Serializable`. Any pair the sources cannot place keeps the implementor.
+
+The excluded types also leave the completeness check of rule 1. The call
+is then `exact` only under rules 1 to 4: every remaining implementor has
+a known body and one body applies. A typed engine filters on its own.
+
+Consequences: probe shapes s3 and s4 dispatch `exact` to `TextHandler`,
+with the witness of ADR-70, as CodeQL does; the `BinaryHandler` flow
+disappears. The filter only removes candidates, so no target is
+invented. A receiver whose argument comes from an inherited field, a
+`var`, or a type variable's bound keeps every implementor.
 
 ## ADR-83: Check a supplied CodeQL database against the indexed sources
 
@@ -2444,3 +2491,65 @@ interfaces lose every flow this way.
 both engines and after `flows calculate`. A sibling controller's
 override of a template hook never enters another controller's flow. The
 same method can appear as the entry of several flows, one per inheritor.
+
+## ADR-89: Narrow a receiver by returned creations, ternaries and call context
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+implement the internal-flow backlog; to be confirmed by the product
+owner. Backlog item BL-46. Extends ADR-86.
+
+**Context:** ADR-86 narrows a local or a `final` field that holds one
+created value. Three shapes CodeQL narrows by type flow stay at the
+declared type. `service.shape().area()`, with `Shape shape() { return
+new Circle(); }`, reaches every `Shape` implementation (cases B10, B39).
+A local holding `flag ? csv : json` reaches `XmlExporter` too (probe
+s17). A private helper `exportWith(Exporter e)`, only ever called with a
+`CsvExporter`, reaches all three exporters (probe s19).
+
+Each of these flows is `low` with `source` and `medium` with `codeql`. In
+`exact` mode they disappear from `source` only.
+
+**Decision:** three rules, in the closed world of the `source` engine.
+
+1. Returned creation. A call that reaches one source method, `exact`
+   under ADR-81, returns `T` when every `return` of that method's own
+   body is `new T(..)` of one named source class `T`. A `return` in a
+   lambda or a nested class body is not the method's. Any other return,
+   an anonymous class, or no `return` keeps the declared return type.
+   The call receiver, and a local or a `final` field that holds the
+   call's value under ADR-86, dispatch on `T`.
+2. Ternary union. A ternary held by such a variable, or written as a
+   receiver whose branches share a static type, holds the union of its
+   branches. A branch gives its created
+   class or returned creation, else its static source type; a `null`
+   branch gives nothing. The call reaches the union of each type's
+   dispatch candidates, instead of the declared type's. An untyped or
+   non-source branch keeps the declared type.
+3. Call context. A parameter of a `private` method holds `T` when every
+   call site in the sources passes, at its position, an argument
+   narrowed to the one source class `T` by these rules or typed `T`. The
+   sites are the calls of that name and arity in its top-level class. A
+   method reference to that name, a varargs or reassigned parameter, a
+   site outside an indexed method, an untyped argument, or no site keeps
+   the declared type. A public, protected or package method keeps it,
+   since code outside the sources can call or override it.
+
+Each narrowed type must be a source subtype of the declared type. The
+call is `exact` only under ADR-81, checked on every narrowed type: one
+target, and every concrete source subtype of each type has a known body.
+A union of two types is `exact` only when both reach the same one body.
+
+**Consequences:** cases B10 and B39 give `Circle.area` `exact` with the
+`Shape.area` witness, and shape s19 gives `CsvExporter.export` `exact`,
+as CodeQL does. Shape s17 gives `CsvExporter.export` and
+`JsonExporter.export` `possible`, without `XmlExporter`.
+
+The declared row of ADR-70 (BL-28) is still left out at s17: a rebuild
+from persisted edges would dispatch it to `XmlExporter`. CodeQL reports
+that row, and its join expands it to `XmlExporter`, so its persisted
+flows keep the `export-xml` route. `source` keeps CodeQL's raw rows, and
+its fresh and rebuilt flows stay identical.
+
+Rule 2 does not compute a least upper bound. A ternary receiver whose
+branches have different types, with no declared variable to name the
+call's declaration, stays untyped as before.
