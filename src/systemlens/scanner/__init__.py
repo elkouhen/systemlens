@@ -35,6 +35,7 @@ from systemlens.scanner._core import _java_qualified_name, _java_source
 from systemlens.domain.models import MessageEndpoint
 from systemlens.scanner._spring_properties import (
     _load_flat_spring_properties,
+    _load_spring_property_documents,
     _load_value_annotated_fields,
     _load_unique_value_annotated_fields,
     _local_spring_application_names,
@@ -112,6 +113,7 @@ def clear_analysis_caches() -> None:
     _strategy1_openapi_contracts.cache_clear()
     _java_source.cache_clear()
     _load_flat_spring_properties.cache_clear()
+    _load_spring_property_documents.cache_clear()
     _load_value_annotated_fields.cache_clear()
     _load_unique_value_annotated_fields.cache_clear()
     _openapi_generator_contract_for_source.cache_clear()

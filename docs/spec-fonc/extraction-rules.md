@@ -27,9 +27,14 @@ declarations stay unresolved. A name declared by the enclosing method, lambda
 or constructor as a parameter, local, loop variable, resource or catch
 parameter is never resolved by name against a field or another file: it is
 dynamic unless the lexical resolver proves its value. A property value that
-still contains a `${...}` placeholder after bounded expansion, a placeholder
-embedded in a longer literal that cannot be resolved, or a key declared with
-different values in profile files without a base declaration is dynamic.
+still contains a `${...}` placeholder after bounded expansion, or a
+placeholder embedded in a longer literal that cannot be resolved, is dynamic.
+
+A key declared with different values by several profiles, and by no base
+document, is dynamic too, even when its placeholder has a default: the
+default is the value in none of those profiles. A profile is an
+`application-<profile>` file or a YAML document with
+`spring.config.activate.on-profile` or `spring.profiles`.
 
 Strategy1 configured API clients may resolve a domain from a `HubRestApi` enum
 constant, including statically imported constants and redundant parentheses. If

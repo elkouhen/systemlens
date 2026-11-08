@@ -153,16 +153,38 @@ def _discover_spring_cloud_config_files(
     return tuple(discovered)
 
 
+def _document_profile(data: object) -> str | None:
+    """Profile a YAML document is activated by, or ``None`` for a base one.
+
+    Spring Boot reads ``spring.config.activate.on-profile``, and before 2.4
+    ``spring.profiles``.
+    """
+    if not isinstance(data, dict):
+        return None
+    flat = _flatten_properties(data)
+    profile = flat.get("spring.config.activate.on-profile") or flat.get("spring.profiles")
+    return profile or None
+
+
 @lru_cache(maxsize=512)
-def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
+def _load_spring_property_documents(
+    path_str: str,
+) -> tuple[dict[str, str], tuple[dict[str, str], ...]]:
+    """Base and profile-specific declarations of one property file.
+
+    A multi-document YAML file holds a base document and documents activated
+    by a profile (BC-31). Indexing has no active profile, so the two are kept
+    apart: the caller applies the "all profiles agree" rule to the latter.
+    A ``.properties`` file is one base document.
+    """
     path = Path(path_str)
     try:
         text = path.read_text(encoding="utf-8", errors="replace")
     except OSError:
-        return {}
+        return {}, ()
 
     if path.suffix == ".properties":
-        return _parse_dotted_properties_file(text)
+        return _parse_dotted_properties_file(text), ()
     try:
         # ``safe_load_all`` returns a lazy generator: materialize it here so
         # parser failures from later YAML documents (notably Helm templates)
@@ -171,15 +193,53 @@ def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
     except (yaml.YAMLError, ValueError, RecursionError):
         # PyYAML raises a plain ``ValueError`` for an impossible timestamp
         # such as ``2023-02-30`` and may exhaust the stack on deep nesting.
-        return {}
-    flat: dict[str, str] = {}
+        return {}, ()
+    base: dict[str, str] = {}
+    profiles: list[dict[str, str]] = []
     for data in documents:
-        # A Spring YAML file may contain a base document followed by
-        # profile-specific documents.  Indexing has no active-profile input,
-        # so retain the first (base) value rather than rejecting the complete
-        # file or pretending that a later profile is universally active.
-        for key, value in _flatten_properties(data or {}).items():
-            flat.setdefault(key, value)
+        flat = _flatten_properties(data or {})
+        if _document_profile(data) is None:
+            for key, value in flat.items():
+                base.setdefault(key, value)
+        else:
+            profiles.append(flat)
+    return base, tuple(profiles)
+
+
+def _declared_values(path_str: str, key: str) -> tuple[str | None, tuple[str, ...]]:
+    """Base value and distinct profile values of ``key`` in one file.
+
+    A key under ``kafka.`` also matches its unprefixed spelling.
+    """
+    base, profiles = _load_spring_property_documents(path_str)
+    keys = (key, key[6:]) if key.casefold().startswith("kafka.") else (key,)
+    base_value = next((base[k] for k in keys if k in base), None)
+    profile_values: list[str] = []
+    for document in profiles:
+        value = next((document[k] for k in keys if k in document), None)
+        if value is not None and value not in profile_values:
+            profile_values.append(value)
+    return base_value, tuple(profile_values)
+
+
+@lru_cache(maxsize=512)
+def _load_flat_spring_properties(path_str: str) -> dict[str, str]:
+    """One file's properties, without choosing a profile.
+
+    A base document wins. A key declared only by profile documents is kept
+    when they all agree; conflicting profile values are left out, since no
+    active profile is known (BC-31).
+    """
+    base, profiles = _load_spring_property_documents(path_str)
+    flat = dict(base)
+    profile_values: dict[str, set[str]] = {}
+    for document in profiles:
+        for key, value in document.items():
+            if key not in base:
+                profile_values.setdefault(key, set()).add(value)
+    for key, values in profile_values.items():
+        if len(values) == 1:
+            flat[key] = next(iter(values))
     return flat
 _NESTED_PLACEHOLDER_RE = re.compile(r"\$\{([^${}]+)\}")
 _MAX_PLACEHOLDER_DEPTH = 5
@@ -192,30 +252,34 @@ def _is_profile_property_file(path_str: str) -> bool:
 
 def _lookup_spring_property(
     repo_root: Path, key: str, source_path: str | None
-) -> str | None:
-    """Return the declared value of ``key`` or ``None`` when it is not unique.
+) -> tuple[str | None, bool]:
+    """Return the declared value of ``key`` and whether it is ambiguous.
 
-    Files are visited from the owning module outwards. A base file answers
-    at once. Profile files (``application-<profile>``) answer only when every
-    profile that declares the key agrees: indexing has no active profile, so
-    conflicting declarations remain unresolved.
+    Files are visited from the owning module outwards. A base declaration
+    answers at once. Profile declarations (an ``application-<profile>``
+    file, or a YAML document activated by ``on-profile``) answer only when
+    every profile that declares the key agrees: indexing has no active
+    profile. Conflicting declarations are ambiguous (BC-31): the caller
+    keeps the value dynamic and never falls back to a placeholder default.
     """
     profile_values: list[str] = []
     for path_str in _discover_spring_property_files(str(repo_root), source_path):
-        flat = _load_flat_spring_properties(path_str)
-        value = flat.get(key)
-        if value is None and key.casefold().startswith("kafka."):
-            value = flat.get(key[6:])
-        if value is None:
-            continue
+        base_value, file_profile_values = _declared_values(path_str, key)
         if _is_profile_property_file(path_str):
+            file_profile_values = (
+                ((base_value,) if base_value is not None else ()) + file_profile_values
+            )
+            base_value = None
+        if base_value is not None:
+            if not profile_values:
+                return base_value, False
+            break
+        for value in file_profile_values:
             if value not in profile_values:
                 profile_values.append(value)
-            continue
-        if not profile_values:
-            return value
-        break
-    return profile_values[0] if len(profile_values) == 1 else None
+    if len(profile_values) == 1:
+        return profile_values[0], False
+    return None, len(profile_values) > 1
 
 
 def resolve_spring_property(
@@ -235,7 +299,10 @@ def resolve_spring_property(
     configuration key, not as a static value.
     """
     key, _, default = property_key.partition(":")
-    value = _lookup_spring_property(repo_root, key.strip(), source_path)
+    value, ambiguous = _lookup_spring_property(repo_root, key.strip(), source_path)
+    if ambiguous:
+        # Profiles disagree: the default is not the value in any of them.
+        return None
     if value is None:
         value = default or None
     if value is None or "${" not in value or _depth >= _MAX_PLACEHOLDER_DEPTH:

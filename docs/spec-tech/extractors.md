@@ -12,7 +12,11 @@ property expressions, unique never-reassigned local string base URLs, and bounde
 private String helpers with one unconditional return.
 
 Multi-document Spring YAML is read document by document; base-document values take
-precedence where no active-profile selection exists. YAML parse failures,
+precedence where no active-profile selection exists. A document activated by
+`on-profile` or `spring.profiles` counts as a profile file:
+`_lookup_spring_property` reports a key on which profiles disagree as
+ambiguous, and `resolve_spring_property` then ignores the placeholder
+default (BC-31). YAML parse failures,
 including unrendered Helm Go-template expressions, leave that file without
 Spring-property facts and never abort the repository index. A failure is
 a `yaml.YAMLError`, a `ValueError` such as an impossible date

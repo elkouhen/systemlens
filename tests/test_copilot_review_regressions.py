@@ -242,3 +242,81 @@ def test_an_unreadable_file_is_reported_and_the_index_completes(tmp_path: Path) 
     assert serves == ["GET /ping"]
     assert any("svc/notes.txt" in message for message in messages)
     assert any("svc/link.txt" in message for message in messages)
+
+
+# Lot 6: scanner precision.
+
+KAFKA_IMPORTS = (
+    "package demo;\n"
+    "import org.springframework.kafka.core.KafkaTemplate;\n"
+    "import org.springframework.beans.factory.annotation.Value;\n"
+)
+
+
+def _ports(repo: Path) -> set[tuple[str, str, str, bool]]:
+    """Every persisted endpoint as ``(role, framework, topic, dynamic)``."""
+    clear_analysis_caches()
+    with Store(repo) as store:
+        index_repo(repo, Config(), store, full=True)
+        return {
+            (endpoint.role, endpoint.framework or "", endpoint.topic, endpoint.topic_dynamic)
+            for endpoint in store.all_endpoints()
+        }
+
+
+def _service(repo: Path, files: dict[str, str]) -> Path:
+    _write(repo / "svc/pom.xml", POM.format(name="svc", deps=""))
+    for name, text in files.items():
+        _write(repo / "svc" / name, text)
+    return repo
+
+
+def test_profile_conflicting_properties_stay_dynamic(tmp_path: Path) -> None:
+    """BC-31: profiles that disagree give no value, default included.
+
+    ``extraction-rules.md`` keeps a key declared with different values in
+    profiles, without a base value, dynamic. A placeholder default is not
+    the value in any profile, and a multi-document ``application.yml``
+    applies the same rule to its ``on-profile`` documents.
+    """
+    producer = KAFKA_IMPORTS + (
+        "public class P {\n"
+        "  private KafkaTemplate<String, String> kafkaTemplate;\n"
+        '  @Value("${app.topic:orders}") private String topic;\n'
+        '  void a() { kafkaTemplate.send(topic, "x"); }\n'
+        '  void b() { kafkaTemplate.send("${app.topic:orders}", "x"); }\n'
+        '  void c() { kafkaTemplate.send("${app.same}", "x"); }\n'
+        '  void d() { kafkaTemplate.send("${app.based}", "x"); }\n'
+        "}\n"
+    )
+    files = _service(tmp_path / "files", {
+        "src/main/java/demo/P.java": producer,
+        "src/main/resources/application.yml": "app:\n  based: base-topic\n",
+        "src/main/resources/application-dev.yml": (
+            "app:\n  topic: orders-dev\n  same: same-topic\n  based: dev-topic\n"
+        ),
+        "src/main/resources/application-prod.yml": (
+            "app:\n  topic: orders-prod\n  same: same-topic\n  based: prod-topic\n"
+        ),
+    })
+    documents = _service(tmp_path / "documents", {
+        "src/main/java/demo/P.java": producer,
+        "src/main/resources/application.yml": (
+            "app:\n  based: base-topic\n"
+            "---\nspring:\n  config:\n    activate:\n      on-profile: prod\n"
+            "app:\n  topic: orders-prod\n  same: same-topic\n  based: prod-topic\n"
+            "---\nspring:\n  profiles: dev\n"
+            "app:\n  topic: orders-dev\n  same: same-topic\n  based: dev-topic\n"
+        ),
+    })
+
+    for repo in (files, documents):
+        produced = {
+            (topic, dynamic) for role, _, topic, dynamic in _ports(repo) if role == "produce"
+        }
+        assert produced == {
+            ("<dynamic>", True),
+            ("app.topic", True),
+            ("same-topic", False),
+            ("base-topic", False),
+        }, repo.name
