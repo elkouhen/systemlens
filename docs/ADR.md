@@ -1829,7 +1829,11 @@ Delivery notes of 2026-11-07, within the decision:
   bodies would be nodes without an outgoing edge. Both implicit nodes span
   the type's header, from its first annotation to its opening brace, where
   the typed engines locate them. A record's implicit canonical constructor
-  and its compact constructor are not nodes.
+  is not a node.
+- A record's compact constructor is a node (BL-39, 2026-11-08): its
+  canonical constructor, `Record.<init>` with the component types as
+  parameters, spanning its declaration. The note of 2026-11-07 left it
+  out, so the calls in its body had no caller for any engine.
 - Instance initializer code is attributed to every constructor that does
   not start with `this(...)`, as Java runs it (JLS 12.5): a delegating
   constructor reaches it through its `this(...)` edge. The engines agree:

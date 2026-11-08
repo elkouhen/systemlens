@@ -19,8 +19,10 @@ from systemlens.domain.module_inventory import ModuleDependency
 from systemlens.indexing.file_inventory import is_test_source
 from systemlens.indexing.integration_methods import (
     CONSTRUCTOR,
+    CONSTRUCTOR_DECLARATIONS,
     INITIALIZER_NAMES,
     STATIC_INITIALIZER,
+    declaration_parameters,
     declared_parameter_types,
     delegates_to_this,
     initializer_declarations,
@@ -364,7 +366,7 @@ def _call_context(node: Node) -> Node | None:
     """
     current = node.parent
     while current is not None:
-        if current.type in {"method_declaration", "constructor_declaration"}:
+        if current.type == "method_declaration" or current.type in CONSTRUCTOR_DECLARATIONS:
             if not parser.is_anonymous_member(current):
                 return current
         elif (
@@ -634,7 +636,7 @@ class JavaSymbols:
                 if len(self._type_candidates(owner, path)) != 1:
                     continue
                 initializer_node = name in INITIALIZER_NAMES
-                parameters = None if node.type in _TYPES else node.child_by_field_name("parameters")
+                parameters = None if node.type in _TYPES else declaration_parameters(node)
                 parameter_types = []
                 erased: list[str | None] = []
                 written: list[str] = []
@@ -1957,7 +1959,7 @@ class JavaSymbols:
         elif parent.type == "return_statement":
             scope = parent.parent
             while scope is not None and scope.type not in {
-                "method_declaration", "lambda_expression", "class_body", "constructor_declaration",
+                "method_declaration", "lambda_expression", "class_body", *CONSTRUCTOR_DECLARATIONS,
             }:
                 scope = scope.parent
             if scope is not None and scope.type == "method_declaration":
@@ -2598,10 +2600,11 @@ class JavaSymbols:
             type_node = patterns.flow_binding(source, scope, child, name) if child.parent == scope else None
             if type_node is not None:
                 return _Declarator(type_node)
-        elif scope.type in {"method_declaration", "constructor_declaration"}:
+        elif scope.type == "method_declaration" or scope.type in CONSTRUCTOR_DECLARATIONS:
             # ``info`` itself, an anonymous class method in its body, or the
-            # method enclosing a local class.
-            parameters = scope.child_by_field_name("parameters")
+            # method enclosing a local class. A compact constructor declares
+            # the record components as its parameters (BL-39).
+            parameters = declaration_parameters(scope)
             for parameter in parameters.named_children if parameters is not None else []:
                 if parameter.type == "formal_parameter" and named(parameter.child_by_field_name("name")):
                     return _Declarator(parameter.child_by_field_name("type"))

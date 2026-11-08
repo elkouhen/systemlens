@@ -763,8 +763,10 @@ method that declares the class.
 
 Constructors and initializers are nodes too (ADR-75), built by
 `initializer_declarations` in `integration_methods.py`. Each written
-constructor is `Owner.<init>` with its parameter types. A class or enum
-without one gets an implicit `Owner.<init>` when its field initializers or
+constructor is `Owner.<init>` with its parameter types. A record's compact
+constructor is its canonical one: it takes the record components as
+parameters (BL-39). A record with no written constructor gets no node. A
+class or enum without one gets an implicit `Owner.<init>` when its field initializers or
 instance initializer blocks make a call; a type gets `Owner.<clinit>` when
 its static code does. Both implicit nodes span the type's header, from the
 first annotation to the opening brace, where the typed engines locate
@@ -1006,7 +1008,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes | `covered` | |
 | S6 | Two methods of one type declared on the same line | `covered` in the symbol pass and the CodeQL join | not planned |
 | S7 | Constructor call `new X(...)`, `this(...)`, `super(...)` | `covered` (ADR-75) | |
-| S8 | Calls inside a constructor, an initializer or a field initializer | `covered` (ADR-75) | |
+| S8 | Calls inside a constructor, a record's compact constructor, an initializer or a field initializer | `covered` (ADR-75, BL-39) | |
 | S9 | Varargs call with any arity from the fixed parameter count up | `covered` | |
 | H1 | Inherited method called on a subclass receiver | `covered` | |
 | H2 | Override on the declared receiver; virtual dispatch over subclasses | `covered` | |
@@ -1152,7 +1154,7 @@ shapes from the jars it fetches while it builds its database.
 | B10 | `service.shape().area()`, `shape()` returns `new Circle()`: CodeQL `Circle` `exact` | `defect` | BL-46 |
 | B14 | `Status.valueOf(s).label()` | `missing` | BL-42 |
 | B15 | `Status.values()[0].label()` | `missing` | BL-42 |
-| B23 | Call in a record compact constructor: no indexed caller for either engine | `missing` | BL-39 |
+| B23 | Call in a record compact constructor, indexed as the canonical constructor | `covered` | BL-39 |
 | B26 | `Supplier<Order> s; s.get().ship()` | `missing` | BL-36 |
 | B27 | `Function<String, Order> f; f.apply(k).ship()` | `missing` | BL-36 |
 | B28 | `BiFunction<String, Integer, Order> bi; bi.apply(..).ship()` | `missing` | BL-36 |

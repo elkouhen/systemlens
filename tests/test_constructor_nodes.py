@@ -14,6 +14,7 @@ import pytest
 
 from systemlens.callgraph.registry import declaration
 from systemlens.indexing.integration_methods import materialize_integration_methods
+from systemlens.indexing.java_symbols import JavaSymbols
 from systemlens.domain.module_inventory import DiscoveredModule
 from systemlens.indexing.service import index_repo
 from systemlens.infrastructure.config import Config
@@ -104,3 +105,50 @@ def test_every_engine_routes_a_flow_through_a_constructor(tmp_path: Path, engine
     assert flows == [[
         "POST /orders/create", "example.Publisher.<init>", "example.Publisher.publish", "orders",
     ]]
+
+
+RECORDS = """\
+package example;
+
+record Money(Ledger ledger, int cents) {
+  Money {
+    ledger.open();
+  }
+}
+
+record Plain(Ledger ledger) {}
+
+class Ledger {
+  void open() {}
+  Money charge() { return new Money(this, 1); }
+}
+"""
+
+
+def test_a_compact_constructor_is_a_node_with_the_record_components(tmp_path: Path) -> None:
+    path = "src/main/java/example/Money.java"
+    (tmp_path / path).parent.mkdir(parents=True)
+    (tmp_path / path).write_text(RECORDS, encoding="utf-8")
+
+    methods = materialize_integration_methods(tmp_path, [], [path], [_module(tmp_path)])
+    nodes = {
+        (method.qualified_method, method.start_line, method.end_line, method.parameter_types)
+        for method in methods if "<" in method.qualified_method
+    }
+    # BL-39: the compact constructor is the canonical one, with the
+    # record's name and its component arity. An implicit canonical
+    # constructor stays without a node.
+    assert nodes == {("example.Money.<init>", 4, 6, ("Ledger", "int"))}
+
+    names = {(method.path, method.start_line): method.qualified_method for method in methods}
+    symbols = JavaSymbols(tmp_path, methods, [path])
+    edges = {
+        (names[(call.caller_path, call.caller_line)], names[(call.callee_path, call.callee_line)],
+         call.call_line, call.dispatch_confidence)
+        for call in symbols.fallback_calls(set(), closed_world=True)
+        if (call.callee_path, call.callee_line) in names
+    }
+    assert edges == {
+        ("example.Money.<init>", "example.Ledger.open", 5, "exact"),
+        ("example.Ledger.charge", "example.Money.<init>", 13, "exact"),
+    }

@@ -34,6 +34,22 @@ _CALL_NODES = {
 }
 
 
+# A written constructor; a record's compact constructor is its canonical
+# constructor, whose parameters are the record components (BL-39).
+CONSTRUCTOR_DECLARATIONS = frozenset({"constructor_declaration", "compact_constructor_declaration"})
+
+
+def declaration_parameters(declaration: Node) -> Node | None:
+    """The formal parameters of a method or constructor declaration.
+
+    A compact constructor writes none: it takes those of its record header.
+    """
+    if declaration.type == "compact_constructor_declaration":
+        record = java_parser.enclosing(declaration, "record_declaration")
+        return record.child_by_field_name("parameters") if record is not None else None
+    return declaration.child_by_field_name("parameters")
+
+
 def is_initializer(qualified_method: str) -> bool:
     """Whether a qualified name is a constructor or static initializer node."""
     return qualified_method.rsplit(".", 1)[-1] in INITIALIZER_NAMES
@@ -43,7 +59,8 @@ def is_initializer(qualified_method: str) -> bool:
 class InitializerDeclaration:
     """One constructor or static initializer node of a named type (ADR-75).
 
-    ``node`` is the ``constructor_declaration``, or the type declaration for
+    ``node`` is the constructor declaration, compact or not, or the type
+    declaration for
     an implicit constructor and for ``<clinit>``. These two have no
     declaration of their own: their lines are the type's header, from its
     first annotation to the opening brace, where the typed engines locate
@@ -126,14 +143,15 @@ def delegates_to_this(constructor: Node) -> bool:
 def initializer_declarations(root: Node, source: bytes) -> list[InitializerDeclaration]:
     """Constructor and static initializer nodes of a compilation unit.
 
-    Every written constructor is a node. A class or enum without one gets
+    Every written constructor is a node, a record's compact constructor
+    included (BL-39). A class or enum without one gets
     an implicit ``<init>`` node when its instance initializer code makes a
     call; a type gets ``<clinit>`` when its static initializer code does.
     Code that calls nothing would be a node without an edge.
     """
     found: list[InitializerDeclaration] = []
     for node in java_parser.walk(root):
-        if node.type == "constructor_declaration":
+        if node.type in CONSTRUCTOR_DECLARATIONS:
             type_node = java_parser.enclosing(node, *_INITIALIZED_TYPES)
             if type_node is not None:
                 found.append(InitializerDeclaration(
@@ -150,7 +168,7 @@ def initializer_declarations(root: Node, source: bytes) -> list[InitializerDecla
         members = type_members(node)
         if (
             node.type != "record_declaration"
-            and not any(member.type == "constructor_declaration" for member in members)
+            and not any(member.type in CONSTRUCTOR_DECLARATIONS for member in members)
             and _contains_call(initializer_members(node, source, static=False))
         ):
             found.append(InitializerDeclaration(CONSTRUCTOR, node, node, *header))
@@ -347,7 +365,7 @@ def declared_parameter_types(declaration, source: bytes) -> tuple[str, ...] | No
     This is the ``parameter_types`` signature persisted for each method; the
     symbol pass uses it to tell apart declarations that share a line.
     """
-    parameter_node = declaration.child_by_field_name("parameters")
+    parameter_node = declaration_parameters(declaration)
     parameters = [
         child for child in parameter_node.named_children
         if child.type in {"formal_parameter", "spread_parameter"}
@@ -575,7 +593,7 @@ def materialize_integration_methods(
                 or _path_module(repo_root, path, modules)
             )
             anchor = (
-                initializer.node if initializer.node.type == "constructor_declaration"
+                initializer.node if initializer.node.type in CONSTRUCTOR_DECLARATIONS
                 else initializer.type_node.child_by_field_name("body")
             )
             owner = _qualified_method_owner(anchor, root, source) if anchor is not None else None
@@ -583,8 +601,8 @@ def materialize_integration_methods(
                 continue
             qualified_method = f"{owner}.{initializer.name}"
             parameter_node = (
-                initializer.node.child_by_field_name("parameters")
-                if initializer.node.type == "constructor_declaration" else None
+                declaration_parameters(initializer.node)
+                if initializer.node.type in CONSTRUCTOR_DECLARATIONS else None
             )
             parameter_signature = (
                 source[parameter_node.start_byte:parameter_node.end_byte].decode("utf-8")
@@ -604,7 +622,7 @@ def materialize_integration_methods(
                 output_endpoint_ids=(),
                 parameter_types=(
                     declared_parameter_types(initializer.node, source)
-                    if initializer.node.type == "constructor_declaration" else ()
+                    if initializer.node.type in CONSTRUCTOR_DECLARATIONS else ()
                 ),
             ))
 
