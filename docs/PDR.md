@@ -26,6 +26,7 @@ written down when the choice was made says so, rather than inventing one.
 | [PDR-14](#pdr-14-a-two-finger-scroll-pans-and-a-pinch-zooms) | A two-finger scroll pans and a pinch zooms | Yes, product owner |
 | [PDR-15](#pdr-15-a-flow-ends-on-an-effect-and-rabbit-and-jms-publications-are-effects) | A flow ends on an effect; Rabbit and JMS publications are effects | Yes, product owner |
 | [PDR-16](#pdr-16-rabbit-jms-events-and-startup-code-start-flows) | Rabbit, JMS, events and startup code start flows | Yes, product owner |
+| [PDR-17](#pdr-17-only-a-post-commit-listener-phase-marks-a-publication-after-commit) | Only a post-commit listener phase marks a publication `after_commit` | Yes, product owner; to be confirmed |
 
 ## PDR-1: Inspection requires Shift + click
 
@@ -495,3 +496,32 @@ conditions.
 **Consequences:** the probe's Rabbit, JMS, event and runner entries yield
 their flows. Projects with runners or `@PostConstruct` seeders gain flows,
 mostly to data writes.
+
+## PDR-17: Only a post-commit listener phase marks a publication `after_commit`
+
+**Status:** Accepted on 2026-11-08 under the product owner's mandate to
+process the Copilot backlog; to be confirmed by the product owner (BC-27).
+
+**Problem:** a publication inside any `@TransactionalEventListener`
+method is persisted with the `after_commit` phase, which downgrades a
+dual-write candidate to "recovery mechanism present". A listener with
+`phase = AFTER_ROLLBACK` runs only when the transaction failed, and a
+`BEFORE_COMMIT` listener runs inside it, so neither publishes after a
+commit. The specification named the annotation without its phase.
+
+**Decision:**
+1. The phase is the listener's `phase` attribute, `AFTER_COMMIT` when
+   absent, read with or without the `TransactionPhase.` qualifier.
+2. Only `AFTER_COMMIT` and `AFTER_COMPLETION` mark a publication in the
+   listener `after_commit`. `BEFORE_COMMIT` and `AFTER_ROLLBACK` do not.
+3. A phase the indexer cannot read, such as a constant, marks nothing.
+4. The phase changes only this mark. Every `@TransactionalEventListener`
+   method stays a transient trigger and an internal hop (PDR-16).
+
+**Why:** `AFTER_COMPLETION` also runs after a commit, so it keeps the
+mark; the review aid stays "not verified" either way. An unreadable phase
+gives no recovery evidence rather than a guessed one.
+
+**Consequences:** a publication in a rollback or before-commit listener
+no longer downgrades a dual-write candidate. Flows and their IDs are
+unchanged; only the step's `phase` changes.
