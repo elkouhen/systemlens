@@ -4630,15 +4630,19 @@ class JavaSymbols:
 
         Java looks up a simple method name in the enclosing type, its
         ancestors and its outer types before static imports: any declaration
-        of that name there, whatever its arity, shadows them. A single
-        static import wins over static wildcards; several wildcards that
-        declare the name stay ambiguous.
+        of that name there, whatever its arity, shadows them. So may one an
+        external supertype with unknown members declares (BC-13), as in
+        :meth:`_lexical_owner`. A single static import wins over static
+        wildcards; several wildcards that declare the name stay ambiguous.
         """
         path = info.method.path
         unit = self.units[path]
         scope = info.owner
         while scope and scope != unit.package:
-            if scope in self.types and self._declared_arities(scope, name, path, info.module):
+            if scope in self.types and (
+                self._declared_arities(scope, name, path, info.module)
+                or self._may_inherit_unknown(scope, self._receiver_module(scope, info), name)
+            ):
                 return None
             scope = scope.rpartition(".")[0]
 

@@ -174,6 +174,62 @@ SHAPES: list[Shape] = [
             }
             """,
     }, "Use.run", {"Util.help": "exact"}),
+    Shape("S2-import-shadowed", {
+        f"{_APP}l/Util.java": """
+            package p.l;
+            public class Util {
+              public static void foo() {} //@Util.foo
+            }
+            """,
+        f"{_APP}a/Use.java": """
+            package p.a;
+            import static p.l.Util.foo;
+            class Extended extends org.acme.ExternalBase {
+              void run() { //@Extended.run
+                foo();
+              }
+            }
+            """,
+    }, "Extended.run", {}, absent=("Util.foo",),
+        note="BC-13: an external supertype with unknown members may declare foo(), which would "
+             "shadow the static import"),
+    Shape("S2-import-shadowed-jdk", {
+        f"{_APP}l/Util.java": """
+            package p.l;
+            public class Util {
+              public static void foo() {} //@Util.foo
+            }
+            """,
+        f"{_APP}a/Use.java": """
+            package p.a;
+            import static p.l.Util.foo;
+            import java.util.AbstractList;
+            abstract class Listed extends AbstractList<String> {
+              void run() { //@Listed.run
+                foo();
+              }
+            }
+            """,
+    }, "Listed.run", {}, absent=("Util.foo",),
+        note="BC-13: the pass does not know AbstractList's members, so the call stays unresolved"),
+    Shape("S2-import-known-supertype", {
+        f"{_APP}l/Util.java": """
+            package p.l;
+            public class Util {
+              public static void foo() {} //@Util.foo
+            }
+            """,
+        f"{_APP}a/Use.java": """
+            package p.a;
+            import static p.l.Util.foo;
+            class Known implements Runnable {
+              public void run() { //@Known.run
+                foo();
+              }
+            }
+            """,
+    }, "Known.run", {"Util.foo": "exact"},
+        note="BC-13: Runnable's members are known and do not include foo"),
     Shape("S3", """
         class Outer {
           void helper() {} //@Outer.helper

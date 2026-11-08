@@ -787,7 +787,9 @@ class's `helper`, attributed to the creating method (ADR-62), while a
 external supertype keeps the call unresolved.
 A name no enclosing type has resolves through a single static import, then
 through the one static wildcard import whose source type declares that name
-and arity. Several candidates stay unresolved.
+and arity. Several candidates stay unresolved. An enclosing type with an
+external supertype whose members the pass does not know may inherit the
+name, so the import does not apply and the call stays unresolved (BC-13).
 Literals, `new`, casts, and typed variables give argument types. Inside
 an anonymous class body, `this` is that instance, typed by the supertype it
 creates (BC-10); in a lambda it stays the enclosing class. A numeric
@@ -1343,7 +1345,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | # | Shape | Status | Plan |
 |---|---|---|---|
 | S1 | Call on a declared receiver: field, local, parameter, `var`, chained return read across the receiver's ancestors | `covered` (BC-07) | |
-| S2 | Static call and static import | `covered` | |
+| S2 | Static call and static import; an import an external supertype may shadow stays unresolved | `covered` (BC-13) | |
 | S3 | Unqualified call to an outer type, from an inner or anonymous class, including one of a fixed-member external type (BL-25) | `covered` | |
 | S4 | Private method | `covered` | |
 | S5 | Overload by argument type: subtype, widening before boxing, literal suffixes, an enum's or record's implicit supertypes | `covered` (BC-06) | |
