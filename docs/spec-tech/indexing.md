@@ -688,6 +688,20 @@ type arguments leave the call untyped.
 containers above: a written variable, a source method's return, or
 `ResponseEntity.ok(o)` gives their type argument.
 
+BL-44 types a class literal and `getBean` from the same table. `X.class`
+is a `Class<X>`, as is a variable written `Class<X>`; a primitive, array
+or wildcard class gives nothing. Two Spring signatures read it:
+
+| Owner | Spring signature | Result |
+|---|---|---|
+| `BeanFactory`, `ApplicationContext` | `<T> T getBean(Class<T> requiredType)` | `T` |
+| `BeanFactory`, `ApplicationContext` | `<T> T getBean(String name, Class<T> requiredType)`, with a `String` first argument | `T` |
+
+The receiver must be typed by one of these two interfaces.
+`getBean(String)` returns `Object` and stays untyped. ModelMapper and
+other mappers are not in the table: `mapper.map(src, Order.class)` stays
+untyped, a deviation parity case A34 keeps (ADR-90).
+
 The source-generics model below keeps flat arguments: a type variable
 bound to a container, as `T` in `Box<List<Circle>>`, stays untyped.
 
@@ -1362,7 +1376,7 @@ Status values: `covered`, `defect` (wrong edge or wrong confidence),
 | W7 | Spring Data derived query | `covered` | |
 | W8 | Generated implementation (MapStruct, OpenAPI client) | `covered` | |
 | W9 | Spring signature table: Spring Data repository members through a source `extends` clause, `Page`/`Slice` content, `HttpEntity`/`ResponseEntity` body; a member absent from the table, a raw repository, a `findAll` conflict and an untyped `save` argument | `covered` (BL-43) | |
-| W10 | `getBean(Class<T>)` typed by a class literal or a written `Class<T>`; `getBean(String)` and ModelMapper stay untyped | `missing` | BL-44 |
+| W10 | `getBean(Class<T>)` typed by a class literal or a written `Class<T>`; `getBean(String)` and ModelMapper stay untyped | `covered` (BL-44) | |
 | X1 | Reflection, `ServiceLoader`, `Class.forName` | `out of scope`: a dynamic target is never guessed | |
 | X2 | AOP advice and proxies (`@Transactional`, aspects) | `out of scope`: the advised method is already the target | |
 | X3 | HTTP and Kafka between services | `out of scope`: flow transitions built by the extractors | |
@@ -1445,9 +1459,9 @@ shapes from the jars it fetches while it builds its database.
 | A29 | `Arrays.asList(a, b).get(0).ship()` | `covered` | BL-36 |
 | A30 | `Collections.unmodifiableList(orders).get(0).ship()` | `covered` | BL-36 |
 | A31 | `new ArrayList<>(orders).get(0).ship()` | `covered` | BL-36 |
-| A32 | `ctx.getBean(OrderService.class).place()` | `missing` | BL-44 |
+| A32 | `ctx.getBean(OrderService.class).place()` | `covered` | BL-44 |
 | A33 | `Objects.requireNonNull(order).ship()` | `covered` | BL-36 |
-| A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `missing` | BL-44 |
+| A34 | `mapper.map(src, Order.class).ship()` (ModelMapper) | `covered` | BL-44; A34 keeps no row where CodeQL types ModelMapper from its jar (ADR-90) |
 | A38 | `var list = repo.findAll(); list.get(0).ship()` | `covered` | BL-43; BL-35 typed the `var` and the source return |
 | A39 | `for (var e : m.entrySet()) e.getValue().ship()` | `covered` | BL-41 |
 | A41 | `stream().map(o -> o.getLine()).forEach(l -> l.qty())` | `covered` | BL-40 |
@@ -1503,7 +1517,8 @@ to `code-flow-v55-entry-rule-on-this`, and BL-48 to BL-50 to
 moved the endpoint inventory to
 `endpoint-inventory-v29-inherited-methods-rabbit-jms`, so the next
 `index` re-extracts every file. BL-45 and BL-46 moved the code-flow
-signature to `code-flow-v57-dispatch-precision`.
+signature to `code-flow-v57-dispatch-precision`, and BL-43 and BL-44 to
+`code-flow-v58-spring-signatures`.
 
 ### Internal-flow shapes
 

@@ -3642,7 +3642,7 @@ SHAPES: list[Shape] = [
           }
         }
         """, "Use.run", {"OrderService.place": "exact", "OrderService.cancel": "exact"},
-        pending="BL-44", note="BL-44: a class literal or a written Class<T> types getBean"),
+        note="BL-44: a class literal or a written Class<T> types getBean"),
     Shape("W10-unproven", """
         import org.modelmapper.ModelMapper;
         import org.springframework.context.ApplicationContext;

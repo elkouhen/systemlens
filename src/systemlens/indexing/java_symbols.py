@@ -255,6 +255,8 @@ _GENERIC_CONTAINERS: dict[str, tuple[str, int]] = {
     "org.springframework.data.domain.Slice": ("page", 1),
     "org.springframework.http.ResponseEntity": ("entity", 1),
     "org.springframework.http.HttpEntity": ("entity", 1),
+    # BL-44, ADR-90: ``X.class`` is a ``Class<X>``.
+    "java.lang.Class": ("class", 1),
 }
 _ELEMENT_CALLBACKS = (
     "filter", "map", "flatMap", "forEach", "forEachOrdered", "peek", "anyMatch", "allMatch",
@@ -426,6 +428,15 @@ _REPOSITORY_RETURNS: dict[tuple[str, str, int], tuple[str | None, tuple[int, ...
     **{(interface, member, arity): ("java.util.List", (0,)) for interface in (
         _LIST_CRUD_REPOSITORY, _JPA_REPOSITORY,
     ) for member, arity in (("findAll", 0), ("findAllById", 1))},
+}
+# Methods that return the type argument of a ``Class<T>`` argument (BL-44,
+# ADR-90): (receiver type, name, arity) -> the ``Class<T>`` position.
+# ``getBean(String name, Class<T> requiredType)`` also needs a ``String``
+# first argument, which ``getBean(Class<T>, Object...)`` does not take.
+_CLASS_TYPED: dict[tuple[str, str, int], int] = {
+    (owner, "getBean", arity): arity - 1 for owner in (
+        "org.springframework.beans.factory.BeanFactory", "org.springframework.context.ApplicationContext",
+    ) for arity in (1, 2)
 }
 _REPOSITORY_ARITIES = {_CRUD_REPOSITORY: 2, _LIST_CRUD_REPOSITORY: 2, _JPA_REPOSITORY: 2}
 # Declared returns of the table that are more specific than another one:
@@ -2031,6 +2042,9 @@ class JavaSymbols:
             ) if type_node is not None else None
         if node.type == "parenthesized_expression" and node.named_children:
             return self.expression_type(info, node.named_children[0], invocation, depth + 1)
+        if node.type == "class_literal":
+            # ``X.class`` (BL-44).
+            return "java.lang.Class"
         if node.type == "ternary_expression":
             # Typed only when both branches have the same type. A ``null``
             # branch takes the other branch's type, boxed when primitive
@@ -3115,6 +3129,17 @@ class JavaSymbols:
             return self._generic_view(info, node.named_children[0], invocation, depth + 1)
         if node.type == "object_creation_expression":
             return self._created_view(info, node, depth + 1)
+        if node.type == "class_literal" and node.named_children:
+            # ``Order.class`` is a ``Class<Order>``; a primitive, array or
+            # ``void`` literal gives nothing (BL-44, ADR-90).
+            type_node = node.named_children[0]
+            if type_node.type not in {"type_identifier", "scoped_type_identifier"}:
+                return None
+            literal = self.resolve(
+                info.method.path, parser.node_text(source, type_node), info.owner, allow_ambiguous=True,
+                at=type_node,
+            )
+            return ("class", (literal,)) if literal is not None else None
         if node.type == "method_invocation":
             receiver, name, arguments = parser.invocation_parts(node, source)
             jdk_owner = self._jdk_static_owner(info, receiver, node)
@@ -3779,6 +3804,14 @@ class JavaSymbols:
             )
         if owner is None:
             return None
+        position = _CLASS_TYPED.get((owner, name, len(arguments)))
+        if position is not None and owner not in self.types:
+            # ``ctx.getBean(Order.class)`` returns ``T`` of its ``Class<T>``
+            # argument (BL-44, ADR-90).
+            if position and self.expression_type(info, arguments[0], receiver, depth + 1) != "java.lang.String":
+                return None
+            view = self._generic_view(info, arguments[position], receiver, depth + 1)
+            return _flat(view[1][0]) if view is not None and view[0] == "class" else None
         locations = self._type_candidates(owner, info.method.path)
         if len(locations) != 1:
             return None

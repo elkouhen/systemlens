@@ -1008,12 +1008,15 @@ CASES: list[Case] = [
           ("a30", "Order.ship", "exact")),
     _case("A31", "A31", None,
           ("a31", "Order.ship", "exact")),
-    _case("A32", "A32", "BL-44",
+    _case("A32", "A32", None,
           ("a32", "OrderService.place", "exact")),
     _case("A33", "A33", None,
           ("a33", "Order.ship", "exact")),
-    _case("A34", "A34", "BL-44",
-          ("a34", "Order.ship", "exact")),
+    # ADR-90: ModelMapper is not in the Spring signature table, so the
+    # source engine leaves ``mapper.map(src, Order.class)`` untyped where
+    # CodeQL types it from the jar it downloads.
+    _case("A34", "A34", None,
+          ("a34", "Order.ship", "exact"), deviation=()),
     _case("A38", "A38", None,
           ("a38", "Order.ship", "exact")),
     _case("A39", "A39", None,
