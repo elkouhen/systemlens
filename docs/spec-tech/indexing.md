@@ -33,11 +33,13 @@ debug runs.
 
 `index --module NAME --refresh-call-graph-view` forces the interprocedural stage
 and queries source-backed CodeQL methods under the selected module path. The
-result replaces that module's method rows while preserving rows from other
-modules, so the persisted graph can still traverse shared helpers. The option
-is intentionally module-scoped to support creating the method view gradually;
-passing `--engine-database` reuses the same global CodeQL database for each
-module refresh.
+module keeps its method rows, with the line ranges and IDs its edges cite,
+and gains each queried method that no row covers. Rows from other modules
+are preserved, so the persisted graph can still traverse shared helpers.
+
+The option is intentionally module-scoped to support creating the method
+view gradually; passing `--engine-database` reuses the same global CodeQL
+database for each module refresh.
 
 A refresh that reaches the engine deadline keeps the persisted method rows
 and call edges unchanged. The join rebuilds the flows from that persisted

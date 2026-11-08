@@ -82,7 +82,7 @@ class _RefreshEngine:
 
     def __init__(self, calls: list[MethodCall], methods: list[SourceMethod]) -> None:
         self._calls = calls
-        self._methods = methods
+        self.recorded_methods = methods
         self.timeout = False
 
     def available(self) -> bool:
@@ -101,7 +101,7 @@ class _RefreshEngine:
     def methods(self, source_prefix: str = "") -> list[SourceMethod]:
         if self.timeout:
             raise CallGraphTimeout()
-        return [method for method in self._methods if method.path.startswith(source_prefix)]
+        return [method for method in self.recorded_methods if method.path.startswith(source_prefix)]
 
     def reachability(self, methods: Sequence[IntegrationMethod]) -> list[MethodReachability]:
         return []
@@ -164,3 +164,24 @@ def test_a_refresh_timeout_keeps_the_persisted_graph(tmp_path: Path) -> None:
     assert _view(repo) == before
     with Store(repo, readonly=True) as store:
         assert store.get_meta("code_flow_snapshot_status") == "partial"
+
+
+def test_a_refresh_keeps_the_module_method_rows(tmp_path: Path) -> None:
+    """BC-30: a refresh filtered the module out of the refreshed graph too.
+
+    The module's rows were replaced by engine placeholders with
+    ``end_line == start_line`` and new IDs, so every edge dangled. A method
+    only the engine reports is still added.
+    """
+    repo, engine = _indexed(tmp_path)
+    methods, edges, dangling, flows = _view(repo)
+    engine.recorded_methods.append(SourceMethod("example.app.Publisher.extra", f"{PACKAGE}/Publisher.java", 40))
+
+    _refresh(repo, engine)
+
+    after_methods, after_edges, after_dangling, after_flows = _view(repo)
+    assert set(methods) < set(after_methods)
+    assert [
+        (name, start, end) for _id, name, start, end in sorted(set(after_methods) - set(methods))
+    ] == [("example.app.Publisher.extra", 40, 40)]
+    assert (after_edges, after_dangling, after_flows) == (edges, 0, flows)

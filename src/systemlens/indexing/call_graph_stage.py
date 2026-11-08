@@ -408,16 +408,15 @@ def run_call_graph_stage(
             ]
         else:
             methods_projection = []
-        graph_methods = call_graph.methods
-        if refresh_call_graph_view and call_graph_view_prefix:
-            graph_methods = tuple(
-                method for method in graph_methods
-                if not (
-                    method.path == call_graph_view_prefix
-                    or method.path.startswith(prefix)
-                )
-            )
-        methods_projection.extend(graph_methods)
+        # The prefix filter applies to the old table only: the refreshed
+        # graph holds the module's methods, with the ranges and IDs its
+        # edges cite. Filtering them too left the module with engine
+        # placeholders and every edge dangling (BC-30).
+        known_ids = {method.id for method in call_graph.methods}
+        methods_projection = [
+            *(method for method in methods_projection if method.id not in known_ids),
+            *call_graph.methods,
+        ]
         # An engine method is the indexed method of the same name whose line
         # range holds its line: the engine locates the declaration, the index
         # starts at its first annotation, and an engine may spell nested types
