@@ -398,9 +398,21 @@ receives its `analysis.engines.NAME` options and the generic `engine_*`
 settings.
 
 Each engine joins the inputs indexing uses: persisted endpoints, integration
-methods, modules, data operations and module dependencies. A flow is keyed by
-its module, entry method, status and every step, so two routes between the
-same ends stay two flows.
+methods, modules, data operations and module dependencies. Neither engine
+runs a reachability query, as during an index (ADR-84).
+
+A flow is keyed by its (entry, trigger, output) pair: module, entry method,
+status, trigger step and output step. Two routes between the same ends are
+one flow, so a route difference never reads as a missing flow. Under
+`flows`, `both`, `only_<engine>` and their `_count` keys count pairs; a pair's
+confidence is the set of its flows' confidences. Each run reports `flows`,
+its flow count, and `flow_pairs`, its pair count.
+
+`routes` lists the pairs both engines connect through different routes: a
+route is the step names between trigger and output, or `(direct)`.
+`pairs_with_different_routes_count` counts them, and each of the first 20
+entries of `pairs_with_different_routes` gives its `pair` and the routes
+only one engine takes, under `only_<engine>`.
 
 Call edges are compared only between indexed integration methods, which both
 engines share. An edge is keyed by caller, callee, source path and call line;

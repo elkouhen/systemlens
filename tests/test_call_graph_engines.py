@@ -225,9 +225,66 @@ def test_engine_comparison_reports_shared_and_missing_flows(tmp_path: Path) -> N
     assert isinstance(runs, dict)
     assert runs["source"]["flows"] == 1 and runs["recorded"]["calls"] == 1
     text = render_engine_comparison_text(result)
-    assert "Flux : 1 communs, 0 seulement source, 0 seulement recorded," in text
+    assert "Flux (paires entrée, déclencheur, sortie) : 1 communs, 0 seulement source, 0 seulement recorded," in text
     with Store(repo, readonly=True) as store:
         assert len(store.all_code_flows()) == 1, "comparison never persists flows"
+
+
+class _NoReachabilityEngine(_RecordedEngine):
+    name = "recorded"
+
+    def reachability(self, methods: Sequence[IntegrationMethod]) -> list[MethodReachability]:
+        raise AssertionError("the comparison runs no reachability query (ADR-84)")
+
+
+def test_engine_comparison_keys_flows_by_entry_trigger_and_output(tmp_path: Path) -> None:
+    """BL-53: two routes between the same ends are one shared flow.
+
+    The source engine reaches the publisher directly; the recorded engine
+    through ``Relay.forward``. The pair is common, its routes are listed
+    apart, and no reachability query runs.
+    """
+    repo = _repository(tmp_path / "repo")
+    (repo / "src/main/java/example/Relay.java").write_text(
+        """package example;
+class Relay {
+  private Generator generator;
+  void forward() { generator.generate(); }
+}
+""",
+        encoding="utf-8",
+    )
+    with Store(repo) as store:
+        index_repo(repo, Config(call_graph_engine="source"), store, full=True)
+    recorded = _NoReachabilityEngine([
+        MethodCall(
+            "example.OrderController.create", "src/main/java/example/OrderController.java", 7,
+            "example.Relay.forward", "src/main/java/example/Relay.java", 4, 7,
+        ),
+        MethodCall(
+            "example.Relay.forward", "src/main/java/example/Relay.java", 4,
+            "example.Generator.generate", "src/main/java/example/Generator.java", 5, 4,
+        ),
+    ])
+    with Store(repo, readonly=True) as store:
+        result = compare_engines(store, [SourceEngine(), recorded])
+
+    flows = result["flows"]
+    assert isinstance(flows, dict)
+    assert flows["both"] == 1
+    assert flows["only_source_count"] == 0 and flows["only_recorded_count"] == 0
+    routes = result["routes"]
+    assert isinstance(routes, dict)
+    assert routes["pairs_with_different_routes_count"] == 1
+    [difference] = routes["pairs_with_different_routes"]
+    assert difference["only_source"] == ["example.Generator.generate"]
+    assert difference["only_recorded"] == ["example.Relay.forward → example.Generator.generate"]
+    runs = result["runs"]
+    assert isinstance(runs, dict)
+    assert runs["recorded"]["flow_pairs"] == 1
+    text = render_engine_comparison_text(result)
+    assert "Routes : 1 paire(s) commune(s) reliée(s) par des routes différentes." in text
+    assert "    [recorded] example.Relay.forward → example.Generator.generate" in text
 
 
 def test_engine_comparison_joins_the_persisted_data_operations(

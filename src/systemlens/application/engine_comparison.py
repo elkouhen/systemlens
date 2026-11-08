@@ -7,6 +7,11 @@ and call edges that both engines find, and those only one of them finds, so
 the cost of choosing one engine over another is measured on the user's own
 code.
 
+A flow is compared by its (entry, trigger, output) pair: each engine may
+pick another route between the same ends, and a route difference is not a
+missing flow. The routes of a pair both engines connect are compared
+apart (BL-53).
+
 Call edges are compared inside the universe both engines share, the indexed
 integration methods. An edge that touches a method only one engine knows,
 such as a helper method only a typed engine reports, is counted apart instead of being reported
@@ -21,7 +26,7 @@ from typing import TypeVar
 
 from systemlens.application.flow_calculation import load_persisted_flow_inputs
 from systemlens.callgraph.engine import CallGraphEngine, EngineRequest
-from systemlens.domain.code_flows import CallGraphEdge, CodeFlow
+from systemlens.domain.code_flows import CallGraphEdge, CodeFlow, CodeFlowStep
 from systemlens.indexing.code_flows import CallGraph, materialize_call_graph_flows
 from systemlens.storage.sqlite import Store
 
@@ -37,22 +42,37 @@ class _Run:
     calls: int
     flow_count: int
     flow_confidence: dict[str, int]
+    # (entry, trigger, output) pair -> its distinct flow confidences.
     flows: dict[str, str]
+    # The same pair -> its routes, the steps between trigger and output.
+    routes: dict[str, frozenset[str]]
     edge_count: int
     edges: dict[_EdgeKey, str]
     outside_edge_count: int
     outside_edges: dict[_EdgeKey, str]
 
 
-def _flow_key(flow: CodeFlow) -> str:
-    """A flow's full identity: its entry method and every step."""
-    steps = " → ".join(
+def _step_label(step: CodeFlowStep) -> str:
+    return (
         f"{step.kind} {step.name}"
         + (f" [{step.operation}]" if step.operation else "")
         + f" ({step.path}:{step.start_line})"
-        for step in flow.steps
     )
-    return f"{flow.module} · {flow.method} · {flow.status} · {steps}"
+
+
+def _flow_key(flow: CodeFlow) -> str:
+    """A flow's (entry, trigger, output) pair, with its module and status.
+
+    The route between the two ends is left out: two engines choosing
+    different routes between the same ends find the same flow (BL-53).
+    """
+    ends = f"{_step_label(flow.steps[0])} → {_step_label(flow.steps[-1])}"
+    return f"{flow.module} · {flow.method} · {flow.status} · {ends}"
+
+
+def _route(flow: CodeFlow) -> str:
+    """The steps a flow takes between its trigger and its output."""
+    return " → ".join(step.name for step in flow.steps[1:-1]) or "(direct)"
 
 
 def _edge_label(edge: CallGraphEdge) -> str:
@@ -82,13 +102,14 @@ def _engine_run(
         repo_root=repo_root, allowed_paths=paths, timeout_seconds=timeout_seconds,
         deadline=time.monotonic() + timeout_seconds,
     )) as session:
+        # No reachability query: the index dropped it (ADR-84), and a row
+        # becomes a flow only through a route the join already checks.
         calls = session.calls()
-        reachability = session.reachability(methods)
     flows = materialize_call_graph_flows(
         methods, inputs.flow_endpoints, calls, repo_root=repo_root, modules=inputs.modules,
         operations=inputs.operations,
         source_paths=paths, max_hops=max_hops, edge_confidence=edge_confidence,
-        reachability=reachability, call_graph_sink=graphs.append,
+        call_graph_sink=graphs.append,
         closed_world=not engine.resolves_types,
         module_dependencies=store.all_module_dependencies(),
     )
@@ -109,15 +130,18 @@ def _engine_run(
                edge.path, edge.line)
         in_shared = edge.caller_id in shared and edge.callee_id in shared
         (edges if in_shared else outside)[key].append(_edge_label(edge))
-    flow_labels: dict[str, list[str]] = defaultdict(list)
+    flow_labels: dict[str, set[str]] = defaultdict(set)
+    flow_routes: dict[str, set[str]] = defaultdict(set)
     for flow in flows:
-        flow_labels[_flow_key(flow)].append(flow.confidence)
+        flow_labels[_flow_key(flow)].add(flow.confidence)
+        flow_routes[_flow_key(flow)].add(_route(flow))
     return _Run(
         seconds=round(time.perf_counter() - started, 2),
         calls=len(calls),
         flow_count=len(flows),
         flow_confidence=dict(Counter(flow.confidence for flow in flows)),
-        flows=_merge(flow_labels),
+        flows={key: " + ".join(sorted(values)) for key, values in flow_labels.items()},
+        routes={key: frozenset(values) for key, values in flow_routes.items()},
         edge_count=sum(len(values) for values in edges.values()),
         edges=_merge(edges),
         outside_edge_count=sum(len(values) for values in outside.values()),
@@ -154,6 +178,7 @@ def compare_engines(
                 "seconds": run.seconds,
                 "calls": run.calls,
                 "flows": run.flow_count,
+                "flow_pairs": len(run.flows),
                 "edges": run.edge_count,
                 "edges_outside_shared_methods": run.outside_edge_count,
                 "flow_confidence": run.flow_confidence,
@@ -161,6 +186,7 @@ def compare_engines(
             for name, run in runs.items()
         },
         "flows": _diff(runs[left].flows, runs[right].flows, left, right),
+        "routes": _route_diff(runs[left].routes, runs[right].routes, left, right),
         "edges": _diff(runs[left].edges, runs[right].edges, left, right),
         # Edges touching a method only one engine models (engine helpers):
         # outside the shared universe, so never a difference by themselves.
@@ -190,6 +216,24 @@ def _diff(a: Mapping[_K, str], b: Mapping[_K, str], left: str, right: str) -> di
     }
 
 
+def _route_diff(
+    a: Mapping[str, frozenset[str]], b: Mapping[str, frozenset[str]], left: str, right: str,
+) -> dict[str, object]:
+    """The pairs both engines connect through different routes."""
+    differing = sorted(key for key in set(a) & set(b) if a[key] != b[key])
+    return {
+        "pairs_with_different_routes_count": len(differing),
+        "pairs_with_different_routes": [
+            {
+                "pair": key,
+                f"only_{left}": sorted(a[key] - b[key]),
+                f"only_{right}": sorted(b[key] - a[key]),
+            }
+            for key in differing[:_EXAMPLES]
+        ],
+    }
+
+
 def _label(item: object) -> str:
     if isinstance(item, tuple):
         caller, callee, path, line = item
@@ -211,7 +255,9 @@ def render_engine_comparison_text(result: dict[str, object]) -> str:
             f"ces méthodes, {run['calls']} appels moteur, {run['seconds']} s, "
             f"confiance {run['flow_confidence']}"
         )
-    for kind, title in (("flows", "Flux"), ("edges", "Arêtes d'appel")):
+    for kind, title in (
+        ("flows", "Flux (paires entrée, déclencheur, sortie)"), ("edges", "Arêtes d'appel"),
+    ):
         section = result[kind]
         assert isinstance(section, dict)
         lines.append("")
@@ -226,4 +272,16 @@ def render_engine_comparison_text(result: dict[str, object]) -> str:
                 lines.append(f"  [{side}] {item}")
         for change in section["confidence_changes"]:
             lines.append(f"  [confiance {left} → {right}] {change}")
+        if kind == "flows":
+            routes = result["routes"]
+            assert isinstance(routes, dict)
+            lines.append(
+                f"Routes : {routes['pairs_with_different_routes_count']} paire(s) "
+                "commune(s) reliée(s) par des routes différentes."
+            )
+            for difference in routes["pairs_with_different_routes"]:
+                lines.append(f"  {difference['pair']}")
+                for side in (left, right):
+                    for route in difference[f"only_{side}"]:
+                        lines.append(f"    [{side}] {route}")
     return "\n".join(lines)
